@@ -11038,6 +11038,10 @@
       "kind": "func",
       "at": "service-petitions/internal/http/nhat_ky_nhiem_vu.go:188"
     },
+    "http.Attributes": {
+      "kind": "func",
+      "at": "service-comms/internal/http/notice_campaigns.go:540"
+    },
     "http.AuditLogReader": {
       "kind": "type",
       "at": "service-petitions/internal/http/audit_entries.go:15"
@@ -11756,7 +11760,7 @@
     },
     "http.Get": {
       "kind": "func",
-      "at": "service-comms/internal/http/notice_campaigns.go:577"
+      "at": "service-comms/internal/http/notice_campaigns.go:653"
     },
     "http.GetCitizenContact": {
       "kind": "func",
@@ -12406,6 +12410,10 @@
       "kind": "type",
       "at": "service-comms/internal/http/routes.go:135"
     },
+    "http.NoticeAttributeLister": {
+      "kind": "type",
+      "at": "service-comms/internal/http/notice_campaigns.go:70"
+    },
     "http.NoticeCampaignDeps": {
       "kind": "type",
       "at": "service-comms/internal/http/notice_campaigns.go:57"
@@ -12556,7 +12564,7 @@
     },
     "http.Preview": {
       "kind": "func",
-      "at": "service-comms/internal/http/notice_campaigns.go:512"
+      "at": "service-comms/internal/http/notice_campaigns.go:588"
     },
     "http.PreviewBudgetImport": {
       "kind": "func",
@@ -12744,7 +12752,7 @@
     },
     "http.Recipients": {
       "kind": "func",
-      "at": "service-comms/internal/http/notice_campaigns.go:443"
+      "at": "service-comms/internal/http/notice_campaigns.go:471"
     },
     "http.RecordCitizenLetterResult": {
       "kind": "func",
@@ -12800,7 +12808,7 @@
     },
     "http.RegisterNoticeCampaigns": {
       "kind": "func",
-      "at": "service-comms/internal/http/notice_campaigns.go:301"
+      "at": "service-comms/internal/http/notice_campaigns.go:309"
     },
     "http.RegisterPublicBasemap": {
       "kind": "func",
@@ -12980,7 +12988,7 @@
     },
     "http.Send": {
       "kind": "func",
-      "at": "service-comms/internal/http/notice_campaigns.go:532"
+      "at": "service-comms/internal/http/notice_campaigns.go:608"
     },
     "http.SendAccountless": {
       "kind": "func",
@@ -13280,7 +13288,7 @@
     },
     "http.Templates": {
       "kind": "func",
-      "at": "service-comms/internal/http/notice_campaigns.go:467"
+      "at": "service-comms/internal/http/notice_campaigns.go:495"
     },
     "http.TenantProfileReader": {
       "kind": "type",

@@ -60,7 +60,15 @@ type NoticeCampaignDeps struct {
 	// Names is identity's ResolveStaffNames (*identityclient.Client) — `created_by_name`. Display only: when
 	// identity cannot be asked the names are "" and the screen shows the business code alone.
 	Names app.StaffNames
-	Log   *slog.Logger
+	// Attributes is identity's ListNoticeAttributes (*identityclient.Client) — what a template parameter may be
+	// mapped to (ADR 0101 #12). Configuration, no personal data; the commune rides the context's metadata.
+	Attributes NoticeAttributeLister
+	Log        *slog.Logger
+}
+
+// NoticeAttributeLister is the one identity RPC GET notice-attributes needs.
+type NoticeAttributeLister interface {
+	ListNoticeAttributes(ctx context.Context, kind identityclient.NoticeRecipientKind) ([]identityclient.NoticeAttribute, error)
 }
 
 type noticeCampaignHandler struct{ d NoticeCampaignDeps }
@@ -306,6 +314,8 @@ func RegisterNoticeCampaigns(mux *http.ServeMux, d NoticeCampaignDeps) {
 		panic("comms/http: thiếu use case gửi đợt tin — /api/v1/notice-campaigns sẽ panic khi có người gọi")
 	case d.Names == nil:
 		panic("comms/http: thiếu tra tên cán bộ — created_by_name sẽ panic")
+	case d.Attributes == nil:
+		panic("comms/http: thiếu tra thuộc tính gửi tin — /api/v1/notice-attributes sẽ panic khi có người gọi")
 	}
 	if d.Log == nil {
 		d.Log = slog.Default()
@@ -323,6 +333,24 @@ func RegisterNoticeCampaigns(mux *http.ServeMux, d NoticeCampaignDeps) {
 	mux.Handle("GET /api/v1/notice-templates",
 		authz.RequirePermission(d.Checker, "notice.send")(
 			http.HandlerFunc(h.Templates)))
+
+	// NO idem.* DECLARATION: a GET. No audit entry: the commune's directory CONFIGURATION (codes and labels),
+	// no recipient and no value — nothing personal is read.
+	//
+	//	400 notice_invalid         `audience` is neither nguoi-dan nor can-bo
+	//	503 identity_unavailable   identity could not be asked
+	//
+	// @summary  Thuộc tính ghép được vào tham số mẫu khi gửi tới danh bạ — `audience=nguoi-dan`: các thuộc tính cố định rồi mọi thuộc tính động đang dùng của xã; `audience=can-bo`: chỉ Họ và tên; mỗi mục mã và nhãn, không giá trị của ai
+	// @screen   ADR 0101 #12 — Gửi tin ZNS / SMS (/gui-thong-bao), ô "Tham số → Thuộc tính"
+	// @reply    200 noticeAttributeListOut
+	// @reply    400 httpx.Error notice_invalid
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    503 httpx.Error identity_unavailable
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/notice-attributes",
+		authz.RequirePermission(d.Checker, "notice.send")(
+			http.HandlerFunc(h.Attributes)))
 
 	// idem.KhongCan: a preview writes nothing — asked twice, it answers twice.
 	//
@@ -487,6 +515,54 @@ func (h *noticeCampaignHandler) Templates(w http.ResponseWriter, r *http.Request
 		}
 		out.SMS = append(out.SMS, smsNoticeTemplateOut{Channel: domain.NoticeChannelSMS, SmsAccountID: s.SmsAccountID,
 			AccountLabel: s.AccountLabel, Brandname: s.Brandname, TemplateRef: s.TemplateRef, Content: s.Content, Params: params})
+	}
+	vietJSON(w, http.StatusOK, out)
+}
+
+// noticeAttributeOut is one attribute a template parameter may take: `code` goes into the campaign body's
+// `attribute_mapping`, `label` is what the screen shows. Configuration only — never a recipient's value.
+type noticeAttributeOut struct {
+	Code  string `json:"code"`
+	Label string `json:"label"`
+}
+
+type noticeAttributeListOut struct {
+	Items []noticeAttributeOut `json:"items"`
+}
+
+// noticeAttributeAudiences — the `audience` values (ADR 0011 spelling, the prefixes of the audience kinds).
+var noticeAttributeAudiences = map[string]identityclient.NoticeRecipientKind{
+	"nguoi-dan": identityclient.NoticeRecipientCitizen,
+	"can-bo":    identityclient.NoticeRecipientStaff,
+}
+
+// Attributes — GET /api/v1/notice-attributes?audience=nguoi-dan|can-bo
+func (h *noticeCampaignHandler) Attributes(w http.ResponseWriter, r *http.Request) {
+	// No default audience: a missing or unknown value is refused, never read as "citizens" — the two lists
+	// differ, and a staff campaign mapped from the citizen list is refused later at the send.
+	kind, ok := noticeAttributeAudiences[r.URL.Query().Get("audience")]
+	if !ok {
+		httpx.WriteError(w, http.StatusBadRequest, "notice_invalid",
+			"Tham số audience phải là nguoi-dan hoặc can-bo.", "")
+		return
+	}
+	// The commune is the context's (TenantMiddleware, from Host); identityclient carries it in metadata.
+	list, err := h.d.Attributes.ListNoticeAttributes(r.Context(), kind)
+	if err != nil {
+		xa := string(tenant.MustFrom(r.Context()))
+		if errors.Is(err, identityclient.ErrIdentityUnavailable) {
+			h.d.Log.Warn("gửi đợt tin: không hỏi được identity khi đọc thuộc tính", "xa", xa, "err", err)
+			httpx.WriteError(w, http.StatusServiceUnavailable, "identity_unavailable",
+				"Chưa tải được danh sách thuộc tính. Vui lòng thử lại sau ít phút.", "")
+			return
+		}
+		h.d.Log.Error("gửi đợt tin: đọc thuộc tính lỗi hệ thống", "xa", xa, "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
+	out := noticeAttributeListOut{Items: make([]noticeAttributeOut, 0, len(list))}
+	for _, a := range list {
+		out.Items = append(out.Items, noticeAttributeOut{Code: a.Code, Label: a.Label})
 	}
 	vietJSON(w, http.StatusOK, out)
 }

@@ -618,10 +618,11 @@ func main() {
 	// the COMMUNE envelope (nil without SECRET_ENCRYPTION_KEYS: such a send answers 503 by name).
 	noticeStore := commsstore.NewNoticeCampaignStore(kho)
 	svchttp.RegisterNoticeCampaigns(mux, svchttp.NoticeCampaignDeps{
-		Checker:   staffauth.Checker{},
-		Campaigns: commsapp.NewNoticeCampaigns(kho, noticeStore, dinhDanh, communeZaloOAs, smsAccounts, esmsClient, envelope),
-		Names:     dinhDanh,
-		Log:       log,
+		Checker:    staffauth.Checker{},
+		Campaigns:  commsapp.NewNoticeCampaigns(kho, noticeStore, dinhDanh, communeZaloOAs, smsAccounts, esmsClient, envelope),
+		Names:      dinhDanh,
+		Attributes: dinhDanh,
+		Log:        log,
 	})
 	// The campaign sender (ADR 0099 #8) — the Zalo dispatcher's shape: one advisory lock per tick
 	// (crosstenant.NoticeSend), each commune in its own context, `nenTang` telling a merged commune (left

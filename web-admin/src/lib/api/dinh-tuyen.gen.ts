@@ -64,6 +64,7 @@ export const DINH_TUYEN_API: ReadonlyArray<{ readonly tienTo: string; readonly d
   { tienTo: "/api/v1/external-contacts", dichVu: "comms" },
   { tienTo: "/api/v1/map-asset-summary", dichVu: "comms" },
   { tienTo: "/api/v1/map-field-schemas", dichVu: "comms" },
+  { tienTo: "/api/v1/notice-attributes", dichVu: "comms" },
   { tienTo: "/api/v1/residential-units", dichVu: "identity" },
   { tienTo: "/api/v1/swap-working-days", dichVu: "identity" },
   { tienTo: "/api/v1/task-unit-summary", dichVu: "petitions" },

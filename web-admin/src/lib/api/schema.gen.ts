@@ -621,6 +621,15 @@ export type comms_noiDungRa = {
   "audio"?: comms_audioOut | null;
 };
 
+export type comms_noticeAttributeListOut = {
+  "items": Array<comms_noticeAttributeOut>;
+};
+
+export type comms_noticeAttributeOut = {
+  "code": string;
+  "label": string;
+};
+
 export type comms_noticeAudienceIn = {
   "kind": string;
   "ids": Array<string>;
@@ -10538,6 +10547,30 @@ export type identity_get_my_residential_units = {
     401: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
+  };
+};
+
+/** GET /api/v1/notice-attributes — Thuộc tính ghép được vào tham số mẫu khi gửi tới danh bạ — `audience=nguoi-dan`: các thuộc tính cố định rồi mọi thuộc tính động đang dùng của xã; `audience=can-bo`: chỉ Họ và tên; mỗi mục mã và nhãn, không giá trị của ai */
+export type comms_get_notice_attributes = {
+  duongDan: "/api/v1/notice-attributes";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "audience": string;
+  };
+  than: never;
+  phanHoi: {
+    200: comms_noticeAttributeListOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    400: "notice_invalid";
+    503: "identity_unavailable";
   };
 };
 

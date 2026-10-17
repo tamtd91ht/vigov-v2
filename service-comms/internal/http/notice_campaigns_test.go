@@ -41,6 +41,7 @@ type fakeNoticeCampaigns struct {
 	lastInput   app.NoticeInput
 	lastCursor  string
 	lastID      string
+	lastKind    identityclient.NoticeRecipientKind
 	err         error
 }
 
@@ -104,6 +105,17 @@ func (f *fakeNoticeCampaigns) Get(ctx context.Context, id string) (app.NoticeCam
 	return sampleNoticeItem(), f.err
 }
 
+// ListNoticeAttributes makes the fake the Attributes dependency too, so the RBAC table counts its calls.
+func (f *fakeNoticeCampaigns) ListNoticeAttributes(ctx context.Context, kind identityclient.NoticeRecipientKind) (
+	[]identityclient.NoticeAttribute, error) {
+	f.note(ctx)
+	f.lastKind = kind
+	if f.err != nil {
+		return nil, f.err
+	}
+	return []identityclient.NoticeAttribute{{Code: "full_name", Label: "Họ và tên"}, {Code: "address", Label: "Địa chỉ"}}, nil
+}
+
 type noticeNames struct{ err error }
 
 func (n noticeNames) TenCanBoTheoMa(_ context.Context, codes []string) (map[string]identityclient.TenCanBo, error) { // vi-name-ok: the method of the existing app.StaffNames interface (core/identityclient)
@@ -130,7 +142,7 @@ func newNoticeServer(t *testing.T) *noticeServer {
 	checker := &checkerDanhMucGia{}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	mux := http.NewServeMux()
-	RegisterNoticeCampaigns(mux, NoticeCampaignDeps{Checker: checker, Campaigns: fake, Names: noticeNames{}, Log: log})
+	RegisterNoticeCampaigns(mux, NoticeCampaignDeps{Checker: checker, Campaigns: fake, Names: noticeNames{}, Attributes: fake, Log: log})
 	var h http.Handler = mux
 	h = chuTheGhi(h)
 	h = idem.Middleware(moKhoIdemGia(), log)(h)
@@ -184,6 +196,7 @@ const (
 func noticeRoutes() []mapAssetRoute {
 	return []mapAssetRoute{
 		{"templates", http.MethodGet, "/api/v1/notice-templates", "", "notice.send", "admin.sms", http.StatusOK},
+		{"attributes", http.MethodGet, "/api/v1/notice-attributes?audience=nguoi-dan", "", "notice.send", "admin.citizen_field", http.StatusOK},
 		{"preview", http.MethodPost, "/api/v1/notice-campaign-previews", noticePreviewBody, "notice.send", "admin.zalo", http.StatusOK},
 		{"send", http.MethodPost, "/api/v1/notice-campaigns", noticeSendBody, "notice.send", "admin.sms", http.StatusCreated},
 		{"list", http.MethodGet, "/api/v1/notice-campaigns?cursor=abc", "", "notice.send", "content.read", http.StatusOK},
@@ -396,7 +409,7 @@ func TestNoticeNamesDownStillAnswers(t *testing.T) {
 	checker := &checkerDanhMucGia{co: map[tenant.ID]map[authz.Perm]struct{}{xaA: {"notice.send": {}}}}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	mux := http.NewServeMux()
-	RegisterNoticeCampaigns(mux, NoticeCampaignDeps{Checker: checker, Campaigns: fake, Names: noticeNames{err: errors.New("down")}, Log: log})
+	RegisterNoticeCampaigns(mux, NoticeCampaignDeps{Checker: checker, Campaigns: fake, Names: noticeNames{err: errors.New("down")}, Attributes: fake, Log: log})
 	var h http.Handler = chuTheGhi(mux)
 	h = httpx.TenantMiddleware(thuMucMau())(h)
 	r := httptest.NewRequest(http.MethodGet, "https://"+hostA+"/api/v1/notice-campaigns", nil)
@@ -577,6 +590,51 @@ func TestNoticeAttributeMappingOnTheWire(t *testing.T) {
 		w := s.call(t, http.MethodPost, "/api/v1/notice-campaign-previews", hostA, canBoGhi(xaA), body)
 		if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), `"notice_invalid"`) ||
 			!strings.Contains(w.Body.String(), tc.want) {
+			t.Errorf("%v → %d %s", tc.err, w.Code, w.Body.String())
+		}
+	}
+}
+
+// GET notice-attributes (ADR 0101 #12): the audience picks the identity list; no default; identity down is 503.
+func TestNoticeAttributes(t *testing.T) {
+	s := newNoticeServer(t)
+	s.grant(xaA, "notice.send")
+	w := s.call(t, http.MethodGet, "/api/v1/notice-attributes?audience=can-bo", hostA, canBoGhi(xaA), "")
+	doiMa(t, w, http.StatusOK)
+	if s.fake.lastKind != identityclient.NoticeRecipientStaff {
+		t.Fatalf("kind = %v", s.fake.lastKind)
+	}
+	if got := strings.TrimSpace(w.Body.String()); got != `{"items":[{"code":"full_name","label":"Họ và tên"},{"code":"address","label":"Địa chỉ"}]}` {
+		t.Fatalf("reply = %s", got)
+	}
+	doiMa(t, s.call(t, http.MethodGet, "/api/v1/notice-attributes?audience=nguoi-dan", hostA, canBoGhi(xaA), ""), http.StatusOK)
+	if s.fake.lastKind != identityclient.NoticeRecipientCitizen {
+		t.Fatalf("kind = %v", s.fake.lastKind)
+	}
+
+	for _, q := range []string{"", "?audience=", "?audience=tat-ca", "?audience=NGUOI-DAN"} {
+		s := newNoticeServer(t)
+		s.grant(xaA, "notice.send")
+		w := s.call(t, http.MethodGet, "/api/v1/notice-attributes"+q, hostA, canBoGhi(xaA), "")
+		if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), `"notice_invalid"`) || s.fake.calls != 0 {
+			t.Errorf("%q → %d %s (calls %d)", q, w.Code, w.Body.String(), s.fake.calls)
+		}
+	}
+
+	for _, tc := range []struct {
+		err    error
+		status int
+		code   string
+	}{
+		{fmt.Errorf("identityclient: ListNoticeAttributes: %w", identityclient.ErrIdentityUnavailable), http.StatusServiceUnavailable, "identity_unavailable"},
+		{errors.New("boom"), http.StatusInternalServerError, "internal"},
+	} {
+		s := newNoticeServer(t)
+		s.grant(xaA, "notice.send")
+		s.fake.err = tc.err
+		w := s.call(t, http.MethodGet, "/api/v1/notice-attributes?audience=nguoi-dan", hostA, canBoGhi(xaA), "")
+		if w.Code != tc.status || !strings.Contains(w.Body.String(), `"`+tc.code+`"`) ||
+			strings.Contains(w.Body.String(), "boom") || strings.Contains(w.Body.String(), "identityclient") {
 			t.Errorf("%v → %d %s", tc.err, w.Code, w.Body.String())
 		}
 	}

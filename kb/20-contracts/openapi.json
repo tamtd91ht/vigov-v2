@@ -25261,6 +25261,99 @@
         }
       }
     },
+    "/api/v1/notice-attributes": {
+      "get": {
+        "summary": "Thuộc tính ghép được vào tham số mẫu khi gửi tới danh bạ — `audience=nguoi-dan`: các thuộc tính cố định rồi mọi thuộc tính động đang dùng của xã; `audience=can-bo`: chỉ Họ và tên; mỗi mục mã và nhãn, không giá trị của ai",
+        "operationId": "comms_get_notice_attributes",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0101 #12 — Gửi tin ZNS / SMS (/gui-thong-bao), ô \"Tham số → Thuộc tính\"",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "notice.send"
+        },
+        "x-vigov-task": "37e8119f43fa",
+        "parameters": [
+          {
+            "name": "audience",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.noticeAttributeListOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "notice_invalid"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "identity_unavailable"
+            ]
+          }
+        }
+      }
+    },
     "/api/v1/notice-campaign-previews": {
       "post": {
         "summary": "Xem trước đợt tin — số người nhận (đã khử trùng theo số), số bỏ qua (ngừng liên hệ, không có số), nội dung SMS đã điền (chỗ chưa gõ giữ nguyên), các tham số còn thiếu, đơn giá và chi phí dự kiến (ước tính, chưa VAT); không ghi gì, không vết, không lộ số điện thoại nào",
@@ -44952,6 +45045,37 @@
           "type",
           "updated_at",
           "view_count"
+        ],
+        "additionalProperties": false
+      },
+      "comms.noticeAttributeListOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.noticeAttributeOut"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "comms.noticeAttributeOut": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "label"
         ],
         "additionalProperties": false
       },

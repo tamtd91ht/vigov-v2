@@ -5670,6 +5670,27 @@
     },
     {
       "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/notice-attributes",
+      "operation_id": "comms_get_notice_attributes",
+      "task_id": "37e8119f43fa",
+      "summary": "Thuộc tính ghép được vào tham số mẫu khi gửi tới danh bạ — `audience=nguoi-dan`: các thuộc tính cố định rồi mọi thuộc tính động đang dùng của xã; `audience=can-bo`: chỉ Họ và tên; mỗi mục mã và nhãn, không giá trị của ai",
+      "screen": "ADR 0101 #12 — Gửi tin ZNS / SMS (/gui-thong-bao), ô \"Tham số → Thuộc tính\"",
+      "permission_kind": "permission",
+      "permission": "notice.send",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "comms.noticeAttributeListOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/notice_campaigns.go"
+    },
+    {
+      "service": "comms",
       "method": "POST",
       "path": "/api/v1/notice-campaign-previews",
       "operation_id": "comms_post_notice_campaign_previews",
