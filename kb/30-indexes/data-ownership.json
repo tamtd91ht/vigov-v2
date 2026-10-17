@@ -124,6 +124,13 @@
       "source": "service-identity/migrations/0033_citizen_directory.sql:283"
     },
     {
+      "entity": "CitizenField",
+      "service": "identity",
+      "scope": "tenant",
+      "table": "citizen_field",
+      "source": "service-identity/migrations/0036_citizen_field.sql:104"
+    },
+    {
       "entity": "CitizenGroup",
       "service": "identity",
       "scope": "tenant",
@@ -304,6 +311,13 @@
       "scope": "tenant",
       "table": "data_encryption_key",
       "source": "service-identity/migrations/0021_mini_app_secret.sql:80"
+    },
+    {
+      "entity": "IdentityEventOutbox",
+      "service": "identity",
+      "scope": "tenant",
+      "table": "event_outbox",
+      "source": "service-identity/migrations/0036_citizen_field.sql:232"
     },
     {
       "entity": "IncomingDocument",

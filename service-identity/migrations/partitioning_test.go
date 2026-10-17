@@ -18,6 +18,8 @@ var hashPartitionedTables = []string{
 	// groups; citizen_group is a catalogue and stays plain.
 	"citizen_contact",
 	"citizen_contact_group",
+	// 0036 (ADR 0101 #11): identity's event outbox grows with writes; citizen_field is configuration.
+	"event_outbox",
 	"ghep_phien",
 	"phien",
 	"phien_cong_dan",

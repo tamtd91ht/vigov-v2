@@ -597,6 +597,9 @@ type Deps struct {
 	// and writes, because the mask on every number is applied there (citizen_directory.go).
 	// *app.CitizenDirectory in production.
 	CitizenDirectory CitizenDirectoryUseCases
+	// CitizenFields — Cấu hình → Thuộc tính danh bạ (migration 0036, ADR 0101): the five routes on
+	// /api/v1/citizen-fields and /api/v1/citizen-field-order. *app.CitizenFields in production.
+	CitizenFields CitizenFieldUseCases
 	// Automation —Cấu hình → Tự động hoá (migration 0017, ADR 0058): the three job cards, their
 	// settings, and "run now". A use case (every write shares its audit entry's transaction). See
 	// AutomationJobs in automation.go. *app.Automation in production.
@@ -736,6 +739,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu kho hoặc use case quy tắc hạn đơn thư — bốn tuyến /api/v1/citizen-letter-deadline-rules sẽ panic, và xã không có cách nào đặt hạn cho đơn thư")
 	case d.CitizenDirectory == nil:
 		panic("identity/http: thiếu use case danh bạ người dân — mười sáu tuyến /api/v1/citizen-contacts*, /api/v1/citizen-groups* sẽ panic khi có người gọi")
+	case d.CitizenFields == nil:
+		panic("identity/http: thiếu use case thuộc tính danh bạ — năm tuyến /api/v1/citizen-fields*, /api/v1/citizen-field-order sẽ panic khi có người gọi")
 	case d.AuditLog == nil:
 		panic("identity/http: thiếu bộ đọc nhật ký hệ thống — GET /api/v1/identity-audit-entries sẽ panic khi có người gọi")
 	case d.Automation == nil:
@@ -3294,6 +3299,111 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/citizen-contacts/{id}/phone",
 		authz.RequirePermission(d.Checker, "citizen.update")(
 			http.HandlerFunc(h.RevealCitizenContactPhone)))
+
+	// "Xem email đầy đủ" (ADR 0101 #6: the e-mail is masked "như số điện thoại"). The phone reveal's key
+	// and contract: `citizen.update`, one audit entry per read (`xem_email_nguoi_dan`), the field and key in
+	// the delta, never the address. NO idem.* — a GET changes no state; two reads are two disclosures.
+	//
+	// @summary  Email đầy đủ của một người dân trong danh bạ — mỗi lần xem ghi nhật ký kiểm toán
+	// @screen   16-danh-ba-nguoi-dan §5
+	// @reply    200 citizenContactEmailOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error citizen_contact_not_found
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/citizen-contacts/{id}/email",
+		authz.RequirePermission(d.Checker, "citizen.update")(
+			http.HandlerFunc(h.RevealCitizenContactEmail)))
+
+	// ---- Cấu hình → Thuộc tính danh bạ (migration 0036, ADR 0101 #1–#5) ------------------------------
+	//
+	// `admin.citizen_field` on every write — seeded by migration 0036 for exactly this (owner, 17/10/2026,
+	// ADR 0101 #5). The plain list is ALSO readable with `citizen.read`, because the contact form renders
+	// the live fields (ADR 0101 #5: "Đọc định nghĩa: citizen.read"); the retired view needs the admin key,
+	// checked in the handler. No key invented (rule 5, invariant 3c).
+
+	// @summary  Các thuộc tính động của danh bạ người dân của xã, theo thứ tự — ?include_retired=true cho màn cấu hình
+	// @screen   14-cau-hinh Thuộc tính danh bạ
+	// 403 for `include_retired=true` without admin.citizen_field.
+	//
+	// @reply    200 citizenFieldsOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/citizen-fields",
+		authz.RequireAnyPermission(d.Checker, "citizen.read", "admin.citizen_field")(
+			http.HandlerFunc(h.ListCitizenFields)))
+
+	// POST idem.Required(idem.MoKhiHong), AND THE KEY PROTECTS IT: PRIMARY KEY (tenant_id, code) refuses a
+	// second field with the code whether or not the header was sent.
+	//
+	// @summary  Thêm một thuộc tính động cho danh bạ người dân — mã 6–8 ký tự, loại không đổi sau khi tạo; tối đa 50 thuộc tính đang dùng
+	// @screen   14-cau-hinh Thuộc tính danh bạ
+	// 409 `citizen_field_code_taken` is a code the commune has ever used (retired included);
+	// 409 `citizen_field_limit` is a 51st live field.
+	//
+	// @request  citizenFieldIn
+	// @reply    201 citizenFieldOut
+	// @reply    400 httpx.Error invalid_request
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error citizen_field_code_taken citizen_field_limit
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/citizen-fields",
+		authz.RequirePermission(d.Checker, "admin.citizen_field")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.CreateCitizenField))))
+
+	// @summary  Sửa tên, placeholder, lựa chọn (thêm, đổi nhãn, ngừng — không xoá), bắt buộc, hiện ở danh sách, định dạng ngày của một thuộc tính
+	// @screen   14-cau-hinh Thuộc tính danh bạ
+	// 400 for a changed code / field_type / number_kind, or an option list missing a value already defined.
+	// 404 is a code matching no LIVE field of this commune.
+	//
+	// @request  citizenFieldPatchIn
+	// @reply    200 citizenFieldOut
+	// @reply    400 httpx.Error invalid_request
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error citizen_field_not_found
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/citizen-fields/{code}",
+		authz.RequirePermission(d.Checker, "admin.citizen_field")(
+			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; use case không ghi gì và không để vết khi không có gì đổi, nên lần gửi thứ hai để lại đúng một dòng và một vết")(
+				http.HandlerFunc(h.UpdateCitizenField))))
+
+	// DELETE with a body carrying the MANDATORY reason — the shape of DELETE /api/v1/sla/{id}. A soft
+	// retire: values already entered are kept (ADR 0101 #4).
+	//
+	// @summary  Ngừng dùng một thuộc tính (xoá mềm), lý do bắt buộc — ẩn khỏi biểu mẫu và bộ lọc, giữ giá trị đã nhập
+	// @screen   14-cau-hinh Thuộc tính danh bạ
+	// @request  citizenFieldRetireIn
+	// @reply    204 -
+	// @reply    400 httpx.Error invalid_request
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error citizen_field_not_found
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/citizen-fields/{code}",
+		authz.RequirePermission(d.Checker, "admin.citizen_field")(
+			idem.KhongCan("ngừng dùng một thuộc tính đã ngừng trả 404 ở cả hai lần vì câu lệnh mang `retired_at IS NULL`; lần thứ hai không ghi đè người ngừng và lý do")(
+				http.HandlerFunc(h.RetireCitizenField))))
+
+	// ONE resource for the order of the commune's list — a PUT of the whole state, like PUT /api/v1/roles/
+	// {id}/permissions: the same body twice leaves the same order and, the second time, no entry.
+	//
+	// @summary  Đặt thứ tự kéo-thả của các thuộc tính đang dùng — danh sách đủ mọi mã, mỗi mã một lần
+	// @screen   14-cau-hinh Thuộc tính danh bạ
+	// @request  citizenFieldOrderIn
+	// @reply    204 -
+	// @reply    400 httpx.Error invalid_request
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PUT /api/v1/citizen-field-order",
+		authz.RequirePermission(d.Checker, "admin.citizen_field")(
+			idem.KhongCan("đặt lại cùng một thứ tự cho cùng một trạng thái; use case không ghi gì và không để vết khi thứ tự không đổi")(
+				http.HandlerFunc(h.SetCitizenFieldOrder))))
 
 	// --- the groups (16-danh-ba-nguoi-dan.md §6; ADR 0097 D4) -----------------------------------------
 

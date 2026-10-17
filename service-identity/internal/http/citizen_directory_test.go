@@ -35,6 +35,7 @@ const (
 	// The agreed fake number (rule 3, invariant 5) and its mask.
 	citizenPhoneFixture       = "0900000001"
 	citizenPhoneMaskedFixture = "09****0001"
+	citizenEmailFixture       = "ten.nguoi@example.vn"
 )
 
 // citizenDirectoryFake stands in for *app.CitizenDirectory. One `err` for every method: a test sets
@@ -47,6 +48,7 @@ type citizenDirectoryFake struct {
 	lastCommune tenant.ID
 	lastID      string
 	lastFilter  idstore.CitizenContactFilter
+	lastSearch  app.CitizenContactSearch
 	lastPage    page.Request
 	lastContact app.CitizenContactRequest
 	lastGroup   domain.CitizenGroupInput
@@ -93,6 +95,29 @@ func (f *citizenDirectoryFake) Count(ctx context.Context, fl idstore.CitizenCont
 	f.note(ctx)
 	f.lastFilter = fl
 	return 57, f.err
+}
+
+func (f *citizenDirectoryFake) Search(ctx context.Context, q app.CitizenContactSearch, req page.Request) (page.Result[app.CitizenContactListItem], error) {
+	f.mu.Lock()
+	f.lastSearch = q
+	f.mu.Unlock()
+	return f.List(ctx, q.Filter, req)
+}
+
+func (f *citizenDirectoryFake) CountSearch(ctx context.Context, q app.CitizenContactSearch) (int, error) {
+	f.mu.Lock()
+	f.lastSearch = q
+	f.mu.Unlock()
+	return f.Count(ctx, q.Filter)
+}
+
+func (f *citizenDirectoryFake) RevealEmail(ctx context.Context, actor app.NguoiThucHien, id string) (string, error) {
+	f.note(ctx)
+	f.lastActor, f.lastID = actor, id
+	if f.err != nil {
+		return "", f.err
+	}
+	return citizenEmailFixture, nil
 }
 
 func (f *citizenDirectoryFake) TagCounts(ctx context.Context) ([]idstore.TagCount, error) {
@@ -214,6 +239,8 @@ func citizenRoutes() []citizenRoute {
 		{name: "tải mẫu", method: "GET", path: "/api/v1/citizen-contact-import-template", key: citizenUpdateKey, ok: http.StatusOK},
 		{name: "xem trước", method: "POST", path: "/api/v1/citizen-contact-import-previews", key: citizenUpdateKey, upload: true, ok: http.StatusOK},
 		{name: "nhập", method: "POST", path: "/api/v1/citizen-contact-imports", key: citizenUpdateKey, upload: true, ok: http.StatusCreated},
+		// ADR 0101 #6 — appended LAST: tests address the routes above by index.
+		{name: "xem email", method: "GET", path: "/api/v1/citizen-contacts/" + citizenContactIDFixture + "/email", key: citizenUpdateKey, ok: http.StatusOK},
 	}
 }
 

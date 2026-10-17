@@ -730,6 +730,8 @@ type mayChu struct {
 	writeLetterRules *letterRulesWriteFake
 	// The citizen contact directory use case (ADR 0097) — citizen_directory_test.go.
 	citizenDirectory *citizenDirectoryFake
+	// The citizen-directory attribute configuration (ADR 0101) — citizen_field_test.go.
+	citizenFields *citizenFieldsFake
 	// The audit-log reader — see audit_entries_test.go.
 	auditLog *auditLogFake
 	// The automation use case — see automationFake in automation_test.go.
@@ -799,6 +801,7 @@ func dungMayChu(t *testing.T) *mayChu {
 	letterRules := letterRulesReadSample()
 	writeLetterRules := letterRulesWriteSample()
 	citizenDirectory := citizenDirectorySample()
+	citizenFields := &citizenFieldsFake{}
 	auditLog := &auditLogFake{}
 	automation := automationSample()
 	idleSessions := &idleRevokerFake{}
@@ -860,6 +863,8 @@ func dungMayChu(t *testing.T) *mayChu {
 		WriteCitizenLetterDeadlineRules: writeLetterRules,
 		// The sixteen citizen-directory routes. Register panics without it.
 		CitizenDirectory: citizenDirectory,
+		// The five attribute-configuration routes. Register panics without it.
+		CitizenFields: citizenFields,
 		// The audit-log reader — audit_entries_test.go.
 		AuditLog: auditLog,
 		// The logo/banner read behind /communes/current — xa_test.go. Commune A has both images,
@@ -955,6 +960,7 @@ func dungMayChu(t *testing.T) *mayChu {
 		writeLetterRules: writeLetterRules,
 
 		citizenDirectory: citizenDirectory,
+		citizenFields:    citizenFields,
 
 		auditLog:   auditLog,
 		automation: automation,

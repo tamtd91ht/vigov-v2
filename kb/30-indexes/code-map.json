@@ -90,6 +90,14 @@
       "kind": "type",
       "at": "service-petitions/internal/app/task_attachment.go:249"
     },
+    "app.AttributeOptionFilter": {
+      "kind": "type",
+      "at": "service-identity/internal/app/citizen_directory_search.go:32"
+    },
+    "app.AttributeRangeFilter": {
+      "kind": "type",
+      "at": "service-identity/internal/app/citizen_directory_search.go:39"
+    },
     "app.AudioCompletion": {
       "kind": "type",
       "at": "service-comms/internal/app/content_audio.go:426"
@@ -400,7 +408,7 @@
     },
     "app.CitizenContactDetail": {
       "kind": "type",
-      "at": "service-identity/internal/app/citizen_directory.go:138"
+      "at": "service-identity/internal/app/citizen_directory.go:236"
     },
     "app.CitizenContactImportPreview": {
       "kind": "type",
@@ -416,7 +424,7 @@
     },
     "app.CitizenContactListItem": {
       "kind": "type",
-      "at": "service-identity/internal/app/citizen_directory.go:121"
+      "at": "service-identity/internal/app/citizen_directory.go:216"
     },
     "app.CitizenContactPhoneReveal": {
       "kind": "type",
@@ -428,15 +436,31 @@
     },
     "app.CitizenContactRepo": {
       "kind": "type",
-      "at": "service-identity/internal/app/citizen_directory.go:67"
+      "at": "service-identity/internal/app/citizen_directory.go:99"
     },
     "app.CitizenContactRequest": {
       "kind": "type",
-      "at": "service-identity/internal/app/citizen_directory.go:156"
+      "at": "service-identity/internal/app/citizen_directory.go:264"
+    },
+    "app.CitizenContactSearch": {
+      "kind": "type",
+      "at": "service-identity/internal/app/citizen_directory_search.go:46"
     },
     "app.CitizenDirectory": {
       "kind": "type",
-      "at": "service-identity/internal/app/citizen_directory.go:97"
+      "at": "service-identity/internal/app/citizen_directory.go:150"
+    },
+    "app.CitizenFieldReader": {
+      "kind": "type",
+      "at": "service-identity/internal/app/citizen_directory.go:120"
+    },
+    "app.CitizenFieldRepo": {
+      "kind": "type",
+      "at": "service-identity/internal/app/citizen_field.go:36"
+    },
+    "app.CitizenFields": {
+      "kind": "type",
+      "at": "service-identity/internal/app/citizen_field.go:47"
     },
     "app.CitizenGroupItem": {
       "kind": "type",
@@ -444,7 +468,7 @@
     },
     "app.CitizenGroupRepo": {
       "kind": "type",
-      "at": "service-identity/internal/app/citizen_directory.go:85"
+      "at": "service-identity/internal/app/citizen_directory.go:138"
     },
     "app.CitizenIntakeFields": {
       "kind": "type",
@@ -538,6 +562,14 @@
       "kind": "func",
       "at": "service-petitions/internal/app/overdue_queue.go:142"
     },
+    "app.CitizenSearch": {
+      "kind": "type",
+      "at": "service-identity/internal/app/citizen_directory.go:130"
+    },
+    "app.CitizenSearchIndexer": {
+      "kind": "type",
+      "at": "service-identity/internal/app/citizen_search_indexer.go:58"
+    },
     "app.CitizenSessionOpener": {
       "kind": "type",
       "at": "service-identity/internal/app/own_app_sign_in.go:94"
@@ -602,6 +634,10 @@
       "kind": "type",
       "at": "service-comms/internal/app/zalo_commune_webhook.go:41"
     },
+    "app.CommunesWithContacts": {
+      "kind": "type",
+      "at": "service-identity/internal/app/citizen_search_indexer.go:53"
+    },
     "app.CompleteAuthorization": {
       "kind": "func",
       "at": "service-comms/internal/app/zalo_commune_oa.go:398"
@@ -636,7 +672,11 @@
     },
     "app.Count": {
       "kind": "func",
-      "at": "service-identity/internal/app/citizen_directory.go:183"
+      "at": "service-identity/internal/app/citizen_directory.go:317"
+    },
+    "app.CountSearch": {
+      "kind": "func",
+      "at": "service-identity/internal/app/citizen_directory_search.go:162"
     },
     "app.CoverFiles": {
       "kind": "type",
@@ -958,6 +998,18 @@
       "kind": "func",
       "at": "service-platform/internal/app/branding.go:156"
     },
+    "app.EventQueue": {
+      "kind": "type",
+      "at": "service-identity/internal/app/event_relay.go:46"
+    },
+    "app.EventRecorder": {
+      "kind": "type",
+      "at": "service-identity/internal/app/citizen_directory.go:125"
+    },
+    "app.EventRelay": {
+      "kind": "type",
+      "at": "service-identity/internal/app/event_relay.go:53"
+    },
     "app.ExpireOpenAuthorizations": {
       "kind": "func",
       "at": "service-comms/internal/app/zalo_commune_oa.go:800"
@@ -1016,7 +1068,7 @@
     },
     "app.Get": {
       "kind": "func",
-      "at": "service-identity/internal/app/citizen_directory.go:195"
+      "at": "service-identity/internal/app/citizen_directory.go:329"
     },
     "app.GetSharedZaloBot": {
       "kind": "func",
@@ -1124,7 +1176,7 @@
     },
     "app.Handle": {
       "kind": "func",
-      "at": "service-comms/internal/app/zalo_webhook.go:112"
+      "at": "service-identity/internal/app/citizen_search_indexer.go:77"
     },
     "app.Has": {
       "kind": "func",
@@ -1202,6 +1254,14 @@
       "kind": "type",
       "at": "service-documents/internal/app/incoming_dashboard.go:55"
     },
+    "app.IndexWriter": {
+      "kind": "type",
+      "at": "service-identity/internal/app/citizen_search_indexer.go:41"
+    },
+    "app.IndexerContacts": {
+      "kind": "type",
+      "at": "service-identity/internal/app/citizen_search_indexer.go:33"
+    },
     "app.IntakeSender": {
       "kind": "type",
       "at": "service-petitions/internal/app/gui_phan_anh.go:83"
@@ -1220,7 +1280,11 @@
     },
     "app.IsCitizenDirectoryInputError": {
       "kind": "func",
-      "at": "service-identity/internal/app/citizen_directory.go:440"
+      "at": "service-identity/internal/app/citizen_directory.go:699"
+    },
+    "app.IsCitizenFieldInputError": {
+      "kind": "func",
+      "at": "service-identity/internal/app/citizen_field.go:216"
     },
     "app.IsCitizenLetterDeadlineRuleInputError": {
       "kind": "func",
@@ -1804,7 +1868,11 @@
     },
     "app.NewCitizenDirectory": {
       "kind": "func",
-      "at": "service-identity/internal/app/citizen_directory.go:107"
+      "at": "service-identity/internal/app/citizen_directory.go:168"
+    },
+    "app.NewCitizenFields": {
+      "kind": "func",
+      "at": "service-identity/internal/app/citizen_field.go:53"
     },
     "app.NewCitizenLetterDeadlineRules": {
       "kind": "func",
@@ -1841,6 +1909,10 @@
     "app.NewCitizenReportBreakdown": {
       "kind": "func",
       "at": "service-petitions/internal/app/citizen_report_breakdown.go:71"
+    },
+    "app.NewCitizenSearchIndexer": {
+      "kind": "func",
+      "at": "service-identity/internal/app/citizen_search_indexer.go:65"
     },
     "app.NewCitizenVerificationPhotos": {
       "kind": "func",
@@ -1941,6 +2013,10 @@
     "app.NewEffectiveFieldLabels": {
       "kind": "func",
       "at": "service-petitions/internal/app/petition_field_catalogue.go:185"
+    },
+    "app.NewEventRelay": {
+      "kind": "func",
+      "at": "service-identity/internal/app/event_relay.go:62"
     },
     "app.NewExternalContacts": {
       "kind": "func",
@@ -2538,6 +2614,10 @@
       "kind": "type",
       "at": "service-comms/internal/app/zalo_links.go:68"
     },
+    "app.PendingEventCommunes": {
+      "kind": "type",
+      "at": "service-identity/internal/app/event_relay.go:41"
+    },
     "app.PendingNoticeCommunes": {
       "kind": "type",
       "at": "service-petitions/internal/app/staff_notice_relay.go:70"
@@ -2818,6 +2898,14 @@
       "kind": "func",
       "at": "service-comms/internal/app/zalo_commune_bot.go:516"
     },
+    "app.ReindexAll": {
+      "kind": "func",
+      "at": "service-identity/internal/app/citizen_search_indexer.go:183"
+    },
+    "app.ReindexCommune": {
+      "kind": "func",
+      "at": "service-identity/internal/app/citizen_search_indexer.go:138"
+    },
     "app.Remove": {
       "kind": "func",
       "at": "service-platform/internal/app/branding.go:894"
@@ -2837,6 +2925,10 @@
     "app.ReopenBudgetPeriodClose": {
       "kind": "func",
       "at": "service-finance/internal/app/budget_period_close.go:139"
+    },
+    "app.Reorder": {
+      "kind": "func",
+      "at": "service-identity/internal/app/citizen_field.go:180"
     },
     "app.Reply": {
       "kind": "func",
@@ -2938,9 +3030,13 @@
       "kind": "func",
       "at": "service-identity/internal/app/staff_email_reveal.go:54"
     },
+    "app.RevealEmail": {
+      "kind": "func",
+      "at": "service-identity/internal/app/citizen_directory.go:364"
+    },
     "app.RevealPhone": {
       "kind": "func",
-      "at": "service-identity/internal/app/citizen_directory.go:227"
+      "at": "service-identity/internal/app/citizen_directory.go:406"
     },
     "app.Revoke": {
       "kind": "func",
@@ -3037,6 +3133,10 @@
     "app.SaveSettings": {
       "kind": "func",
       "at": "service-comms/internal/app/zalo_links.go:395"
+    },
+    "app.Search": {
+      "kind": "func",
+      "at": "service-identity/internal/app/citizen_directory_search.go:123"
     },
     "app.SecretOpener": {
       "kind": "type",
@@ -3400,7 +3500,7 @@
     },
     "app.TagCounts": {
       "kind": "func",
-      "at": "service-identity/internal/app/citizen_directory.go:189"
+      "at": "service-identity/internal/app/citizen_directory.go:323"
     },
     "app.TaiKhoanCanBo": {
       "kind": "type",
@@ -3753,6 +3853,10 @@
     "app.WithResidentialUnits": {
       "kind": "func",
       "at": "service-petitions/internal/app/xu_ly_phan_anh.go:469"
+    },
+    "app.WithSearch": {
+      "kind": "func",
+      "at": "service-identity/internal/app/citizen_directory.go:181"
     },
     "app.WithTaskPriorities": {
       "kind": "func",
@@ -4364,11 +4468,11 @@
     },
     "config.CanhBao": {
       "kind": "func",
-      "at": "core/config/config.go:979"
+      "at": "core/config/config.go:995"
     },
     "config.CauPhienBat": {
       "kind": "func",
-      "at": "core/config/config.go:1188"
+      "at": "core/config/config.go:1204"
     },
     "config.CheckBucketPrefix": {
       "kind": "func",
@@ -4404,7 +4508,7 @@
     },
     "config.Config": {
       "kind": "type",
-      "at": "core/config/config.go:118"
+      "at": "core/config/config.go:119"
     },
     "config.Configured": {
       "kind": "func",
@@ -4428,11 +4532,11 @@
     },
     "config.Error": {
       "kind": "func",
-      "at": "core/config/uses.go:256"
+      "at": "core/config/uses.go:260"
     },
     "config.Format": {
       "kind": "func",
-      "at": "core/config/accessors.go:368"
+      "at": "core/config/accessors.go:370"
     },
     "config.GRPCCallerKey": {
       "kind": "func",
@@ -4448,7 +4552,7 @@
     },
     "config.Groups": {
       "kind": "func",
-      "at": "core/config/uses.go:190"
+      "at": "core/config/uses.go:194"
     },
     "config.IdentityAdminSeedPassword": {
       "kind": "func",
@@ -4468,11 +4572,11 @@
     },
     "config.Khoa": {
       "kind": "type",
-      "at": "core/config/config.go:605"
+      "at": "core/config/config.go:609"
     },
     "config.KhoaKyBytes": {
       "kind": "func",
-      "at": "core/config/config.go:1179"
+      "at": "core/config/config.go:1195"
     },
     "config.ListenAddr": {
       "kind": "func",
@@ -4480,11 +4584,11 @@
     },
     "config.Load": {
       "kind": "func",
-      "at": "core/config/config.go:626"
+      "at": "core/config/config.go:630"
     },
     "config.LogValue": {
       "kind": "func",
-      "at": "core/config/accessors.go:373"
+      "at": "core/config/accessors.go:375"
     },
     "config.MalwareScanner": {
       "kind": "type",
@@ -4492,7 +4596,7 @@
     },
     "config.MarshalJSON": {
       "kind": "func",
-      "at": "core/config/accessors.go:376"
+      "at": "core/config/accessors.go:378"
     },
     "config.MiniAppProfileCode": {
       "kind": "func",
@@ -4564,7 +4668,7 @@
     },
     "config.Redacted": {
       "kind": "func",
-      "at": "core/config/config.go:1051"
+      "at": "core/config/config.go:1067"
     },
     "config.RedisDSN": {
       "kind": "func",
@@ -4573,6 +4677,10 @@
     "config.Rong": {
       "kind": "func",
       "at": "core/config/cors.go:31"
+    },
+    "config.SearchHashKey": {
+      "kind": "func",
+      "at": "core/config/search_hash.go:57"
     },
     "config.SecretEncryptionConfigured": {
       "kind": "func",
@@ -4588,7 +4696,7 @@
     },
     "config.String": {
       "kind": "func",
-      "at": "core/config/uses.go:152"
+      "at": "core/config/uses.go:156"
     },
     "config.TenantCacheTTL": {
       "kind": "func",
@@ -4600,11 +4708,11 @@
     },
     "config.Usage": {
       "kind": "type",
-      "at": "core/config/uses.go:161"
+      "at": "core/config/uses.go:165"
     },
     "config.Uses": {
       "kind": "func",
-      "at": "core/config/uses.go:167"
+      "at": "core/config/uses.go:171"
     },
     "config.UsesSASL": {
       "kind": "func",
@@ -4666,6 +4774,10 @@
       "kind": "func",
       "at": "service-comms/internal/store/crosstenant/body_image_sweep.go:38"
     },
+    "crosstenant.CommunesWithContacts": {
+      "kind": "func",
+      "at": "service-identity/internal/store/crosstenant/event_outbox.go:42"
+    },
     "crosstenant.CommunesWithDueNoticeRecipients": {
       "kind": "func",
       "at": "service-comms/internal/store/crosstenant/notice_send.go:38"
@@ -4690,6 +4802,10 @@
       "kind": "func",
       "at": "service-petitions/internal/store/crosstenant/automation.go:58"
     },
+    "crosstenant.CommunesWithUnpublishedEvents": {
+      "kind": "func",
+      "at": "service-identity/internal/store/crosstenant/event_outbox.go:33"
+    },
     "crosstenant.DinhDanh": {
       "kind": "type",
       "at": "service-identity/internal/store/crosstenant/dinh_danh_cong_dan.go:44"
@@ -4709,6 +4825,10 @@
     "crosstenant.EndChatLinksInOtherCommunes": {
       "kind": "func",
       "at": "service-comms/internal/store/crosstenant/zalo_bot.go:127"
+    },
+    "crosstenant.EventOutboxCommunes": {
+      "kind": "type",
+      "at": "service-identity/internal/store/crosstenant/event_outbox.go:21"
     },
     "crosstenant.GhepPhienStore": {
       "kind": "type",
@@ -4741,6 +4861,10 @@
     "crosstenant.NewDinhDanhStore": {
       "kind": "func",
       "at": "service-identity/internal/store/crosstenant/dinh_danh_cong_dan.go:36"
+    },
+    "crosstenant.NewEventOutboxCommunes": {
+      "kind": "func",
+      "at": "service-identity/internal/store/crosstenant/event_outbox.go:25"
     },
     "crosstenant.NewGhepPhienStore": {
       "kind": "func",
@@ -5069,6 +5193,10 @@
     "domain.Apply": {
       "kind": "func",
       "at": "service-petitions/internal/domain/task_assignment.go:169"
+    },
+    "domain.ApplyCitizenFieldPatch": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_field.go:210"
     },
     "domain.ApplyCustomValues": {
       "kind": "func",
@@ -5406,13 +5534,21 @@
       "kind": "func",
       "at": "service-comms/internal/domain/noi_dung_mini_app.go:568"
     },
+    "domain.CheckCitizenAttributes": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_field.go:397"
+    },
     "domain.CheckCitizenContactInput": {
       "kind": "func",
-      "at": "service-identity/internal/domain/citizen_directory.go:261"
+      "at": "service-identity/internal/domain/citizen_directory.go:271"
+    },
+    "domain.CheckCitizenFieldOrder": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_field.go:277"
     },
     "domain.CheckCitizenGroupInput": {
       "kind": "func",
-      "at": "service-identity/internal/domain/citizen_directory.go:405"
+      "at": "service-identity/internal/domain/citizen_directory.go:418"
     },
     "domain.CheckCitizenID": {
       "kind": "func",
@@ -5485,6 +5621,10 @@
     "domain.CheckMergeReason": {
       "kind": "func",
       "at": "service-petitions/internal/domain/petition_merge.go:107"
+    },
+    "domain.CheckNewCitizenField": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_field.go:162"
     },
     "domain.CheckNoticeAudience": {
       "kind": "func",
@@ -5908,7 +6048,7 @@
     },
     "domain.CitizenContact": {
       "kind": "type",
-      "at": "service-identity/internal/domain/citizen_directory.go:53"
+      "at": "service-identity/internal/domain/citizen_directory.go:54"
     },
     "domain.CitizenContactImportColumns": {
       "kind": "func",
@@ -5932,19 +6072,39 @@
     },
     "domain.CitizenContactInput": {
       "kind": "type",
-      "at": "service-identity/internal/domain/citizen_directory.go:242"
+      "at": "service-identity/internal/domain/citizen_directory.go:249"
     },
     "domain.CitizenContactSource": {
       "kind": "type",
-      "at": "service-identity/internal/domain/citizen_directory.go:33"
+      "at": "service-identity/internal/domain/citizen_directory.go:34"
+    },
+    "domain.CitizenField": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/citizen_field.go:126"
+    },
+    "domain.CitizenFieldInput": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/citizen_field.go:148"
+    },
+    "domain.CitizenFieldOption": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/citizen_field.go:119"
+    },
+    "domain.CitizenFieldPatch": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/citizen_field.go:197"
+    },
+    "domain.CitizenFieldType": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/citizen_field.go:26"
     },
     "domain.CitizenGroup": {
       "kind": "type",
-      "at": "service-identity/internal/domain/citizen_directory.go:76"
+      "at": "service-identity/internal/domain/citizen_directory.go:83"
     },
     "domain.CitizenGroupInput": {
       "kind": "type",
-      "at": "service-identity/internal/domain/citizen_directory.go:396"
+      "at": "service-identity/internal/domain/citizen_directory.go:409"
     },
     "domain.CitizenLetter": {
       "kind": "type",
@@ -5988,7 +6148,7 @@
     },
     "domain.CitizenPhoneIdentityForm": {
       "kind": "func",
-      "at": "service-identity/internal/domain/citizen_directory.go:233"
+      "at": "service-identity/internal/domain/citizen_directory.go:240"
     },
     "domain.CitizenReportBreakdown": {
       "kind": "type",
@@ -6730,6 +6890,10 @@
       "kind": "func",
       "at": "service-petitions/internal/domain/automation.go:81"
     },
+    "domain.HasOptions": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_field.go:47"
+    },
     "domain.HasResolutionDeadline": {
       "kind": "func",
       "at": "service-documents/internal/domain/citizen_letter.go:160"
@@ -6917,6 +7081,10 @@
     "domain.IsSystemRole": {
       "kind": "func",
       "at": "service-identity/internal/domain/role_write.go:66"
+    },
+    "domain.IsText": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_field.go:50"
     },
     "domain.IsTypedNoticeAudience": {
       "kind": "func",
@@ -7414,9 +7582,17 @@
       "kind": "func",
       "at": "service-documents/internal/domain/citizen_letter.go:678"
     },
+    "domain.Live": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_field.go:145"
+    },
     "domain.LiveAllocationLines": {
       "kind": "func",
       "at": "service-finance/internal/domain/project_allocation.go:210"
+    },
+    "domain.LiveAttributes": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_field.go:584"
     },
     "domain.LoaiBang": {
       "kind": "type",
@@ -7944,31 +8120,39 @@
     },
     "domain.NormalizeCitizenContactAddress": {
       "kind": "func",
-      "at": "service-identity/internal/domain/citizen_directory.go:301"
+      "at": "service-identity/internal/domain/citizen_directory.go:314"
     },
     "domain.NormalizeCitizenContactDeleteReason": {
       "kind": "func",
-      "at": "service-identity/internal/domain/citizen_directory.go:428"
+      "at": "service-identity/internal/domain/citizen_directory.go:441"
+    },
+    "domain.NormalizeCitizenContactEmail": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_field.go:596"
     },
     "domain.NormalizeCitizenContactFullName": {
       "kind": "func",
-      "at": "service-identity/internal/domain/citizen_directory.go:288"
+      "at": "service-identity/internal/domain/citizen_directory.go:301"
     },
     "domain.NormalizeCitizenContactNote": {
       "kind": "func",
-      "at": "service-identity/internal/domain/citizen_directory.go:310"
+      "at": "service-identity/internal/domain/citizen_directory.go:323"
     },
     "domain.NormalizeCitizenContactTags": {
       "kind": "func",
-      "at": "service-identity/internal/domain/citizen_directory.go:325"
+      "at": "service-identity/internal/domain/citizen_directory.go:338"
     },
     "domain.NormalizeCitizenContactUnitRef": {
       "kind": "func",
-      "at": "service-identity/internal/domain/citizen_directory.go:366"
+      "at": "service-identity/internal/domain/citizen_directory.go:379"
+    },
+    "domain.NormalizeCitizenFieldRetireReason": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_field.go:265"
     },
     "domain.NormalizeCitizenGroupDeleteReason": {
       "kind": "func",
-      "at": "service-identity/internal/domain/citizen_directory.go:439"
+      "at": "service-identity/internal/domain/citizen_directory.go:452"
     },
     "domain.NormalizeCitizenLetterDeleteReason": {
       "kind": "func",
@@ -7984,7 +8168,7 @@
     },
     "domain.NormalizeCitizenPhone": {
       "kind": "func",
-      "at": "service-identity/internal/domain/citizen_directory.go:177"
+      "at": "service-identity/internal/domain/citizen_directory.go:184"
     },
     "domain.NormalizeCommuneZaloBotName": {
       "kind": "func",
@@ -8948,7 +9132,7 @@
     },
     "domain.RoleTemplatePermissions": {
       "kind": "func",
-      "at": "service-identity/internal/domain/role_template.go:213"
+      "at": "service-identity/internal/domain/role_template.go:217"
     },
     "domain.RoleTemplates": {
       "kind": "func",
@@ -9192,7 +9376,7 @@
     },
     "domain.SplitCitizenContactTags": {
       "kind": "func",
-      "at": "service-identity/internal/domain/citizen_directory.go:355"
+      "at": "service-identity/internal/domain/citizen_directory.go:368"
     },
     "domain.SplitIssueText": {
       "kind": "func",
@@ -10236,19 +10420,19 @@
     },
     "events.Dispatch": {
       "kind": "func",
-      "at": "core/events/events.go:45"
+      "at": "core/events/events.go:52"
     },
     "events.Envelope": {
       "kind": "type",
-      "at": "core/events/events.go:25"
+      "at": "core/events/events.go:32"
     },
     "events.Handler": {
       "kind": "type",
-      "at": "core/events/events.go:39"
+      "at": "core/events/events.go:46"
     },
     "events.Publisher": {
       "kind": "type",
-      "at": "core/events/events.go:33"
+      "at": "core/events/events.go:40"
     },
     "events.Topic": {
       "kind": "func",
@@ -10888,11 +11072,15 @@
     },
     "http.CitizenDirectoryUseCases": {
       "kind": "type",
-      "at": "service-identity/internal/http/citizen_directory.go:67"
+      "at": "service-identity/internal/http/citizen_directory.go:69"
     },
     "http.CitizenFieldCatalogue": {
       "kind": "type",
       "at": "service-petitions/internal/http/petition_fields.go:40"
+    },
+    "http.CitizenFieldUseCases": {
+      "kind": "type",
+      "at": "service-identity/internal/http/citizen_field.go:37"
     },
     "http.CitizenLetterCount": {
       "kind": "func",
@@ -11052,7 +11240,7 @@
     },
     "http.CountCitizenContacts": {
       "kind": "func",
-      "at": "service-identity/internal/http/citizen_directory.go:422"
+      "at": "service-identity/internal/http/citizen_directory.go:561"
     },
     "http.CountMyUnreadNotifications": {
       "kind": "func",
@@ -11076,11 +11264,15 @@
     },
     "http.CreateCitizenContact": {
       "kind": "func",
-      "at": "service-identity/internal/http/citizen_directory.go:474"
+      "at": "service-identity/internal/http/citizen_directory.go:616"
+    },
+    "http.CreateCitizenField": {
+      "kind": "func",
+      "at": "service-identity/internal/http/citizen_field.go:169"
     },
     "http.CreateCitizenGroup": {
       "kind": "func",
-      "at": "service-identity/internal/http/citizen_directory.go:583"
+      "at": "service-identity/internal/http/citizen_directory.go:750"
     },
     "http.CreateCitizenLetterDeadlineRule": {
       "kind": "func",
@@ -11504,7 +11696,7 @@
     },
     "http.GetCitizenContact": {
       "kind": "func",
-      "at": "service-identity/internal/http/citizen_directory.go:462"
+      "at": "service-identity/internal/http/citizen_directory.go:604"
     },
     "http.GetCurrent": {
       "kind": "func",
@@ -11832,15 +12024,19 @@
     },
     "http.ListCitizenContactTags": {
       "kind": "func",
-      "at": "service-identity/internal/http/citizen_directory.go:444"
+      "at": "service-identity/internal/http/citizen_directory.go:586"
     },
     "http.ListCitizenContacts": {
       "kind": "func",
-      "at": "service-identity/internal/http/citizen_directory.go:350"
+      "at": "service-identity/internal/http/citizen_directory.go:455"
+    },
+    "http.ListCitizenFields": {
+      "kind": "func",
+      "at": "service-identity/internal/http/citizen_field.go:138"
     },
     "http.ListCitizenGroups": {
       "kind": "func",
-      "at": "service-identity/internal/http/citizen_directory.go:566"
+      "at": "service-identity/internal/http/citizen_directory.go:733"
     },
     "http.ListCitizenLetterDeadlineRules": {
       "kind": "func",
@@ -12592,11 +12788,11 @@
     },
     "http.RemoveCitizenContact": {
       "kind": "func",
-      "at": "service-identity/internal/http/citizen_directory.go:518"
+      "at": "service-identity/internal/http/citizen_directory.go:660"
     },
     "http.RemoveCitizenGroup": {
       "kind": "func",
-      "at": "service-identity/internal/http/citizen_directory.go:629"
+      "at": "service-identity/internal/http/citizen_directory.go:796"
     },
     "http.RemoveCitizenLetterDeadlineRule": {
       "kind": "func",
@@ -12658,9 +12854,17 @@
       "kind": "func",
       "at": "service-comms/internal/http/sms_accounts.go:406"
     },
+    "http.RetireCitizenField": {
+      "kind": "func",
+      "at": "service-identity/internal/http/citizen_field.go:230"
+    },
+    "http.RevealCitizenContactEmail": {
+      "kind": "func",
+      "at": "service-identity/internal/http/citizen_directory.go:708"
+    },
     "http.RevealCitizenContactPhone": {
       "kind": "func",
-      "at": "service-identity/internal/http/citizen_directory.go:540"
+      "at": "service-identity/internal/http/citizen_directory.go:682"
     },
     "http.RevealStaffEmail": {
       "kind": "func",
@@ -12700,7 +12904,7 @@
     },
     "http.SearchCitizenContacts": {
       "kind": "func",
-      "at": "service-identity/internal/http/citizen_directory.go:376"
+      "at": "service-identity/internal/http/citizen_directory.go:481"
     },
     "http.SeedMapAssetTypes": {
       "kind": "func",
@@ -12725,6 +12929,10 @@
     "http.SendZaloTestMessage": {
       "kind": "func",
       "at": "service-comms/internal/http/zalo_links.go:357"
+    },
+    "http.SetCitizenFieldOrder": {
+      "kind": "func",
+      "at": "service-identity/internal/http/citizen_field.go:249"
     },
     "http.SetCitizenLetterDeadline": {
       "kind": "func",
@@ -13140,11 +13348,15 @@
     },
     "http.UpdateCitizenContact": {
       "kind": "func",
-      "at": "service-identity/internal/http/citizen_directory.go:497"
+      "at": "service-identity/internal/http/citizen_directory.go:639"
+    },
+    "http.UpdateCitizenField": {
+      "kind": "func",
+      "at": "service-identity/internal/http/citizen_field.go:194"
     },
     "http.UpdateCitizenGroup": {
       "kind": "func",
-      "at": "service-identity/internal/http/citizen_directory.go:606"
+      "at": "service-identity/internal/http/citizen_directory.go:773"
     },
     "http.UpdateCitizenLetterDeadlineRule": {
       "kind": "func",
@@ -13866,9 +14078,21 @@
       "kind": "func",
       "at": "core/events/kafka/kafka.go:158"
     },
+    "kafka.Consumer": {
+      "kind": "type",
+      "at": "core/events/kafka/consumer.go:60"
+    },
+    "kafka.Group": {
+      "kind": "func",
+      "at": "core/events/kafka/consumer.go:112"
+    },
     "kafka.New": {
       "kind": "func",
       "at": "core/events/kafka/kafka.go:65"
+    },
+    "kafka.NewConsumer": {
+      "kind": "func",
+      "at": "core/events/kafka/consumer.go:71"
     },
     "kafka.Publish": {
       "kind": "func",
@@ -13877,6 +14101,10 @@
     "kafka.Publisher": {
       "kind": "type",
       "at": "core/events/kafka/kafka.go:54"
+    },
+    "kafka.Run": {
+      "kind": "func",
+      "at": "core/events/kafka/consumer.go:125"
     },
     "mail.Account": {
       "kind": "type",
@@ -15186,6 +15414,186 @@
       "kind": "func",
       "at": "service-comms/internal/richtext/richtext.go:123"
     },
+    "search.AdoptKey": {
+      "kind": "func",
+      "at": "service-identity/internal/search/citizen_index.go:124"
+    },
+    "search.After": {
+      "kind": "type",
+      "at": "service-identity/internal/search/citizen_index.go:394"
+    },
+    "search.AttrNum": {
+      "kind": "type",
+      "at": "service-identity/internal/search/citizen_index.go:243"
+    },
+    "search.BuildDoc": {
+      "kind": "func",
+      "at": "service-identity/internal/search/citizen_index.go:270"
+    },
+    "search.Bulk": {
+      "kind": "func",
+      "at": "core/search/search.go:332"
+    },
+    "search.BulkIndex": {
+      "kind": "type",
+      "at": "core/search/search.go:324"
+    },
+    "search.BulkUpsert": {
+      "kind": "func",
+      "at": "service-identity/internal/search/citizen_index.go:332"
+    },
+    "search.CitizenIndex": {
+      "kind": "type",
+      "at": "service-identity/internal/search/citizen_index.go:70"
+    },
+    "search.Client": {
+      "kind": "type",
+      "at": "core/search/search.go:75"
+    },
+    "search.Count": {
+      "kind": "func",
+      "at": "service-identity/internal/search/citizen_index.go:594"
+    },
+    "search.DeleteByQuery": {
+      "kind": "func",
+      "at": "core/search/search.go:316"
+    },
+    "search.DeleteCommune": {
+      "kind": "func",
+      "at": "service-identity/internal/search/citizen_index.go:358"
+    },
+    "search.DeleteDoc": {
+      "kind": "func",
+      "at": "core/search/search.go:260"
+    },
+    "search.DeleteEverything": {
+      "kind": "func",
+      "at": "service-identity/internal/search/citizen_index.go:141"
+    },
+    "search.Doc": {
+      "kind": "type",
+      "at": "service-identity/internal/search/citizen_index.go:226"
+    },
+    "search.EnsureIndex": {
+      "kind": "func",
+      "at": "core/search/search.go:204"
+    },
+    "search.Error": {
+      "kind": "func",
+      "at": "core/search/search.go:61"
+    },
+    "search.Hit": {
+      "kind": "type",
+      "at": "core/search/search.go:269"
+    },
+    "search.IndexName": {
+      "kind": "func",
+      "at": "service-identity/internal/search/citizen_index.go:80"
+    },
+    "search.IsStatus": {
+      "kind": "func",
+      "at": "core/search/search.go:69"
+    },
+    "search.Meta": {
+      "kind": "func",
+      "at": "core/search/search.go:225"
+    },
+    "search.Name": {
+      "kind": "func",
+      "at": "service-identity/internal/search/citizen_index.go:97"
+    },
+    "search.New": {
+      "kind": "func",
+      "at": "service-identity/internal/search/citizen_index.go:92"
+    },
+    "search.Open": {
+      "kind": "func",
+      "at": "service-identity/internal/search/citizen_index.go:101"
+    },
+    "search.OptionFilter": {
+      "kind": "type",
+      "at": "service-identity/internal/search/citizen_index.go:370"
+    },
+    "search.Page": {
+      "kind": "type",
+      "at": "service-identity/internal/search/citizen_index.go:400"
+    },
+    "search.PutDoc": {
+      "kind": "func",
+      "at": "core/search/search.go:254"
+    },
+    "search.PutMeta": {
+      "kind": "func",
+      "at": "core/search/search.go:248"
+    },
+    "search.Query": {
+      "kind": "type",
+      "at": "service-identity/internal/search/citizen_index.go:382"
+    },
+    "search.RangeFilter": {
+      "kind": "type",
+      "at": "service-identity/internal/search/citizen_index.go:376"
+    },
+    "search.Ready": {
+      "kind": "func",
+      "at": "service-identity/internal/search/citizen_index.go:157"
+    },
+    "search.Search": {
+      "kind": "func",
+      "at": "service-identity/internal/search/citizen_index.go:546"
+    },
+    "search.SearchResult": {
+      "kind": "type",
+      "at": "core/search/search.go:275"
+    },
+    "search.Unindex": {
+      "kind": "func",
+      "at": "service-identity/internal/search/citizen_index.go:349"
+    },
+    "search.Upsert": {
+      "kind": "func",
+      "at": "service-identity/internal/search/citizen_index.go:320"
+    },
+    "searchhash.EmailGrams": {
+      "kind": "func",
+      "at": "core/searchhash/searchhash.go:142"
+    },
+    "searchhash.EmailQuery": {
+      "kind": "func",
+      "at": "core/searchhash/searchhash.go:160"
+    },
+    "searchhash.Fingerprint": {
+      "kind": "func",
+      "at": "core/searchhash/searchhash.go:87"
+    },
+    "searchhash.Key": {
+      "kind": "type",
+      "at": "core/searchhash/searchhash.go:60"
+    },
+    "searchhash.NewKey": {
+      "kind": "func",
+      "at": "core/searchhash/searchhash.go:65"
+    },
+    "searchhash.NormalizeEmail": {
+      "kind": "func",
+      "at": "core/searchhash/searchhash.go:138"
+    },
+    "searchhash.PhoneGrams": {
+      "kind": "func",
+      "at": "core/searchhash/searchhash.go:121"
+    },
+    "searchhash.PhoneQuery": {
+      "kind": "func",
+      "at": "core/searchhash/searchhash.go:130"
+    },
+    "searchhash.Substrings": {
+      "kind": "func",
+      "at": "core/searchhash/searchhash.go:95"
+    },
+    "searchhash.Valid": {
+      "kind": "func",
+      "at": "core/searchhash/searchhash.go:74"
+    },
     "secret.DSN": {
       "kind": "type",
       "at": "core/secret/secret.go:97"
@@ -15784,15 +16192,19 @@
     },
     "store.CitizenContactFilter": {
       "kind": "type",
-      "at": "service-identity/internal/store/citizen_directory.go:84"
+      "at": "service-identity/internal/store/citizen_directory.go:85"
     },
     "store.CitizenContactListItem": {
       "kind": "type",
-      "at": "service-identity/internal/store/citizen_directory.go:105"
+      "at": "service-identity/internal/store/citizen_directory.go:106"
     },
     "store.CitizenDirectoryStore": {
       "kind": "type",
-      "at": "service-identity/internal/store/citizen_directory.go:33"
+      "at": "service-identity/internal/store/citizen_directory.go:34"
+    },
+    "store.CitizenFieldStore": {
+      "kind": "type",
+      "at": "service-identity/internal/store/citizen_field.go:20"
     },
     "store.CitizenGroupStore": {
       "kind": "type",
@@ -15964,7 +16376,7 @@
     },
     "store.Count": {
       "kind": "func",
-      "at": "service-identity/internal/store/citizen_directory.go:224"
+      "at": "service-identity/internal/store/citizen_directory.go:303"
     },
     "store.CountAccountlessPetitionsSince": {
       "kind": "func",
@@ -16310,6 +16722,10 @@
       "kind": "func",
       "at": "service-platform/internal/store/operator_writes.go:87"
     },
+    "store.EventOutboxStore": {
+      "kind": "type",
+      "at": "service-identity/internal/store/event_outbox.go:23"
+    },
     "store.Exec": {
       "kind": "func",
       "at": "core/store/scoped.go:132"
@@ -16440,7 +16856,7 @@
     },
     "store.GroupIDsOf": {
       "kind": "func",
-      "at": "service-identity/internal/store/citizen_directory.go:632"
+      "at": "service-identity/internal/store/citizen_directory.go:781"
     },
     "store.GroupPairingCode": {
       "kind": "type",
@@ -16742,6 +17158,10 @@
       "kind": "func",
       "at": "service-identity/internal/store/citizen_letter_deadline_rule.go:72"
     },
+    "store.ListByIDs": {
+      "kind": "func",
+      "at": "service-identity/internal/store/citizen_directory.go:199"
+    },
     "store.ListByOA": {
       "kind": "func",
       "at": "service-comms/internal/store/zalo_commune_oa.go:502"
@@ -16837,6 +17257,10 @@
     "store.LiveIDs": {
       "kind": "func",
       "at": "service-identity/internal/store/org_unit_lookup.go:25"
+    },
+    "store.LiveIDsAfter": {
+      "kind": "func",
+      "at": "service-identity/internal/store/citizen_directory.go:526"
     },
     "store.LiveIDsByCode": {
       "kind": "func",
@@ -16945,6 +17369,10 @@
     "store.LockAccountlessIntake": {
       "kind": "func",
       "at": "service-petitions/internal/store/accountless.go:25"
+    },
+    "store.LockAndListLive": {
+      "kind": "func",
+      "at": "service-identity/internal/store/citizen_field.go:100"
     },
     "store.LockBudgetYears": {
       "kind": "func",
@@ -17146,6 +17574,10 @@
       "kind": "func",
       "at": "service-comms/internal/store/zalo_link.go:278"
     },
+    "store.MarkPublished": {
+      "kind": "func",
+      "at": "service-identity/internal/store/event_outbox.go:89"
+    },
     "store.MarkRead": {
       "kind": "func",
       "at": "service-comms/internal/store/staff_notification.go:165"
@@ -17172,7 +17604,7 @@
     },
     "store.MemberCounts": {
       "kind": "func",
-      "at": "service-identity/internal/store/citizen_directory.go:662"
+      "at": "service-identity/internal/store/citizen_directory.go:811"
     },
     "store.MergeLinks": {
       "kind": "func",
@@ -17256,7 +17688,11 @@
     },
     "store.NewCitizenDirectoryStore": {
       "kind": "func",
-      "at": "service-identity/internal/store/citizen_directory.go:37"
+      "at": "service-identity/internal/store/citizen_directory.go:38"
+    },
+    "store.NewCitizenFieldStore": {
+      "kind": "func",
+      "at": "service-identity/internal/store/citizen_field.go:24"
     },
     "store.NewCitizenGroupStore": {
       "kind": "func",
@@ -17321,6 +17757,10 @@
     "store.NewDuAnStore": {
       "kind": "func",
       "at": "service-finance/internal/store/du_an.go:24"
+    },
+    "store.NewEventOutboxStore": {
+      "kind": "func",
+      "at": "service-identity/internal/store/event_outbox.go:27"
     },
     "store.NewExternalContactStore": {
       "kind": "func",
@@ -17742,6 +18182,10 @@
       "kind": "func",
       "at": "service-identity/internal/store/notice_recipients.go:43"
     },
+    "store.OutboxEvent": {
+      "kind": "type",
+      "at": "service-identity/internal/store/event_outbox.go:30"
+    },
     "store.OverdueCitizenReports": {
       "kind": "func",
       "at": "service-petitions/internal/store/citizen_report_summary.go:287"
@@ -17856,7 +18300,7 @@
     },
     "store.PhoneTaken": {
       "kind": "func",
-      "at": "service-identity/internal/store/citizen_directory.go:412"
+      "at": "service-identity/internal/store/citizen_directory.go:550"
     },
     "store.Points": {
       "kind": "func",
@@ -17974,9 +18418,13 @@
       "kind": "func",
       "at": "service-platform/internal/store/operator_log.go:73"
     },
+    "store.ReadEmail": {
+      "kind": "func",
+      "at": "service-identity/internal/store/citizen_directory.go:497"
+    },
     "store.ReadPhone": {
       "kind": "func",
-      "at": "service-identity/internal/store/citizen_directory.go:382"
+      "at": "service-identity/internal/store/citizen_directory.go:467"
     },
     "store.ReadyObjectKeys": {
       "kind": "func",
@@ -18184,7 +18632,7 @@
     },
     "store.SetGroups": {
       "kind": "func",
-      "at": "service-identity/internal/store/citizen_directory.go:583"
+      "at": "service-identity/internal/store/citizen_directory.go:732"
     },
     "store.SetMapFrameDefault": {
       "kind": "func",
@@ -18201,6 +18649,10 @@
     "store.SetName": {
       "kind": "func",
       "at": "service-comms/internal/store/zalo_commune_oa.go:247"
+    },
+    "store.SetOrder": {
+      "kind": "func",
+      "at": "service-identity/internal/store/citizen_field.go:187"
     },
     "store.SetPendingWebhookSecret": {
       "kind": "func",
@@ -18432,11 +18884,11 @@
     },
     "store.TagCount": {
       "kind": "type",
-      "at": "service-identity/internal/store/citizen_directory.go:523"
+      "at": "service-identity/internal/store/citizen_directory.go:672"
     },
     "store.TagCounts": {
       "kind": "func",
-      "at": "service-identity/internal/store/citizen_directory.go:539"
+      "at": "service-identity/internal/store/citizen_directory.go:688"
     },
     "store.Tao": {
       "kind": "func",
@@ -18653,6 +19105,10 @@
     "store.UnlinkMerge": {
       "kind": "func",
       "at": "service-petitions/internal/store/petition_merge.go:113"
+    },
+    "store.Unpublished": {
+      "kind": "func",
+      "at": "service-identity/internal/store/event_outbox.go:64"
     },
     "store.UnsetDefault": {
       "kind": "func",

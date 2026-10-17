@@ -115,6 +115,9 @@ const (
 	// service-comms (owner, 17/10/2026). Only the ADDRESS is required in staging/prod; credentials are
 	// optional by the owner's decision (kafka_event.go). APPENDED.
 	KafkaEvent
+	// SearchHash: SEARCH_HASH_KEY — the one system-wide key of the citizen-directory search hashes (ADR
+	// 0101 #8, owner 17/10/2026). service-identity only, required in staging/prod (search_hash.go). APPENDED.
+	SearchHash
 
 	groupEnd // not a group: the bound Uses checks against
 )
@@ -146,6 +149,7 @@ var groupNames = map[Group]string{
 	MiniAppProfile:      "MiniAppProfile",
 	ZaloOA:              "ZaloOA",
 	KafkaEvent:          "KafkaEvent",
+	SearchHash:          "SearchHash",
 }
 
 // String is the identifier a main writes (`config.Redis`), so a message names what to add.

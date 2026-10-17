@@ -112,6 +112,15 @@ spec:
             # khoá gốc niêm secret Zalo của app riêng từng xã (bảng `mini_app_secret`). Identity khai
             # nhóm này, nên staging/prod THIẾU LÀ POD KHÔNG KHỞI ĐỘNG (ADR 0057). Giá trị riêng của
             # identity, khác của comms. SAO LƯU KHOÁ TÁCH KHỎI BẢN SAO LƯU CSDL trước lần đặt secret đầu tiên.
+            # ⚠ TỪ 17/10/2026 (thuộc tính động + tìm kiếm danh bạ trên Elasticsearch, ADR 0101): Secret này
+            # PHẢI có thêm ELASTICSEARCH_API_KEY và SEARCH_HASH_KEY (một khoá cho toàn hệ thống, GIỐNG HỆT ở
+            # vigov-dev và vigov-prod, `openssl rand -base64 32`, không xoay tuỳ tiện — đổi = chạy
+            # `identity -reindex-citizen-contacts=all`), và `common-config` PHẢI có ELASTICSEARCH_ADDRS,
+            # ELASTICSEARCH_INDEX_PREFIX, KAFKA_EVENT_ADDRESS. `configUses` khai Elasticsearch + KafkaEvent +
+            # SearchHash, nên ở prod thiếu một biến là pod TỪ CHỐI KHỞI ĐỘNG (ADR 0057). KAFKA_EVENT_USERNAME /
+            # _PASSWORD (Secret này, cùng giá trị comms) là tuỳ chọn. Topic
+            # `<ENV>.identity.citizen_contact_changed.v1` phải được tạo sẵn. ĐƯỜNG RA 9200 tới Elasticsearch
+            # CHƯA có trong NetworkPolicy `allow-egress` (chỉ 5432/6379/9092) — phải mở trước khi đặt biến.
             - secretRef:    { name: identity-secrets }
 
           startupProbe:

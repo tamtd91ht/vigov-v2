@@ -28,17 +28,22 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"github.com/vihat/vigov/core/audit"
+	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/privacy"
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/ulid"
 	"github.com/vihat/vigov/service-identity/internal/domain"
+	"github.com/vihat/vigov/service-identity/internal/search"
 	idstore "github.com/vihat/vigov/service-identity/internal/store"
 )
 
@@ -53,6 +58,33 @@ const (
 	ActionAddCitizenContact           = "them_nguoi_dan_danh_ba"
 	ActionEditCitizenContact          = "sua_nguoi_dan_danh_ba"
 	ActionRemoveCitizenContact        = "go_nguoi_dan_danh_ba"
+	// ActionRevealCitizenDirectoryEmail — "Xem email đầy đủ" (ADR 0101 #6): the phone reveal's shape for
+	// the e-mail column, a READ audited because it discloses full personal data (rule 6, invariant 7).
+	ActionRevealCitizenDirectoryEmail = "xem_email_nguoi_dan"
+)
+
+// EventCitizenContactChanged is the fact every directory write owes the search index (ADR 0101 #11;
+// proto/vigov/identity/v1/events.proto). Its topic is events.Topic(ENV, this name).
+const EventCitizenContactChanged = "identity.citizen_contact_changed.v1"
+
+// The two operation words of the event payload.
+const (
+	contactOpUpsert = "upsert"
+	contactOpRemove = "remove"
+)
+
+// The search refusals (ADR 0101 #7; task card E-1).
+var (
+	// ErrCitizenSearchUnavailable — the request needs Elasticsearch (attribute or created-date filters, or
+	// any search once the index is configured) and the index is off or failed. 503, never a silent
+	// PostgreSQL answer with the filters dropped.
+	ErrCitizenSearchUnavailable = errors.New("danh bạ người dân: tìm kiếm nâng cao tạm thời không dùng được — vui lòng thử lại sau")
+	// ErrCitizenSearchFilterInvalid — a filter naming a field that is not a live attribute of the right
+	// type, or an option value it does not define, or an empty range.
+	ErrCitizenSearchFilterInvalid = errors.New("danh bạ người dân: bộ lọc thuộc tính không hợp lệ")
+	// ErrCitizenSearchCombination — "Chỉ người có Zalo" is a live session join only PostgreSQL can answer;
+	// it cannot be combined with the attribute and created-date filters only Elasticsearch can.
+	ErrCitizenSearchCombination = errors.New("danh bạ người dân: không lọc \"có Zalo\" cùng lúc với lọc thuộc tính hoặc ngày tạo")
 )
 
 // revealCitizenContactPhonePermission is the key the reveal route declares, recorded in the entry so
@@ -78,6 +110,27 @@ type CitizenContactRepo interface {
 	Update(ctx context.Context, tx *store.ScopedTx, c domain.CitizenContact) error
 	SoftDelete(ctx context.Context, tx *store.ScopedTx, id, by, reason string, at time.Time) error
 	SetGroups(ctx context.Context, tx *store.ScopedTx, contactID string, groupIDs []string, by string, at time.Time) error
+
+	// ListByIDs hydrates the page the search index chose (ADR 0101 #7); ReadEmail is the audited reveal.
+	ListByIDs(ctx context.Context, ids []string) ([]idstore.CitizenContactListItem, error)
+	ReadEmail(ctx context.Context, tx *store.ScopedTx, id string) (string, bool, error)
+}
+
+// CitizenFieldReader reads the commune's attribute definitions. *idstore.CitizenFieldStore.
+type CitizenFieldReader interface {
+	List(ctx context.Context, includeRetired bool) ([]domain.CitizenField, error)
+}
+
+// EventRecorder writes owed facts inside the act's transaction. *idstore.EventOutboxStore.
+type EventRecorder interface {
+	Record(ctx context.Context, tx *store.ScopedTx, evs []idstore.OutboxEvent) error
+}
+
+// CitizenSearch is the directory's search index. *search.CitizenIndex.
+type CitizenSearch interface {
+	Ready() error
+	Search(ctx context.Context, q search.Query, limit int, after *search.After) (search.Page, error)
+	Count(ctx context.Context, q search.Query) (int, error)
 }
 
 // CitizenGroupRepo is the group store, declared at the point of use. *idstore.CitizenGroupStore
@@ -98,21 +151,63 @@ type CitizenDirectory struct {
 	db       *store.DB
 	contacts CitizenContactRepo
 	groups   CitizenGroupRepo
+	fields   CitizenFieldReader
+	outbox   EventRecorder
+	// index is nil when Elasticsearch is NOT CONFIGURED (dev): a keyword-only search then runs on
+	// PostgreSQL, and the filters only the index can answer are 503. Configured but off (key mismatch,
+	// cluster down) is index.Ready() != nil: every search is 503 (owner, 17/10/2026).
+	index CitizenSearch
 
 	// Injected so a test can pin them. In production: ulid.Moi and time.Now.
 	newID func() (string, error)
 	now   func() time.Time
 }
 
-func NewCitizenDirectory(db *store.DB, contacts CitizenContactRepo, groups CitizenGroupRepo) *CitizenDirectory {
-	if db == nil || contacts == nil || groups == nil {
-		panic("app.NewCitizenDirectory: db, contacts and groups are required")
+// NewCitizenDirectory builds the use case. The outbox is REQUIRED: a directory write that did not record
+// its event would leave the search index silently stale (ADR 0101 #11).
+func NewCitizenDirectory(db *store.DB, contacts CitizenContactRepo, groups CitizenGroupRepo,
+	fields CitizenFieldReader, outbox EventRecorder) *CitizenDirectory {
+	if db == nil || contacts == nil || groups == nil || fields == nil || outbox == nil {
+		panic("app.NewCitizenDirectory: db, contacts, groups, fields and outbox are required")
 	}
 	return &CitizenDirectory{
-		db: db, contacts: contacts, groups: groups,
+		db: db, contacts: contacts, groups: groups, fields: fields, outbox: outbox,
 		newID: ulid.Moi,
 		now:   func() time.Time { return time.Now().UTC() },
 	}
+}
+
+// WithSearch attaches the configured search index. Not called when Elasticsearch is not configured.
+func (uc *CitizenDirectory) WithSearch(idx CitizenSearch) *CitizenDirectory {
+	uc.index = idx
+	return uc
+}
+
+// contactChangedEvents builds one outbox row per contact id: the opaque id and the operation, nothing
+// personal (rule 3; events.proto).
+func (uc *CitizenDirectory) contactChangedEvents(ids []string, op string, at time.Time) ([]idstore.OutboxEvent, error) {
+	out := make([]idstore.OutboxEvent, 0, len(ids))
+	for _, id := range ids {
+		evID, err := uc.newID()
+		if err != nil {
+			return nil, fmt.Errorf("danh bạ người dân: sinh mã sự kiện: %w", err)
+		}
+		payload, err := protojson.MarshalOptions{UseProtoNames: true}.Marshal(&identityv1.CitizenContactChanged{ContactId: id, Op: op})
+		if err != nil {
+			return nil, fmt.Errorf("danh bạ người dân: mã hoá sự kiện: %w", err)
+		}
+		out = append(out, idstore.OutboxEvent{ID: evID, Name: EventCitizenContactChanged, Payload: payload, OccurredAt: at})
+	}
+	return out, nil
+}
+
+// recordChanged writes the events of `ids` inside tx — the same transaction as the write (ADR 0101 #11).
+func (uc *CitizenDirectory) recordChanged(ctx context.Context, tx *store.ScopedTx, ids []string, op string, at time.Time) error {
+	evs, err := uc.contactChangedEvents(ids, op, at)
+	if err != nil {
+		return err
+	}
+	return uc.outbox.Record(ctx, tx, evs)
 }
 
 // CitizenContactListItem is one row of the directory page AS THE BROWSER MAY SEE IT: the number
@@ -131,6 +226,9 @@ type CitizenContactListItem struct {
 	// HasOwnAppSession is the "Zalo" column (ADR 0097 §3): one boolean, derived by the store.
 	HasOwnAppSession bool
 	CreatedAt        time.Time
+	// Attributes carries ONLY the live fields the commune marked "hiện ở danh sách" (ADR 0101 #1) — the
+	// list's columns; a page must not carry every attribute of fifty people (rule 3, invariant 6).
+	Attributes map[string]json.RawMessage
 }
 
 // CitizenContactDetail is the edit dialog's view of one row: address and note included, the number
@@ -149,13 +247,26 @@ type CitizenContactDetail struct {
 	ImportBatchID     string
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
+	// EmailMasked is privacy.MaskEmail of the e-mail (ADR 0101 #6), "" when none; the full address has
+	// its own audited route (RevealEmail), like the number.
+	EmailMasked string
+	// Attributes are the values of the LIVE fields (the edit form); values of retired fields stay stored
+	// and hidden (ADR 0101 #4).
+	Attributes map[string]json.RawMessage
 }
 
 // CitizenContactRequest is one contact as the add / edit form sends it: the row's fields and the
 // WHOLE set of group ids the person belongs to (SetGroups semantics — absent means removed).
+//
+// Email and Attributes are OPTIONAL ON AN EDIT so the dialog can save without revealing the e-mail first:
+// Email nil = keep the stored address, "" = clear it; AttributesSet false = keep every stored value, true =
+// Attributes is the whole set of live values (a live code absent is cleared). On a create, absent = none.
 type CitizenContactRequest struct {
-	Contact  domain.CitizenContactInput
-	GroupIDs []string
+	Contact       domain.CitizenContactInput
+	GroupIDs      []string
+	Email         *string
+	Attributes    map[string]json.RawMessage
+	AttributesSet bool
 }
 
 // List reads one page under `f` and masks every number before it leaves.
@@ -165,15 +276,38 @@ func (uc *CitizenDirectory) List(ctx context.Context, f idstore.CitizenContactFi
 	if err != nil {
 		return page.NewResult[CitizenContactListItem](), err
 	}
-	out := page.Result[CitizenContactListItem]{
-		Items: make([]CitizenContactListItem, 0, len(kq.Items)), NextCursor: kq.NextCursor, HasMore: kq.HasMore,
+	items, err := uc.maskListItems(ctx, kq.Items)
+	if err != nil {
+		return page.NewResult[CitizenContactListItem](), err
 	}
-	for _, r := range kq.Items {
-		out.Items = append(out.Items, CitizenContactListItem{
+	return page.Result[CitizenContactListItem]{Items: items, NextCursor: kq.NextCursor, HasMore: kq.HasMore}, nil
+}
+
+// maskListItems renders store rows as the browser may see them: number masked, attributes cut to the
+// live list columns. One definition read per page.
+func (uc *CitizenDirectory) maskListItems(ctx context.Context, rows []idstore.CitizenContactListItem) ([]CitizenContactListItem, error) {
+	out := make([]CitizenContactListItem, 0, len(rows))
+	if len(rows) == 0 {
+		return out, nil
+	}
+	// The store scopes this read by tenant_id through store.DB.For(ctx).
+	defs, err := uc.fields.List(ctx, false)
+	if err != nil {
+		return nil, err
+	}
+	var columns []domain.CitizenField
+	for _, d := range defs {
+		if d.ShowInList {
+			columns = append(columns, d)
+		}
+	}
+	for _, r := range rows {
+		out = append(out, CitizenContactListItem{
 			ID: r.ID, FullName: r.FullName, PhoneMasked: privacy.MaskPhone(r.Phone),
 			ResidentialUnitID: r.ResidentialUnitID, ResidentialUnitName: r.ResidentialUnitName,
 			Tags: nonNilStrings(r.Tags), GroupIDs: nonNilStrings(r.GroupIDs),
 			IsActive: r.IsActive, Source: r.Source, HasOwnAppSession: r.HasOwnAppSession, CreatedAt: r.CreatedAt,
+			Attributes: domain.LiveAttributes(columns, r.Attributes),
 		})
 	}
 	return out, nil
@@ -205,14 +339,59 @@ func (uc *CitizenDirectory) Get(ctx context.Context, id string) (CitizenContactD
 	if err != nil {
 		return CitizenContactDetail{}, err
 	}
+	// The store scopes this read by tenant_id through store.DB.For(ctx).
+	defs, err := uc.fields.List(ctx, false)
+	if err != nil {
+		return CitizenContactDetail{}, err
+	}
 	d := CitizenContactDetail{
 		ID: c.ID, FullName: c.FullName, PhoneMasked: privacy.MaskPhone(c.Phone),
 		ResidentialUnitID: derefString(c.ResidentialUnitID), Address: c.Address, Note: c.Note,
 		Tags: nonNilStrings(c.Tags), GroupIDs: nonNilStrings(groups[c.ID]),
 		IsActive: c.IsActive, Source: c.Source, ImportBatchID: derefString(c.ImportBatchID),
 		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
+		Attributes: domain.LiveAttributes(defs, c.Attributes),
+	}
+	if c.Email != "" {
+		d.EmailMasked = privacy.MaskEmail(c.Email)
 	}
 	return d, nil
+}
+
+// RevealEmail returns the FULL e-mail of one live contact — "Xem email đầy đủ" (ADR 0101 #6). The
+// RevealPhone contract: one entry per call, written in the read's transaction, the address handed out only
+// after the commit. "" when the row has no e-mail (still one entry: the act of looking is the disclosure).
+func (uc *CitizenDirectory) RevealEmail(ctx context.Context, actor NguoiThucHien, id string) (string, error) {
+	if err := actor.hopLe(); err != nil {
+		return "", err
+	}
+	if id == "" {
+		return "", idstore.ErrCitizenContactNotFound
+	}
+	delta := deltaSLA(map[string]any{"truong_da_mo": []string{"email"}, "quyen": revealCitizenContactPhonePermission})
+	var email string
+	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		e, found, err := uc.contacts.ReadEmail(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return idstore.ErrCitizenContactNotFound
+		}
+		// TenantID left unset: audit.Write takes it from the transaction (rule 1, invariant 4).
+		if err := audit.Write(ctx, tx, audit.Entry{
+			Actor: actor.Vet, Action: ActionRevealCitizenDirectoryEmail, Subject: id, Delta: delta,
+		}); err != nil {
+			return err
+		}
+		email = e
+		return nil
+	})
+	if err != nil {
+		// Never the address in the message (rule 3).
+		return "", fmt.Errorf("xem_email_nguoi_dan: %w", err)
+	}
+	return email, nil
 }
 
 // RevealPhone returns the FULL number of one live contact — "Xem số đầy đủ" (ADR 0097 §1).
@@ -275,7 +454,20 @@ func (uc *CitizenDirectory) Create(ctx context.Context, actor NguoiThucHien, req
 	if err := actor.hopLe(); err != nil {
 		return "", err
 	}
+	if req.Email != nil {
+		req.Contact.Email = *req.Email
+	}
 	in, err := domain.CheckCitizenContactInput(req.Contact)
+	if err != nil {
+		return "", err
+	}
+	// The store scopes this read by tenant_id through store.DB.For(ctx). Retired fields included: their
+	// codes are recognised (and ignored) rather than refused as unknown.
+	defs, err := uc.fields.List(ctx, true)
+	if err != nil {
+		return "", err
+	}
+	attrs, err := domain.CheckCitizenAttributes(defs, req.Attributes, nil)
 	if err != nil {
 		return "", err
 	}
@@ -289,6 +481,7 @@ func (uc *CitizenDirectory) Create(ctx context.Context, actor NguoiThucHien, req
 	}
 	at := uc.now()
 	c := contactFromInput(id, in, domain.CitizenContactSourceManual, nil, at)
+	c.Attributes = attrs
 
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		// Checked inside the transaction so the answer and the insert see the same rows; the
@@ -310,14 +503,21 @@ func (uc *CitizenDirectory) Create(ctx context.Context, actor NguoiThucHien, req
 				return err
 			}
 		}
+		// The search index learns of the row through the outbox, in this transaction (ADR 0101 #11).
+		if err := uc.recordChanged(ctx, tx, []string{c.ID}, contactOpUpsert, at); err != nil {
+			return err
+		}
 		// SAME TRANSACTION AS THE INSERT (rule 6, invariant 3). Non-personal fields only.
+		trail := contactTrail(in, len(groupIDs))
+		trail["co_email"] = in.Email != ""
+		trail["thuoc_tinh"] = attributeCodes(attrs)
 		return audit.Write(ctx, tx, audit.Entry{
 			Actor:   actor.Vet,
 			Action:  ActionAddCitizenContact,
 			Subject: c.ID,
 			At:      at,
 			Delta: deltaSLA(map[string]any{
-				"sau":   contactTrail(in, len(groupIDs)),
+				"sau":   trail,
 				"nguon": string(c.Source),
 			}),
 		})
@@ -344,14 +544,6 @@ func (uc *CitizenDirectory) Update(ctx context.Context, actor NguoiThucHien, id 
 	if id == "" {
 		return idstore.ErrCitizenContactNotFound
 	}
-	in, err := domain.CheckCitizenContactInput(req.Contact)
-	if err != nil {
-		return err
-	}
-	groupIDs, err := uc.liveGroupIDs(ctx, req.GroupIDs)
-	if err != nil {
-		return err
-	}
 	// The store scopes this read by tenant_id through store.DB.For(ctx).
 	before, found, err := uc.contacts.Get(ctx, id)
 	if err != nil {
@@ -360,17 +552,46 @@ func (uc *CitizenDirectory) Update(ctx context.Context, actor NguoiThucHien, id 
 	if !found {
 		return idstore.ErrCitizenContactNotFound
 	}
+	// Email absent = keep the stored address (the dialog never had it unmasked); "" = clear.
+	req.Contact.Email = before.Email
+	if req.Email != nil {
+		req.Contact.Email = *req.Email
+	}
+	in, err := domain.CheckCitizenContactInput(req.Contact)
+	if err != nil {
+		return err
+	}
+	attrs := before.Attributes
+	if req.AttributesSet {
+		// The store scopes this read by tenant_id through store.DB.For(ctx).
+		defs, err := uc.fields.List(ctx, true)
+		if err != nil {
+			return err
+		}
+		if attrs, err = domain.CheckCitizenAttributes(defs, req.Attributes, before.Attributes); err != nil {
+			return err
+		}
+	}
+	groupIDs, err := uc.liveGroupIDs(ctx, req.GroupIDs)
+	if err != nil {
+		return err
+	}
 	beforeGroups, err := uc.contacts.GroupIDsOf(ctx, []string{id})
 	if err != nil {
 		return err
 	}
 	changed := changedContactFields(before, beforeGroups[id], in, groupIDs)
+	changedAttrs := changedAttributeCodes(before.Attributes, attrs)
+	if len(changedAttrs) > 0 {
+		changed = append(changed, "attributes")
+	}
 	if len(changed) == 0 {
 		return nil
 	}
 	at := uc.now()
 	after := contactFromInput(before.ID, in, before.Source, before.ImportBatchID, before.CreatedAt)
 	after.UpdatedAt = at
+	after.Attributes = attrs
 
 	return uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		if in.Phone != before.Phone {
@@ -391,18 +612,53 @@ func (uc *CitizenDirectory) Update(ctx context.Context, actor NguoiThucHien, id 
 				return err
 			}
 		}
+		if err := uc.recordChanged(ctx, tx, []string{id}, contactOpUpsert, at); err != nil {
+			return err
+		}
+		delta := map[string]any{
+			"truong_da_doi": changed,
+			"truoc":         map[string]any{"is_active": before.IsActive},
+			"sau":           map[string]any{"is_active": in.IsActive},
+		}
+		if len(changedAttrs) > 0 {
+			// Codes only — a value may be personal data (rule 6, forbidden #4).
+			delta["thuoc_tinh_da_doi"] = changedAttrs
+		}
 		return audit.Write(ctx, tx, audit.Entry{
 			Actor:   actor.Vet,
 			Action:  ActionEditCitizenContact,
 			Subject: id,
 			At:      at,
-			Delta: deltaSLA(map[string]any{
-				"truong_da_doi": changed,
-				"truoc":         map[string]any{"is_active": before.IsActive},
-				"sau":           map[string]any{"is_active": in.IsActive},
-			}),
+			Delta:   deltaSLA(delta),
 		})
 	})
+}
+
+// attributeCodes lists the codes holding a value, sorted — what a create entry records.
+func attributeCodes(a map[string]json.RawMessage) []string {
+	out := make([]string, 0, len(a))
+	for k := range a {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// changedAttributeCodes lists, sorted, the codes whose stored JSON differs between before and after.
+func changedAttributeCodes(before, after map[string]json.RawMessage) []string {
+	var out []string
+	for k, v := range after {
+		if string(before[k]) != string(v) {
+			out = append(out, k)
+		}
+	}
+	for k := range before {
+		if _, ok := after[k]; !ok {
+			out = append(out, k)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // Remove soft deletes one contact with a MANDATORY reason (ADR 0097 D7): removing a person from the
@@ -422,6 +678,9 @@ func (uc *CitizenDirectory) Remove(ctx context.Context, actor NguoiThucHien, id,
 	return uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		// deleted_by is the STAFF CODE (rule 6, invariant 8) — the same value as the entry's actor.
 		if err := uc.contacts.SoftDelete(ctx, tx, id, actor.Vet.ID, reason, at); err != nil {
+			return err
+		}
+		if err := uc.recordChanged(ctx, tx, []string{id}, contactOpRemove, at); err != nil {
 			return err
 		}
 		return audit.Write(ctx, tx, audit.Entry{
@@ -449,6 +708,8 @@ func IsCitizenDirectoryInputError(err error) bool {
 		domain.ErrCitizenGroupDescriptionTooLong, domain.ErrCitizenGroupSortOrderRange,
 		domain.ErrCitizenDirectoryReasonMissing, domain.ErrCitizenDirectoryReasonTooLong,
 		idstore.ErrCitizenContactUnitUnknown,
+		domain.ErrCitizenContactEmail, domain.ErrCitizenAttributeUnknown, domain.ErrCitizenAttributeInvalid,
+		domain.ErrCitizenAttributeRequired, ErrCitizenSearchFilterInvalid, ErrCitizenSearchCombination,
 	} {
 		if errors.Is(err, e) {
 			return true
@@ -487,7 +748,7 @@ func contactFromInput(id string, in domain.CitizenContactInput, source domain.Ci
 	batch *string, createdAt time.Time) domain.CitizenContact {
 	c := domain.CitizenContact{
 		ID: id, FullName: in.FullName, Phone: in.Phone, Address: in.Address, Note: in.Note,
-		Tags: nonNilStrings(in.Tags), Source: source, IsActive: in.IsActive,
+		Tags: nonNilStrings(in.Tags), Source: source, IsActive: in.IsActive, Email: in.Email,
 		ImportBatchID: batch, CreatedAt: createdAt, UpdatedAt: createdAt,
 	}
 	if in.ResidentialUnitID != "" {
@@ -526,6 +787,7 @@ func changedContactFields(before domain.CitizenContact, beforeGroups []string, a
 	add("note", before.Note != after.Note)
 	add("tags", !sameList(before.Tags, after.Tags))
 	add("is_active", before.IsActive != after.IsActive)
+	add("email", before.Email != after.Email)
 	add("groups", !sameSet(beforeGroups, afterGroups))
 	return out
 }

@@ -3761,6 +3761,86 @@
         }
       }
     },
+    "/api/v1/citizen-contacts/{id}/email": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Email đầy đủ của một người dân trong danh bạ — mỗi lần xem ghi nhật ký kiểm toán",
+        "operationId": "identity_get_citizen_contacts_by_id_email",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "16-danh-ba-nguoi-dan §5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "citizen.update"
+        },
+        "x-vigov-task": "19bfe59f20b6",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.citizenContactEmailOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "citizen_contact_not_found"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/citizen-contacts/{id}/phone": {
       "parameters": [
         {
@@ -3826,6 +3906,444 @@
             },
             "x-vigov-error-codes": [
               "citizen_contact_not_found"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-field-order": {
+      "put": {
+        "summary": "Đặt thứ tự kéo-thả của các thuộc tính đang dùng — danh sách đủ mọi mã, mỗi mã một lần",
+        "operationId": "identity_put_citizen_field_order",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh Thuộc tính danh bạ",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.citizen_field"
+        },
+        "x-vigov-task": "e7af72d368c8",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.citizenFieldOrderIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_request"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-fields": {
+      "get": {
+        "summary": "Các thuộc tính động của danh bạ người dân của xã, theo thứ tự — ?include_retired=true cho màn cấu hình",
+        "operationId": "identity_get_citizen_fields",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh Thuộc tính danh bạ",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "any_of": [
+            "citizen.read",
+            "admin.citizen_field"
+          ]
+        },
+        "x-vigov-task": "2e50064984fc",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.citizenFieldsOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Thêm một thuộc tính động cho danh bạ người dân — mã 6–8 ký tự, loại không đổi sau khi tạo; tối đa 50 thuộc tính đang dùng",
+        "operationId": "identity_post_citizen_fields",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh Thuộc tính danh bạ",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.citizen_field"
+        },
+        "x-vigov-task": "3a975436ec11",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "MoKhiHong",
+          "on_store_failure_effect": "Store không tới được -> cho qua và ghi cảnh báo"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.citizenFieldIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.citizenFieldOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_request"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "citizen_field_code_taken",
+              "citizen_field_limit"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-fields/{code}": {
+      "parameters": [
+        {
+          "name": "code",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Ngừng dùng một thuộc tính (xoá mềm), lý do bắt buộc — ẩn khỏi biểu mẫu và bộ lọc, giữ giá trị đã nhập",
+        "operationId": "identity_delete_citizen_fields_by_code",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh Thuộc tính danh bạ",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.citizen_field"
+        },
+        "x-vigov-task": "3be976c7ce09",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.citizenFieldRetireIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_request"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "citizen_field_not_found"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Sửa tên, placeholder, lựa chọn (thêm, đổi nhãn, ngừng — không xoá), bắt buộc, hiện ở danh sách, định dạng ngày của một thuộc tính",
+        "operationId": "identity_patch_citizen_fields_by_code",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh Thuộc tính danh bạ",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.citizen_field"
+        },
+        "x-vigov-task": "d34e089c64a5",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.citizenFieldPatchIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.citizenFieldOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_request"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "citizen_field_not_found"
             ]
           },
           "500": {
@@ -53236,10 +53754,33 @@
               "boolean",
               "null"
             ]
+          },
+          "created_from": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "created_to": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.citizenContactFilterIn"
+            }
           }
         },
         "required": [
           "active",
+          "created_from",
+          "created_to",
+          "filters",
           "group_id",
           "has_own_app_session",
           "q",
@@ -53321,11 +53862,20 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "email_masked": {
+            "type": "string"
+          },
+          "attributes": {
+            "type": "object",
+            "additionalProperties": {}
           }
         },
         "required": [
           "address",
+          "attributes",
           "created_at",
+          "email_masked",
           "full_name",
           "group_ids",
           "id",
@@ -53337,6 +53887,51 @@
           "source",
           "tags",
           "updated_at"
+        ],
+        "additionalProperties": false
+      },
+      "identity.citizenContactEmailOut": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "additionalProperties": false
+      },
+      "identity.citizenContactFilterIn": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "from": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "to": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "from",
+          "to",
+          "values"
         ],
         "additionalProperties": false
       },
@@ -53464,10 +54059,22 @@
               "boolean",
               "null"
             ]
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "attributes": {
+            "type": "object",
+            "additionalProperties": {}
           }
         },
         "required": [
           "address",
+          "attributes",
+          "email",
           "full_name",
           "group_ids",
           "is_active",
@@ -53520,9 +54127,14 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "attributes": {
+            "type": "object",
+            "additionalProperties": {}
           }
         },
         "required": [
+          "attributes",
           "created_at",
           "full_name",
           "group_ids",
@@ -53581,11 +54193,34 @@
           },
           "cursor": {
             "type": "string"
+          },
+          "created_from": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "created_to": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.citizenContactFilterIn"
+            }
           }
         },
         "required": [
           "active",
+          "created_from",
+          "created_to",
           "cursor",
+          "filters",
           "group_id",
           "has_own_app_session",
           "limit",
@@ -53617,6 +54252,258 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/identity.citizenContactTagOut"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "identity.citizenFieldIn": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "field_type": {
+            "type": "string"
+          },
+          "placeholder": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.citizenFieldOptionWire"
+            }
+          },
+          "number_kind": {
+            "type": "string"
+          },
+          "date_pattern": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "show_in_list": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "date_pattern",
+          "field_type",
+          "label",
+          "number_kind",
+          "options",
+          "placeholder",
+          "required",
+          "show_in_list"
+        ],
+        "additionalProperties": false
+      },
+      "identity.citizenFieldOptionWire": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "retired": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "label",
+          "retired",
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "identity.citizenFieldOrderIn": {
+        "type": "object",
+        "properties": {
+          "codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "codes"
+        ],
+        "additionalProperties": false
+      },
+      "identity.citizenFieldOut": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "field_type": {
+            "type": "string"
+          },
+          "placeholder": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.citizenFieldOptionWire"
+            }
+          },
+          "number_kind": {
+            "type": "string"
+          },
+          "date_pattern": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "show_in_list": {
+            "type": "boolean"
+          },
+          "sort_order": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "retired_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "code",
+          "created_at",
+          "date_pattern",
+          "field_type",
+          "label",
+          "number_kind",
+          "options",
+          "placeholder",
+          "required",
+          "retired_at",
+          "show_in_list",
+          "sort_order",
+          "updated_at"
+        ],
+        "additionalProperties": false
+      },
+      "identity.citizenFieldPatchIn": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "field_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "placeholder": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "options": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/identity.citizenFieldOptionWire"
+            }
+          },
+          "number_kind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "date_pattern": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "required": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "show_in_list": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "date_pattern",
+          "field_type",
+          "label",
+          "number_kind",
+          "options",
+          "placeholder",
+          "required",
+          "show_in_list"
+        ],
+        "additionalProperties": false
+      },
+      "identity.citizenFieldRetireIn": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "identity.citizenFieldsOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.citizenFieldOut"
             }
           }
         },

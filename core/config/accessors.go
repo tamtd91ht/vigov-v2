@@ -303,6 +303,7 @@ type configView struct {
 	ZaloOACallbackHost             string
 	ZaloOAWebhookSecret            secret.Secret
 	KafkaEventBroker               KafkaEventBroker // the credentials inside are secret.Secret
+	SearchHashKey                  secret.Secret
 	BasemapURL                     string
 	MiniAppProfileCode             secret.Secret
 	RabbitMQDSN                    secret.DSN
@@ -354,6 +355,7 @@ func (c Config) view() configView {
 		ZaloOACallbackHost:             c.zaloOACallbackHost,
 		ZaloOAWebhookSecret:            c.zaloOAWebhookSecret,
 		KafkaEventBroker:               c.kafkaEvent,
+		SearchHashKey:                  c.searchHashKey,
 		BasemapURL:                     c.basemapURL,
 		MiniAppProfileCode:             c.miniAppProfileCode,
 		RabbitMQDSN:                    c.rabbitMQDSN,

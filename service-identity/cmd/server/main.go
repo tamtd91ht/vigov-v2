@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -72,6 +73,13 @@ var configUses = config.Uses(
 	// tokens and seals TOTP secrets. Declared, so staging/prod refuse to start without both keys,
 	// ADR 0057. In dev, absent keys mean every OperatorService RPC answers FAILED_PRECONDITION.
 	config.OperatorRealm,
+	// ADR 0101 #7–#11, owner 17/10/2026: the citizen-directory search runs on Elasticsearch, fed through
+	// the outbox → Kafka → identity's own consumer, with phone/e-mail stored as keyed hashes under the one
+	// system-wide SEARCH_HASH_KEY. Declared, so staging/prod refuse to start without them, ADR 0057. In dev,
+	// absent = search off with a startup warning, cmd/server/citizen_search.go, never a crash.
+	config.Elasticsearch,
+	config.KafkaEvent,
+	config.SearchHash,
 )
 
 func main() {
@@ -82,6 +90,16 @@ func main() {
 	}
 
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+	// `-reindex-citizen-contacts=<tenant_id|all>`: rebuild the directory search index and exit (ADR 0101
+	// #11) — one-off pod with the deployment's environment. `all` also adopts a new SEARCH_HASH_KEY.
+	if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], reindexFlag) {
+		if err := runReindex(log, strings.TrimPrefix(os.Args[1], reindexFlag)); err != nil {
+			log.Error("dựng lại chỉ mục danh bạ lỗi", "err", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
 
 	if err := run(log); err != nil {
 		log.Error("service dừng", "err", err)
@@ -229,6 +247,27 @@ func run(log *slog.Logger) error {
 	// every statement binds tenant_id from the context or the transaction.
 	citizenContacts := idstore.NewCitizenDirectoryStore(kho)
 	citizenGroups := idstore.NewCitizenGroupStore(kho)
+	// Thuộc tính động + tìm kiếm (migration 0036, ADR 0101): the commune's attribute definitions, and the
+	// outbox every directory write records its event in (same transaction). The background search
+	// pipeline (index, relay, consumer) lives until searchCtx is cancelled at shutdown.
+	citizenFields := idstore.NewCitizenFieldStore(kho)
+	eventOutbox := idstore.NewEventOutboxStore(kho)
+	searchCtx, stopSearch := context.WithCancel(context.Background())
+	defer stopSearch()
+	citizenIndex, err := buildCitizenIndex(searchCtx, cfg, log)
+	if err != nil {
+		return err
+	}
+	closeSearch, err := startCitizenSearchPipeline(searchCtx, cfg, db, kho, citizenIndex, log)
+	if err != nil {
+		return err
+	}
+	defer closeSearch()
+	citizenDirectory := app.NewCitizenDirectory(kho, citizenContacts, citizenGroups, citizenFields, eventOutbox)
+	if citizenIndex != nil {
+		// Only when configured: a nil *CitizenIndex in the interface would read as "configured but off".
+		citizenDirectory.WithSearch(citizenIndex)
+	}
 	// The CITIZEN session registry (migration 0004) — the only store here built on the RAW *sql.DB
 	// rather than on `kho`, and the exemption is argued in full at NewPhienCongDanStore: this
 	// lookup is what ESTABLISHES the commune, so there is no commune with which to scope it
@@ -550,8 +589,10 @@ func run(log *slog.Logger) error {
 		// Danh bạ người dân (ADR 0097): one use case for the reads (the mask lives there), the writes
 		// (each with its audit entry in one transaction) and the Excel import. The template's and the
 		// import's residential units come from ThonToDanPho above, active only.
-		CitizenDirectory: app.NewCitizenDirectory(kho, citizenContacts, citizenGroups),
-		Automation:       automation,
+		CitizenDirectory: citizenDirectory,
+		// Cấu hình → Thuộc tính danh bạ (ADR 0101 #1–#5): every write audited in its own transaction.
+		CitizenFields: app.NewCitizenFields(kho, citizenFields),
+		Automation:    automation,
 		// This service's OWN audit_log, on its own handle — never another service's (ADR 0054 §1).
 		AuditLog: audit.NewLog(kho),
 		// Logo + web-admin banner on GET /api/v1/communes/current (ADR 0069 #8): the SAME platform client

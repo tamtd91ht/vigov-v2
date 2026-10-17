@@ -393,6 +393,14 @@
       "no_confirm": [],
       "bang_chung": "TASK D-7: core/phone, core/crypto/envelope.go; go test core/phone + core/crypto xanh (17/10/2026).",
       "tiep_theo": "service-identity còn bản fold số riêng (internal/domain/citizen_directory.go) — cân nhắc chuyển sang core/phone."
+    },
+    {
+      "id": "kafka-consumer-es-searchhash-17-10",
+      "viec": "core/events/kafka Consumer, core/search (ES qua net/http), core/searchhash (HMAC n-gram), nhóm cấu hình SearchHash (SEARCH_HASH_KEY) — ADR 0101",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "bang_chung": "TASK E-1: go test core 36/36 gói; check_env_map PASS 51 biến (17/10/2026). NetworkPolicy allow-identity-egress-elasticsearch (9200, chỉ identity).",
+      "tiep_theo": "Chưa nối Kafka/ES thật. Dòng SEARCH_HASH_KEY trong .env.example để trống có chủ ý (placeholder trượt phép kiểm định dạng)."
     }
   ]
 }

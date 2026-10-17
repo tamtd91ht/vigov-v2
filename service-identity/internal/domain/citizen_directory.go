@@ -19,6 +19,7 @@ package domain
 // safe to log, to return and to read out.
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -60,6 +61,12 @@ type CitizenContact struct {
 	Tags              []string
 	Source            CitizenContactSource
 	IsActive          bool
+	// Email is the static e-mail column (ADR 0101 #6), lower case, "" = none. Personal data: masked at
+	// the API (privacy.MaskEmail), revealed only through the audited route.
+	Email string
+	// Attributes are the commune's dynamic attribute values, {code: JSON value} (ADR 0101; migration
+	// 0036). Values of RETIRED fields are kept here and hidden on the way out (LiveAttributes).
+	Attributes map[string]json.RawMessage
 	// HouseholdCode is RESERVED (owner, 16/10/2026) — carried so a row round-trips, never set by
 	// this service.
 	HouseholdCode *string
@@ -247,6 +254,9 @@ type CitizenContactInput struct {
 	Note              string
 	Tags              []string
 	IsActive          bool
+	// Email "" = none (ADR 0101 #6). Attribute values are checked by CheckCitizenAttributes against the
+	// commune's definitions, which only the use case can read.
+	Email string
 }
 
 // CheckCitizenContactInput applies every shape rule and returns the NORMALISED input: name with
@@ -277,6 +287,9 @@ func CheckCitizenContactInput(in CitizenContactInput) (CitizenContactInput, erro
 		return CitizenContactInput{}, err
 	}
 	if out.Tags, err = NormalizeCitizenContactTags(in.Tags); err != nil {
+		return CitizenContactInput{}, err
+	}
+	if out.Email, err = NormalizeCitizenContactEmail(in.Email); err != nil {
 		return CitizenContactInput{}, err
 	}
 	return out, nil

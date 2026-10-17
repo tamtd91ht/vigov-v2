@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
@@ -30,6 +31,7 @@ import (
 //	PATCH  /api/v1/citizen-contacts/{id}             save the whole form
 //	POST   /api/v1/citizen-contacts/{id}/deletion    soft delete, reason mandatory
 //	GET    /api/v1/citizen-contacts/{id}/phone       "Xem số đầy đủ" — one audit entry per call
+//	GET    /api/v1/citizen-contacts/{id}/email       "Xem email đầy đủ" — the same contract (ADR 0101 #6)
 //	GET    /api/v1/citizen-groups                    the groups and their member counts
 //	POST   /api/v1/citizen-groups                    create a group
 //	PATCH  /api/v1/citizen-groups/{id}               rename / describe / reorder a group
@@ -67,9 +69,13 @@ const citizenContactBodyMax = thanCanBoToiDa
 type CitizenDirectoryUseCases interface {
 	List(ctx context.Context, f idstore.CitizenContactFilter, req page.Request) (page.Result[app.CitizenContactListItem], error)
 	Count(ctx context.Context, f idstore.CitizenContactFilter) (int, error)
+	// Search / CountSearch: the search body with the attribute and created-date filters (ADR 0101 #7).
+	Search(ctx context.Context, q app.CitizenContactSearch, req page.Request) (page.Result[app.CitizenContactListItem], error)
+	CountSearch(ctx context.Context, q app.CitizenContactSearch) (int, error)
 	TagCounts(ctx context.Context) ([]idstore.TagCount, error)
 	Get(ctx context.Context, id string) (app.CitizenContactDetail, error)
 	RevealPhone(ctx context.Context, actor app.NguoiThucHien, id string) (string, error)
+	RevealEmail(ctx context.Context, actor app.NguoiThucHien, id string) (string, error)
 	Create(ctx context.Context, actor app.NguoiThucHien, req app.CitizenContactRequest) (string, error)
 	Update(ctx context.Context, actor app.NguoiThucHien, id string, req app.CitizenContactRequest) error
 	Remove(ctx context.Context, actor app.NguoiThucHien, id, reason string) error
@@ -105,6 +111,9 @@ type citizenContactOut struct {
 	// Mini App right now. One boolean — never an id, never whether the number is known elsewhere.
 	HasOwnAppSession bool      `json:"has_own_app_session"`
 	CreatedAt        time.Time `json:"created_at"`
+	// Attributes are the values of the live fields marked "hiện ở danh sách" only (ADR 0101 #1), {code:
+	// value}: the list's dynamic columns. Never the other attributes.
+	Attributes map[string]any `json:"attributes"`
 }
 
 // citizenContactDetailOut is the edit dialog's view (chapter 16 §5): address and note included, the
@@ -123,20 +132,46 @@ type citizenContactDetailOut struct {
 	ImportBatchID     string    `json:"import_batch_id"` // "" unless source is nhap-excel
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
+	// EmailMasked is privacy.MaskEmail of the address, "" when none (ADR 0101 #6) — the name the staff
+	// picker already uses (danh_ba_chon_nguoi.go). The full address: GET …/{id}/email, audited.
+	EmailMasked string `json:"email_masked"`
+	// Attributes are the values of the LIVE fields, {code: value} (ADR 0101).
+	Attributes map[string]any `json:"attributes"`
 }
 
 // citizenContactIn is the whole add / edit form (chapter 16 §5). PATCH sends the WHOLE form: the
 // use case compares and audits what changed. `group_ids` is the full membership — absent means
 // removed. `is_active` absent = true (the checkbox's default).
+//
+// `email` (ADR 0101 #6): absent = keep the stored address (the dialog only ever saw it masked), "" =
+// clear, a value = set. `attributes`: absent = keep every stored value; present = the whole set of live
+// values, a live code absent is cleared; codes of retired fields are ignored and their values kept.
 type citizenContactIn struct {
-	FullName          string   `json:"full_name"`
-	Phone             string   `json:"phone"` // any spelling; the server normalises to 0…
-	ResidentialUnitID string   `json:"residential_unit_id"`
-	Address           string   `json:"address"`
-	Note              string   `json:"note"`
-	Tags              []string `json:"tags"`
-	GroupIDs          []string `json:"group_ids"`
-	IsActive          *bool    `json:"is_active"`
+	FullName          string         `json:"full_name"`
+	Phone             string         `json:"phone"` // any spelling; the server normalises to 0…
+	ResidentialUnitID string         `json:"residential_unit_id"`
+	Address           string         `json:"address"`
+	Note              string         `json:"note"`
+	Tags              []string       `json:"tags"`
+	GroupIDs          []string       `json:"group_ids"`
+	IsActive          *bool          `json:"is_active"`
+	Email             *string        `json:"email"`
+	Attributes        map[string]any `json:"attributes"`
+}
+
+// citizenContactEmailOut is the one body that carries a full e-mail — the reply of the audited reveal.
+type citizenContactEmailOut struct {
+	Email string `json:"email"`
+}
+
+// citizenContactFilterIn is one attribute filter of the search body (ADR 0101 #10): `values` for a
+// combobox / singleBox field (match ANY), or `from` / `to` for a number / dateTime field (inclusive, one
+// bound enough; dateTime in epoch millis).
+type citizenContactFilterIn struct {
+	Code   string   `json:"code"`
+	Values []string `json:"values"`
+	From   *float64 `json:"from"`
+	To     *float64 `json:"to"`
 }
 
 // citizenContactCreatedOut is the 201 of POST: the new row's id, what the dialog opens next.
@@ -166,24 +201,61 @@ type citizenContactPhoneOut struct {
 //	has_own_app_session    optional: true = only numbers signed in to this commune's Mini App
 //	                       ("Chỉ người có Zalo"); false = only those not; absent = everyone
 //	limit, cursor          as GET's `?limit=` / `?cursor=`; 50 per page is the screen's choice
+//	created_from/_to       optional epoch millis, inclusive (ADR 0101 #10) — Elasticsearch only
+//	filters                optional attribute filters (citizenContactFilterIn) — Elasticsearch only
+//
+// With Elasticsearch configured the keyword also matches the e-mail, and the number / e-mail fragments
+// are compared as keyed hashes (ADR 0101 #8). Without it (dev), a body with created_* or filters is 503.
 type citizenContactSearchIn struct {
-	Q                 string `json:"q"`
-	GroupID           string `json:"group_id"`
-	ResidentialUnitID string `json:"residential_unit_id"`
-	Active            *bool  `json:"active"`
-	HasOwnAppSession  *bool  `json:"has_own_app_session"`
-	Limit             *int   `json:"limit"`
-	Cursor            string `json:"cursor"`
+	Q                 string                   `json:"q"`
+	GroupID           string                   `json:"group_id"`
+	ResidentialUnitID string                   `json:"residential_unit_id"`
+	Active            *bool                    `json:"active"`
+	HasOwnAppSession  *bool                    `json:"has_own_app_session"`
+	Limit             *int                     `json:"limit"`
+	Cursor            string                   `json:"cursor"`
+	CreatedFrom       *int64                   `json:"created_from"`
+	CreatedTo         *int64                   `json:"created_to"`
+	Filters           []citizenContactFilterIn `json:"filters"`
 }
 
 // citizenContactCountQueryIn is the body of POST /api/v1/citizen-contact-count-queries: the search's
 // filter without its paging.
 type citizenContactCountQueryIn struct {
-	Q                 string `json:"q"`
-	GroupID           string `json:"group_id"`
-	ResidentialUnitID string `json:"residential_unit_id"`
-	Active            *bool  `json:"active"`
-	HasOwnAppSession  *bool  `json:"has_own_app_session"`
+	Q                 string                   `json:"q"`
+	GroupID           string                   `json:"group_id"`
+	ResidentialUnitID string                   `json:"residential_unit_id"`
+	Active            *bool                    `json:"active"`
+	HasOwnAppSession  *bool                    `json:"has_own_app_session"`
+	CreatedFrom       *int64                   `json:"created_from"`
+	CreatedTo         *int64                   `json:"created_to"`
+	Filters           []citizenContactFilterIn `json:"filters"`
+}
+
+// maxSearchFilters bounds the attribute filters of one body: one per live attribute at most.
+const maxSearchFilters = domain.MaxCitizenFieldsLive
+
+// citizenContactSearchFrom builds the use case's search from the filter and the index-only fields,
+// answering 400 itself for a filter that is neither an option filter nor a range.
+func citizenContactSearchFrom(w http.ResponseWriter, f idstore.CitizenContactFilter, from, to *int64, filters []citizenContactFilterIn) (app.CitizenContactSearch, bool) {
+	q := app.CitizenContactSearch{Filter: f, CreatedFrom: from, CreatedTo: to}
+	if len(filters) > maxSearchFilters {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", "Quá nhiều bộ lọc thuộc tính.", "")
+		return q, false
+	}
+	for _, fl := range filters {
+		switch {
+		case len(fl.Values) > 0 && fl.From == nil && fl.To == nil:
+			q.Options = append(q.Options, app.AttributeOptionFilter{Code: fl.Code, Values: fl.Values})
+		case len(fl.Values) == 0 && (fl.From != nil || fl.To != nil):
+			q.Ranges = append(q.Ranges, app.AttributeRangeFilter{Code: fl.Code, From: fl.From, To: fl.To})
+		default:
+			httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+				"Mỗi bộ lọc thuộc tính cần hoặc danh sách giá trị (values), hoặc khoảng (from / to).", "")
+			return q, false
+		}
+	}
+	return q, true
 }
 
 // citizenContactCountOut — the shape of the separate count route (ADR 0097 D8, ADR 0071).
@@ -243,8 +315,38 @@ func citizenContactToOut(c app.CitizenContactListItem) citizenContactOut {
 		ResidentialUnitID: c.ResidentialUnitID, ResidentialUnitName: c.ResidentialUnitName,
 		Tags: nonNilList(c.Tags), GroupIDs: nonNilList(c.GroupIDs),
 		IsActive: c.IsActive, Source: string(c.Source), HasOwnAppSession: c.HasOwnAppSession,
-		CreatedAt: c.CreatedAt.UTC(),
+		CreatedAt: c.CreatedAt.UTC(), Attributes: nonNilAttributes(c.Attributes),
 	}
+}
+
+// nonNilAttributes makes an empty set marshal as `{}`, never `null`. The wire type is map[string]any —
+// apidoc cannot describe json.RawMessage (a type outside the repository) — but every value stays the
+// stored JSON verbatim: a json.RawMessage inside an `any` marshals as itself.
+func nonNilAttributes(a map[string]json.RawMessage) map[string]any {
+	out := make(map[string]any, len(a))
+	for k, v := range a {
+		out[k] = v
+	}
+	return out
+}
+
+// rawAttributes turns the decoded body back into per-value JSON for the domain, which validates each
+// value against its field's type. nil stays nil: "attributes absent" means keep (citizenContactIn).
+func rawAttributes(a map[string]any) map[string]json.RawMessage {
+	if a == nil {
+		return nil
+	}
+	out := make(map[string]json.RawMessage, len(a))
+	for k, v := range a {
+		b, err := json.Marshal(v)
+		if err != nil {
+			// Values decoded from JSON always re-encode; an unencodable one reaches the domain as JSON
+			// null, which no field type accepts — refused there, never dropped silently.
+			b = []byte("null")
+		}
+		out[k] = b
+	}
+	return out
 }
 
 func citizenContactDetailToOut(d app.CitizenContactDetail) citizenContactDetailOut {
@@ -254,6 +356,7 @@ func citizenContactDetailToOut(d app.CitizenContactDetail) citizenContactDetailO
 		Tags: nonNilList(d.Tags), GroupIDs: nonNilList(d.GroupIDs),
 		IsActive: d.IsActive, Source: string(d.Source), ImportBatchID: d.ImportBatchID,
 		CreatedAt: d.CreatedAt.UTC(), UpdatedAt: d.UpdatedAt.UTC(),
+		EmailMasked: d.EmailMasked, Attributes: nonNilAttributes(d.Attributes),
 	}
 }
 
@@ -282,7 +385,9 @@ func (in citizenContactIn) toRequest() app.CitizenContactRequest {
 			FullName: in.FullName, Phone: in.Phone, ResidentialUnitID: in.ResidentialUnitID,
 			Address: in.Address, Note: in.Note, Tags: in.Tags, IsActive: active,
 		},
-		GroupIDs: in.GroupIDs,
+		GroupIDs: in.GroupIDs, Email: in.Email,
+		// `"attributes": {}` decodes to an empty non-nil map (clear every live value); absent or null to nil.
+		Attributes: rawAttributes(in.Attributes), AttributesSet: in.Attributes != nil,
 	}
 }
 
@@ -382,6 +487,10 @@ func (h *Handler) SearchCitizenContacts(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
+	q, ok := citizenContactSearchFrom(w, f, in.CreatedFrom, in.CreatedTo, in.Filters)
+	if !ok {
+		return
+	}
 	// page.New and not page.Parse: the paging fields arrive in the body. One sort column
 	// (created_at, newest first), so there is no sort/order field to read.
 	limit := ""
@@ -394,7 +503,37 @@ func (h *Handler) SearchCitizenContacts(w http.ResponseWriter, r *http.Request) 
 		httpx.WriteError(w, status, code, msg, "")
 		return
 	}
-	h.writeCitizenContactPage(w, r, "tìm người dân", f, req)
+	ctx := r.Context()
+	// tenant_id: the context's, from Host; the index and the store both read it from ctx, never the body.
+	res, err := h.d.CitizenDirectory.Search(ctx, q, req)
+	if err != nil {
+		h.writeCitizenSearchError(w, r, "tìm người dân", err)
+		return
+	}
+	out := page.Result[citizenContactOut]{Items: make([]citizenContactOut, 0, len(res.Items)),
+		NextCursor: res.NextCursor, HasMore: res.HasMore}
+	for _, c := range res.Items {
+		out.Items = append(out.Items, citizenContactToOut(c))
+	}
+	vietJSON(w, http.StatusOK, out)
+}
+
+// writeCitizenSearchError maps a refusal of the search or the count: 400 for the body, 503 when the
+// index is needed and off, 500 otherwise. The keyword is never logged.
+func (h *Handler) writeCitizenSearchError(w http.ResponseWriter, r *http.Request, what string, err error) {
+	switch {
+	case errors.Is(err, app.ErrCitizenSearchUnavailable):
+		// Logged: an operator must see why search is off (key mismatch, cluster down). The error carries
+		// no keyword — the index never puts the query in its errors (core/search).
+		h.d.Log.Warn("danh bạ người dân: "+what+" — chỉ mục tìm kiếm không dùng được", "xa", string(tenant.MustFrom(r.Context())), "err", err)
+		httpx.WriteError(w, http.StatusServiceUnavailable, "search_unavailable",
+			"Tìm kiếm theo thuộc tính và ngày tạo hiện chưa dùng được. Vui lòng thử lại sau hoặc bỏ các bộ lọc này.", "")
+	case app.IsCitizenDirectoryInputError(err):
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
+	default:
+		h.d.Log.Error("danh bạ người dân: "+what+" lỗi hệ thống", "xa", string(tenant.MustFrom(r.Context())), "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
+	}
 }
 
 // writeCitizenContactPage runs one page read and writes it — shared by the list and the search so the
@@ -428,12 +567,15 @@ func (h *Handler) CountCitizenContacts(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	q, ok := citizenContactSearchFrom(w, f, in.CreatedFrom, in.CreatedTo, in.Filters)
+	if !ok {
+		return
+	}
 	ctx := r.Context()
-	// tenant_id: the context's, from Host; the store counts through store.DB.For(ctx).
-	n, err := h.d.CitizenDirectory.Count(ctx, f)
+	// tenant_id: the context's, from Host; the index and the store both read it from ctx, never the body.
+	n, err := h.d.CitizenDirectory.CountSearch(ctx, q)
 	if err != nil {
-		h.d.Log.Error("danh bạ người dân: đếm lỗi hệ thống", "xa", string(tenant.MustFrom(ctx)), "err", err)
-		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		h.writeCitizenSearchError(w, r, "đếm", err)
 		return
 	}
 	vietJSON(w, http.StatusOK, citizenContactCountOut{Count: n})
@@ -558,6 +700,31 @@ func (h *Handler) RevealCitizenContactPhone(w http.ResponseWriter, r *http.Reque
 	// A full number: never cached between this process and the dialog.
 	w.Header().Set("Cache-Control", "no-store")
 	vietJSON(w, http.StatusOK, citizenContactPhoneOut{Phone: phone})
+}
+
+// RevealCitizenContactEmail — GET /api/v1/citizen-contacts/{id}/email, "Xem email đầy đủ" (ADR 0101 #6):
+// the phone reveal's contract for the e-mail column. One audit entry per call, in the read's transaction;
+// 404 one answer; neither the address nor the id is logged. `{"email": ""}` when the row has none.
+func (h *Handler) RevealCitizenContactEmail(w http.ResponseWriter, r *http.Request) {
+	actor, ok := nguoiThucHienCanBo(r)
+	if !ok {
+		h.thieuNguoiThucHien(w, r)
+		return
+	}
+	ctx := r.Context()
+	// tenant_id: the context's, from Host; the use case opens store.DB.For(ctx).Tx.
+	email, err := h.d.CitizenDirectory.RevealEmail(ctx, actor, r.PathValue("id"))
+	if err != nil {
+		if errors.Is(err, idstore.ErrCitizenContactNotFound) {
+			httpx.WriteError(w, http.StatusNotFound, "citizen_contact_not_found", "Không tìm thấy người dân này trong danh bạ.", "")
+			return
+		}
+		h.d.Log.Error("danh bạ người dân: xem email đầy đủ lỗi hệ thống", "xa", string(tenant.MustFrom(ctx)), "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	vietJSON(w, http.StatusOK, citizenContactEmailOut{Email: email})
 }
 
 // --- handlers: groups ------------------------------------------------------------------------------

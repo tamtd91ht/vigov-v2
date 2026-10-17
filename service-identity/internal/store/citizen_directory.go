@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -118,6 +119,9 @@ type CitizenContactListItem struct {
 	// HasOwnAppSession is the "Zalo" column (ADR 0097 §3): a live session of THIS commune holds the
 	// number. Derived in the page statement; never stored.
 	HasOwnAppSession bool
+	// Attributes are the stored dynamic attribute values (ADR 0101), retired fields included — the use
+	// case keeps only the live fields shown as list columns.
+	Attributes map[string]json.RawMessage
 }
 
 // citizenContactLiveFilter is the base predicate of every read: soft-deleted rows are excluded
@@ -128,17 +132,21 @@ const citizenContactLiveFilter = ` AND deleted_at IS NULL`
 // Zalo flag, computed by ownAppSessionPredicate on the row's own number in identity form
 // (domain.CitizenPhoneIdentityForm: leading 0 → 84). `$1` inside it is the commune QueryPage binds.
 var citizenContactPageCols = `id, full_name, phone, coalesce(residential_unit_id, ''), ` +
-	`array_to_string(tags, ','), source, is_active, created_at, updated_at, ` +
+	`array_to_string(tags, ','), source, is_active, created_at, updated_at, attributes::text, ` +
 	fmt.Sprintf(ownAppSessionPredicate, `'84' || substr(citizen_contact.phone, 2)`)
 
 func scanCitizenContactListItem(rows *sql.Rows) (CitizenContactListItem, string, error) {
 	var r CitizenContactListItem
-	var tags, source string
+	var tags, source, attrs string
 	if err := rows.Scan(&r.ID, &r.FullName, &r.Phone, &r.ResidentialUnitID, &tags, &source,
-		&r.IsActive, &r.CreatedAt, &r.UpdatedAt, &r.HasOwnAppSession); err != nil {
+		&r.IsActive, &r.CreatedAt, &r.UpdatedAt, &attrs, &r.HasOwnAppSession); err != nil {
 		return CitizenContactListItem{}, "", fmt.Errorf("danh bạ người dân: đọc dòng danh sách: %w", err)
 	}
 	r.Tags = splitStoredTags(tags)
+	var err error
+	if r.Attributes, err = decodeAttributes(attrs); err != nil {
+		return CitizenContactListItem{}, "", err
+	}
 	r.Source = domain.CitizenContactSource(source)
 	return r, r.ID, nil
 }
@@ -177,14 +185,60 @@ func (s *CitizenDirectoryStore) List(ctx context.Context, f CitizenContactFilter
 	if err != nil {
 		return page.NewResult[CitizenContactListItem](), fmt.Errorf("danh bạ người dân: đọc trang: %w", err)
 	}
-	if len(kq.Items) == 0 {
-		return kq, nil
+	if err := s.fillListItems(ctx, kq.Items); err != nil {
+		return page.NewResult[CitizenContactListItem](), err
 	}
+	return kq, nil
+}
 
-	ids := make([]string, 0, len(kq.Items))
-	unitIDs := make([]string, 0, len(kq.Items))
+// ListByIDs reads the LIVE rows of this commune among `ids` — the page the search index chose (ADR 0101
+// #7) — in the order of `ids`, filled like a List page. An id with no live row of THIS commune is simply
+// absent (removed since it was indexed, or never this commune's): the index is a pointer, PostgreSQL is
+// the truth. The commune is $1 (Scoped.Query), so another commune's row can never come back even if an
+// index ever held its id.
+func (s *CitizenDirectoryStore) ListByIDs(ctx context.Context, ids []string) ([]CitizenContactListItem, error) {
+	if len(ids) == 0 {
+		return []CitizenContactListItem{}, nil
+	}
+	// @cross-tenant: ADR 0097 §3 — the Zalo column joins this commune's citizen sessions (see List).
+	rows, err := s.db.For(ctx).Query(ctx, citizenContactPageCols, "citizen_contact",
+		citizenContactLiveFilter+` AND id = ANY($2)`, ids)
+	if err != nil {
+		return nil, fmt.Errorf("danh bạ người dân: đọc theo danh sách mã: %w", err)
+	}
+	defer rows.Close()
+	byID := make(map[string]CitizenContactListItem, len(ids))
+	for rows.Next() {
+		r, _, err := scanCitizenContactListItem(rows)
+		if err != nil {
+			return nil, err
+		}
+		byID[r.ID] = r
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("danh bạ người dân: duyệt theo danh sách mã: %w", err)
+	}
+	out := make([]CitizenContactListItem, 0, len(byID))
+	for _, id := range ids {
+		if r, ok := byID[id]; ok {
+			out = append(out, r)
+		}
+	}
+	if err := s.fillListItems(ctx, out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// fillListItems resolves unit names and group ids for a page in two statements (skills/load-data-once).
+func (s *CitizenDirectoryStore) fillListItems(ctx context.Context, items []CitizenContactListItem) error {
+	if len(items) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(items))
+	unitIDs := make([]string, 0, len(items))
 	seenUnit := map[string]bool{}
-	for _, r := range kq.Items {
+	for _, r := range items {
 		ids = append(ids, r.ID)
 		if r.ResidentialUnitID != "" && !seenUnit[r.ResidentialUnitID] {
 			seenUnit[r.ResidentialUnitID] = true
@@ -196,7 +250,7 @@ func (s *CitizenDirectoryStore) List(ctx context.Context, f CitizenContactFilter
 	// retired still shows the hamlet it holds (the archival-record reading of UnitNamesByID).
 	units, err := NewThonToDanPhoStore(s.db).UnitNamesByID(ctx, unitIDs)
 	if err != nil {
-		return page.NewResult[CitizenContactListItem](), fmt.Errorf("danh bạ người dân: tra tên thôn / tổ: %w", err)
+		return fmt.Errorf("danh bạ người dân: tra tên thôn / tổ: %w", err)
 	}
 	unitName := make(map[string]string, len(units))
 	for _, u := range units {
@@ -204,17 +258,42 @@ func (s *CitizenDirectoryStore) List(ctx context.Context, f CitizenContactFilter
 	}
 	groups, err := s.GroupIDsOf(ctx, ids)
 	if err != nil {
-		return page.NewResult[CitizenContactListItem](), err
+		return err
 	}
-	for i := range kq.Items {
-		r := &kq.Items[i]
+	for i := range items {
+		r := &items[i]
 		r.ResidentialUnitName = unitName[r.ResidentialUnitID]
 		r.GroupIDs = groups[r.ID]
 		if r.GroupIDs == nil {
 			r.GroupIDs = []string{}
 		}
 	}
-	return kq, nil
+	return nil
+}
+
+// decodeAttributes reads `attributes::text`. A row the CHECK admits is always an object.
+func decodeAttributes(text string) (map[string]json.RawMessage, error) {
+	out := map[string]json.RawMessage{}
+	if text == "" {
+		return out, nil
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		// Not the text: it may hold personal data.
+		return nil, errors.New("danh bạ người dân: thuộc tính đã lưu không đọc được")
+	}
+	return out, nil
+}
+
+// encodeAttributes renders the object written to the JSONB column; nil writes '{}'.
+func encodeAttributes(a map[string]json.RawMessage) (string, error) {
+	if len(a) == 0 {
+		return "{}", nil
+	}
+	b, err := json.Marshal(a)
+	if err != nil {
+		return "", errors.New("danh bạ người dân: không mã hoá được thuộc tính")
+	}
+	return string(b), nil
 }
 
 // Count counts the rows List would walk under `f` — the separate count route (ADR 0071, ADR 0097 D8).
@@ -292,6 +371,8 @@ func citizenContactFilterClause(f CitizenContactFilter) (string, []any) {
 		if digits := digitsOf(term); digits != "" {
 			fmt.Fprintf(&b, " OR phone LIKE $%d", bind("%"+digits+"%"))
 		}
+		// The e-mail column (ADR 0101 #6) is stored lower-case; the term is lowered by the database.
+		fmt.Fprintf(&b, " OR coalesce(email, '') LIKE lower(%s)", p)
 		b.WriteString(")")
 	}
 	if f.HasOwnAppSession != nil {
@@ -319,17 +400,21 @@ func digitsOf(term string) string {
 // citizenContactCols is read BY POSITION in scanCitizenContact — the detail read (Get).
 const citizenContactCols = `id, full_name, phone, residential_unit_id, coalesce(address, ''), ` +
 	`coalesce(note, ''), array_to_string(tags, ','), source, is_active, household_code, ` +
-	`import_batch_id, created_at, updated_at`
+	`import_batch_id, created_at, updated_at, coalesce(email, ''), attributes::text`
 
 func scanCitizenContact(scan func(...any) error) (domain.CitizenContact, error) {
 	var c domain.CitizenContact
 	var unit, household, batch sql.NullString
-	var tags, source string
+	var tags, source, attrs string
 	if err := scan(&c.ID, &c.FullName, &c.Phone, &unit, &c.Address, &c.Note, &tags, &source,
-		&c.IsActive, &household, &batch, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		&c.IsActive, &household, &batch, &c.CreatedAt, &c.UpdatedAt, &c.Email, &attrs); err != nil {
 		return domain.CitizenContact{}, err
 	}
 	c.Tags = splitStoredTags(tags)
+	var err error
+	if c.Attributes, err = decodeAttributes(attrs); err != nil {
+		return domain.CitizenContact{}, err
+	}
 	c.Source = domain.CitizenContactSource(source)
 	if unit.Valid {
 		c.ResidentialUnitID = &unit.String
@@ -406,6 +491,59 @@ func (s *CitizenDirectoryStore) ReadPhone(ctx context.Context, tx *store.ScopedT
 	return phone, true, rows.Err()
 }
 
+// ReadEmail returns the FULL e-mail of one live contact inside the caller's transaction — the one read
+// behind "Xem email đầy đủ" (ADR 0101 #6; the ReadPhone contract: the caller writes the audit entry in
+// this transaction and hands the address out only after it commits). "" with found = true: no e-mail.
+func (s *CitizenDirectoryStore) ReadEmail(ctx context.Context, tx *store.ScopedTx, id string) (string, bool, error) {
+	if tx == nil {
+		return "", false, ErrThieuGiaoDich
+	}
+	if id == "" {
+		return "", false, nil
+	}
+	// ScopedTx.Query binds tenant_id = $1 from the transaction's commune (rule 1, invariant 5).
+	rows, err := tx.Query(ctx, `coalesce(email, '')`, "citizen_contact", citizenContactLiveFilter+` AND id = $2`, id)
+	if err != nil {
+		return "", false, fmt.Errorf("danh bạ người dân: đọc email đầy đủ: %w", err)
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return "", false, fmt.Errorf("danh bạ người dân: đọc email đầy đủ: %w", err)
+		}
+		return "", false, nil
+	}
+	var email string
+	// Never written to a log line (rule 3, forbidden #1).
+	if err := rows.Scan(&email); err != nil {
+		return "", false, fmt.Errorf("danh bạ người dân: đọc dòng email: %w", err)
+	}
+	return email, true, rows.Err()
+}
+
+// LiveIDsAfter reads up to `limit` ids of this commune's LIVE contacts greater than `after`, in id order —
+// the walk of the per-commune reindex (ADR 0101 #11). Ids only.
+func (s *CitizenDirectoryStore) LiveIDsAfter(ctx context.Context, after string, limit int) ([]string, error) {
+	rows, err := s.db.For(ctx).Query(ctx, `id`, "citizen_contact",
+		citizenContactLiveFilter+` AND id > $2 ORDER BY id LIMIT $3`, after, limit)
+	if err != nil {
+		return nil, fmt.Errorf("danh bạ người dân: đọc mã để dựng chỉ mục: %w", err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("danh bạ người dân: đọc mã: %w", err)
+		}
+		out = append(out, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("danh bạ người dân: duyệt mã: %w", err)
+	}
+	return out, nil
+}
+
 // PhoneTaken reports whether a LIVE contact of this commune other than `exceptID` holds `phone`
 // (national form). Read inside the transaction so the answer and the write that follows see the
 // same rows; the live-unique key is the backstop for the race that remains (ErrCitizenPhoneTaken).
@@ -447,13 +585,18 @@ func (s *CitizenDirectoryStore) Insert(ctx context.Context, tx *store.ScopedTx, 
 	if !c.Source.Valid() {
 		return domain.ErrCitizenContactSourceUnknown
 	}
+	attrs, err := encodeAttributes(c.Attributes)
+	if err != nil {
+		return err
+	}
 	const stmt = `INSERT INTO citizen_contact
 			(tenant_id, id, full_name, phone, residential_unit_id, address, note, tags, source,
-			 is_active, import_batch_id, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, nullif($6, ''), nullif($7, ''), $8::text[], $9, $10, $11, $12, $12)`
-	_, err := tx.Exec(ctx, stmt, string(tx.TenantID()), c.ID, c.FullName, c.Phone,
+			 is_active, import_batch_id, created_at, updated_at, email, attributes)
+		VALUES ($1, $2, $3, $4, $5, nullif($6, ''), nullif($7, ''), $8::text[], $9, $10, $11, $12, $12,
+		        nullif($13, ''), $14::jsonb)`
+	_, err = tx.Exec(ctx, stmt, string(tx.TenantID()), c.ID, c.FullName, c.Phone,
 		nullableRef(c.ResidentialUnitID), c.Address, c.Note, nonNilTags(c.Tags), string(c.Source),
-		c.IsActive, nullableRef(c.ImportBatchID), c.CreatedAt)
+		c.IsActive, nullableRef(c.ImportBatchID), c.CreatedAt, c.Email, attrs)
 	if err != nil {
 		return fmt.Errorf("danh bạ người dân: chèn người dân: %w", translateCitizenDirectoryWriteError(err))
 	}
@@ -473,12 +616,18 @@ func (s *CitizenDirectoryStore) Update(ctx context.Context, tx *store.ScopedTx, 
 	if c.UpdatedAt.IsZero() {
 		return ErrCitizenDirectoryInstantMissing
 	}
+	attrs, err := encodeAttributes(c.Attributes)
+	if err != nil {
+		return err
+	}
 	const stmt = `UPDATE citizen_contact
 			SET full_name = $3, phone = $4, residential_unit_id = $5, address = nullif($6, ''),
-			    note = nullif($7, ''), tags = $8::text[], is_active = $9, updated_at = $10
+			    note = nullif($7, ''), tags = $8::text[], is_active = $9, updated_at = $10,
+			    email = nullif($11, ''), attributes = $12::jsonb
 		WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
 	res, err := tx.Exec(ctx, stmt, string(tx.TenantID()), c.ID, c.FullName, c.Phone,
-		nullableRef(c.ResidentialUnitID), c.Address, c.Note, nonNilTags(c.Tags), c.IsActive, c.UpdatedAt)
+		nullableRef(c.ResidentialUnitID), c.Address, c.Note, nonNilTags(c.Tags), c.IsActive, c.UpdatedAt,
+		c.Email, attrs)
 	if err != nil {
 		return fmt.Errorf("danh bạ người dân: sửa người dân: %w", translateCitizenDirectoryWriteError(err))
 	}

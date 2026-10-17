@@ -167,6 +167,28 @@ func (f *fakeCitizenContacts) SetGroups(ctx context.Context, tx *store.ScopedTx,
 	return nil
 }
 
+func (f *fakeCitizenContacts) ListByIDs(_ context.Context, ids []string) ([]idstore.CitizenContactListItem, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []idstore.CitizenContactListItem
+	for _, id := range ids {
+		if c, ok := f.rows[id]; ok {
+			out = append(out, idstore.CitizenContactListItem{ID: c.ID, FullName: c.FullName, Phone: c.Phone,
+				IsActive: c.IsActive, CreatedAt: c.CreatedAt, Attributes: c.Attributes})
+		}
+	}
+	return out, nil
+}
+func (f *fakeCitizenContacts) ReadEmail(ctx context.Context, tx *store.ScopedTx, id string) (string, bool, error) {
+	if _, err := tx.Exec(ctx, "FAKE citizen_contact read email", id); err != nil {
+		return "", false, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c, ok := f.rows[id]
+	return c.Email, ok, nil
+}
+
 type fakeCitizenGroups struct {
 	mu       sync.Mutex
 	rows     map[string]domain.CitizenGroup
@@ -261,6 +283,8 @@ type directoryHarness struct {
 	g        *ghiChep
 	contacts *fakeCitizenContacts
 	groups   *fakeCitizenGroups
+	fields   *fakeCitizenFields
+	outbox   *fakeOutbox
 	ctx      context.Context
 }
 
@@ -268,7 +292,8 @@ func newDirectoryHarness(t *testing.T) *directoryHarness {
 	t.Helper()
 	db, g := moDB(t)
 	contacts, groups := newFakeCitizenContacts(), newFakeCitizenGroups()
-	uc := NewCitizenDirectory(db, contacts, groups)
+	fields, outbox := &fakeCitizenFields{}, &fakeOutbox{}
+	uc := NewCitizenDirectory(db, contacts, groups, fields, outbox)
 	n := 0
 	uc.newID = func() (string, error) {
 		n++
@@ -277,7 +302,7 @@ func newDirectoryHarness(t *testing.T) *directoryHarness {
 	uc.now = func() time.Time { return directoryInstant }
 	groups.rows[groupSampleID] = domain.CitizenGroup{ID: groupSampleID, Name: "Tổ trưởng dân phố"}
 	groups.rows[groupSecondID] = domain.CitizenGroup{ID: groupSecondID, Name: "Hộ kinh doanh"}
-	return &directoryHarness{uc: uc, g: g, contacts: contacts, groups: groups, ctx: ctxXa(xaThu)}
+	return &directoryHarness{uc: uc, g: g, contacts: contacts, groups: groups, fields: fields, outbox: outbox, ctx: ctxXa(xaThu)}
 }
 
 func (h *directoryHarness) seedContact() {

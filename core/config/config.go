@@ -74,6 +74,7 @@
 //	KAFKA_EVENT_ADDRESS                   ConfigMap  KafkaEvent             refused in staging/prod; dev: publishing routes answer 503
 //	KAFKA_EVENT_USERNAME / _PASSWORD      Secret     KafkaEvent             optional (owner 17/10/2026): absent = plaintext, no auth
 //	KAFKA_EVENT_SASL_MECHANISM            ConfigMap  KafkaEvent             required only WITH the credentials
+//	SEARCH_HASH_KEY                       Secret     SearchHash             refused in staging/prod; dev: directory ES search off
 //	RABBITMQ_DSN, RABBITMQ_EXCHANGE       Secret/CM  RabbitMQ              refused in staging/prod once declared
 //	ELASTICSEARCH_ADDRS / _API_KEY / _INDEX_PREFIX   Elasticsearch          refused in staging/prod once declared
 //
@@ -570,6 +571,9 @@ type Config struct {
 	// kafkaEvent is the business-event broker (kafka_event.go). Group KafkaEvent.
 	kafkaEvent KafkaEventBroker
 
+	// searchHashKey is the DECODED SEARCH_HASH_KEY (search_hash.go). Group SearchHash, identity only.
+	searchHashKey secret.Secret
+
 	// BasemapURL is the self-hosted basemap's storage prefix (BASEMAP_URL, basemap.go), validated and
 	// ending in "/"; "" = not configured. Group Basemap, comms only.
 	basemapURL string
@@ -768,6 +772,11 @@ func Load(serviceName string, uses Usage) (Config, error) {
 	kafkaPassRaw := r.read("KAFKA_EVENT_PASSWORD", os.Getenv("KAFKA_EVENT_PASSWORD"), optional, KafkaEvent)
 	kafkaMechRaw := r.read("KAFKA_EVENT_SASL_MECHANISM", os.Getenv("KAFKA_EVENT_SASL_MECHANISM"), optional, KafkaEvent)
 
+	// ---- SearchHash (ADR 0101 #8; identity only) ----------------------------------------------------
+	// Required in prod once declared (ADR 0057): without it the directory search index can be neither
+	// written nor queried. In dev, empty = Elasticsearch search and indexing off, said at startup.
+	searchHashRaw := r.read("SEARCH_HASH_KEY", os.Getenv("SEARCH_HASH_KEY"), requiredInProd, SearchHash)
+
 	// ---- Basemap (ADR 0072 M1; comms only) --------------------------------------------------
 	// Optional IN EVERY ENVIRONMENT, prod included: operations sets it only after the signed
 	// sovereignty check of the archive (ADR 0072 §Còn mở #3). Empty = the public basemap route answers
@@ -885,6 +894,12 @@ func Load(serviceName string, uses Usage) (Config, error) {
 		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
 	}
 
+	// Malformed or short is fatal, by name and never with the value: a key the hashes cannot trust.
+	searchHashKey, err := parseSearchHashKey(searchHashRaw)
+	if err != nil {
+		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
+	}
+
 	// Malformed is fatal, never repaired (the OPERATOR_HOST rule) — even though empty is allowed.
 	basemapURL, err := parseBasemapURL(basemapRaw)
 	if err != nil {
@@ -945,6 +960,7 @@ func Load(serviceName string, uses Usage) (Config, error) {
 		zaloOACallbackHost:         zaloOACallbackHost,
 		zaloOAWebhookSecret:        parseZaloOAAppSecret(zaloOAWebhookSecretRaw),
 		kafkaEvent:                 kafkaEvent,
+		searchHashKey:              searchHashKey,
 		basemapURL:                 basemapURL,
 		miniAppProfileCode:         miniAppProfileCode,
 

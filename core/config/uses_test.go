@@ -28,7 +28,7 @@ var allGroupVars = []string{
 	"ELASTICSEARCH_INDEX_PREFIX", "DANGEROUS_AUTH_BYPASS", "BASEMAP_URL",
 	"MINI_APP_PROFILE_CODE", "ZALO_OA_APP_ID", "ZALO_OA_APP_SECRET", "ZALO_OA_CALLBACK_HOST",
 	"ZALO_OA_WEBHOOK_SECRET", "KAFKA_EVENT_ADDRESS", "KAFKA_EVENT_USERNAME", "KAFKA_EVENT_PASSWORD",
-	"KAFKA_EVENT_SASL_MECHANISM",
+	"KAFKA_EVENT_SASL_MECHANISM", "SEARCH_HASH_KEY",
 }
 
 func clean(t *testing.T, env string, set map[string]string) {
@@ -83,6 +83,8 @@ var prodRequired = map[Group][]string{
 	// Owner, 17/10/2026: the address is used ⇒ required (ADR 0057); the credentials are optional by
 	// decision — their absence is the plaintext mode, so requiring them would contradict it.
 	KafkaEvent: {"KAFKA_EVENT_ADDRESS"},
+	// Owner, 17/10/2026 (ADR 0101 #8): identity uses it ⇒ required in prod (ADR 0057).
+	SearchHash: {"SEARCH_HASH_KEY"},
 }
 
 func TestEveryGroupHasAProdDecision(t *testing.T) {

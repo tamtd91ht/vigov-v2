@@ -2944,6 +2944,9 @@ export type identity_citizenContactCountQueryIn = {
   "residential_unit_id": string;
   "active": boolean | null;
   "has_own_app_session": boolean | null;
+  "created_from": number | null;
+  "created_to": number | null;
+  "filters": Array<identity_citizenContactFilterIn>;
 };
 
 export type identity_citizenContactCreatedOut = {
@@ -2969,6 +2972,19 @@ export type identity_citizenContactDetailOut = {
   "import_batch_id": string;
   "created_at": string;
   "updated_at": string;
+  "email_masked": string;
+  "attributes": Record<string, JsonValue>;
+};
+
+export type identity_citizenContactEmailOut = {
+  "email": string;
+};
+
+export type identity_citizenContactFilterIn = {
+  "code": string;
+  "values": Array<string>;
+  "from": number | null;
+  "to": number | null;
 };
 
 export type identity_citizenContactImportCreatedOut = {
@@ -3007,6 +3023,8 @@ export type identity_citizenContactIn = {
   "tags": Array<string>;
   "group_ids": Array<string>;
   "is_active": boolean | null;
+  "email": string | null;
+  "attributes": Record<string, JsonValue>;
 };
 
 export type identity_citizenContactOut = {
@@ -3021,6 +3039,7 @@ export type identity_citizenContactOut = {
   "source": string;
   "has_own_app_session": boolean;
   "created_at": string;
+  "attributes": Record<string, JsonValue>;
 };
 
 export type identity_citizenContactPhoneOut = {
@@ -3035,6 +3054,9 @@ export type identity_citizenContactSearchIn = {
   "has_own_app_session": boolean | null;
   "limit": number | null;
   "cursor": string;
+  "created_from": number | null;
+  "created_to": number | null;
+  "filters": Array<identity_citizenContactFilterIn>;
 };
 
 export type identity_citizenContactTagOut = {
@@ -3044,6 +3066,64 @@ export type identity_citizenContactTagOut = {
 
 export type identity_citizenContactTagsOut = {
   "items": Array<identity_citizenContactTagOut>;
+};
+
+export type identity_citizenFieldIn = {
+  "code": string;
+  "label": string;
+  "field_type": string;
+  "placeholder": string;
+  "options": Array<identity_citizenFieldOptionWire>;
+  "number_kind": string;
+  "date_pattern": string;
+  "required": boolean;
+  "show_in_list": boolean;
+};
+
+export type identity_citizenFieldOptionWire = {
+  "value": string;
+  "label": string;
+  "retired": boolean;
+};
+
+export type identity_citizenFieldOrderIn = {
+  "codes": Array<string>;
+};
+
+export type identity_citizenFieldOut = {
+  "code": string;
+  "label": string;
+  "field_type": string;
+  "placeholder": string;
+  "options": Array<identity_citizenFieldOptionWire>;
+  "number_kind": string;
+  "date_pattern": string;
+  "required": boolean;
+  "show_in_list": boolean;
+  "sort_order": number;
+  "created_at": string;
+  "updated_at": string;
+  "retired_at": string | null;
+};
+
+export type identity_citizenFieldPatchIn = {
+  "code": string | null;
+  "label": string | null;
+  "field_type": string | null;
+  "placeholder": string | null;
+  "options": Array<identity_citizenFieldOptionWire> | null;
+  "number_kind": string | null;
+  "date_pattern": string | null;
+  "required": boolean | null;
+  "show_in_list": boolean | null;
+};
+
+export type identity_citizenFieldRetireIn = {
+  "reason": string;
+};
+
+export type identity_citizenFieldsOut = {
+  "items": Array<identity_citizenFieldOut>;
 };
 
 export type identity_citizenGroupCreatedOut = {
@@ -5781,6 +5861,28 @@ export type identity_post_citizen_contacts_by_id_deletion = {
   };
 };
 
+/** GET /api/v1/citizen-contacts/{id}/email — Email đầy đủ của một người dân trong danh bạ — mỗi lần xem ghi nhật ký kiểm toán */
+export type identity_get_citizen_contacts_by_id_email = {
+  duongDan: "/api/v1/citizen-contacts/{id}/email";
+  phuongThuc: "GET";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_citizenContactEmailOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    404: "citizen_contact_not_found";
+  };
+};
+
 /** GET /api/v1/citizen-contacts/{id}/phone — Số điện thoại đầy đủ của một người dân trong danh bạ — mỗi lần xem ghi nhật ký kiểm toán */
 export type identity_get_citizen_contacts_by_id_phone = {
   duongDan: "/api/v1/citizen-contacts/{id}/phone";
@@ -5800,6 +5902,116 @@ export type identity_get_citizen_contacts_by_id_phone = {
   };
   errorCodes: {
     404: "citizen_contact_not_found";
+  };
+};
+
+/** PUT /api/v1/citizen-field-order — Đặt thứ tự kéo-thả của các thuộc tính đang dùng — danh sách đủ mọi mã, mỗi mã một lần */
+export type identity_put_citizen_field_order = {
+  duongDan: "/api/v1/citizen-field-order";
+  phuongThuc: "PUT";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: identity_citizenFieldOrderIn;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+  };
+};
+
+/** GET /api/v1/citizen-fields — Các thuộc tính động của danh bạ người dân của xã, theo thứ tự — ?include_retired=true cho màn cấu hình */
+export type identity_get_citizen_fields = {
+  duongDan: "/api/v1/citizen-fields";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_citizenFieldsOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-fields — Thêm một thuộc tính động cho danh bạ người dân — mã 6–8 ký tự, loại không đổi sau khi tạo; tối đa 50 thuộc tính đang dùng */
+export type identity_post_citizen_fields = {
+  duongDan: "/api/v1/citizen-fields";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: identity_citizenFieldIn;
+  phanHoi: {
+    201: identity_citizenFieldOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    409: "citizen_field_code_taken" | "citizen_field_limit";
+  };
+};
+
+/** PATCH /api/v1/citizen-fields/{code} — Sửa tên, placeholder, lựa chọn (thêm, đổi nhãn, ngừng — không xoá), bắt buộc, hiện ở danh sách, định dạng ngày của một thuộc tính */
+export type identity_patch_citizen_fields_by_code = {
+  duongDan: "/api/v1/citizen-fields/{code}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "code": string;
+  };
+  truyVan: {
+  };
+  than: identity_citizenFieldPatchIn;
+  phanHoi: {
+    200: identity_citizenFieldOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    404: "citizen_field_not_found";
+  };
+};
+
+/** DELETE /api/v1/citizen-fields/{code} — Ngừng dùng một thuộc tính (xoá mềm), lý do bắt buộc — ẩn khỏi biểu mẫu và bộ lọc, giữ giá trị đã nhập */
+export type identity_delete_citizen_fields_by_code = {
+  duongDan: "/api/v1/citizen-fields/{code}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "code": string;
+  };
+  truyVan: {
+  };
+  than: identity_citizenFieldRetireIn;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    404: "citizen_field_not_found";
   };
 };
 

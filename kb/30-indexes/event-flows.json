@@ -22,6 +22,23 @@
       ]
     },
     {
+      "name": "identity.citizen_contact_changed.v1",
+      "owner_service": "identity",
+      "version": "v1",
+      "schema": "proto/vigov/identity/v1/events.proto#CitizenContactChanged",
+      "publishers": [],
+      "consumers": [
+        {
+          "service": "identity",
+          "at": "service-identity/internal/app/citizen_search_indexer.go:78"
+        }
+      ],
+      "unclassified_mentions": [],
+      "state": [
+        "CHƯA CÓ BÊN PHÁT trong mã Go: không tệp .go nào (ngoài test và mã sinh) nhắc tên sự kiện này ở dạng hằng chuỗi. Hợp đồng đã tồn tại — proto/vigov/identity/v1/events.proto#CitizenContactChanged — nhưng chưa ai phát."
+      ]
+    },
+    {
       "name": "petitions.merge_changed.v1",
       "owner_service": "petitions",
       "version": "v1",

@@ -109,6 +109,8 @@ func RoleTemplates() []RoleTemplate {
 				"admin.village", "admin.message", "admin.mail", "admin.zalo",
 				// Migration 0035 (ADR 0099 #3): admin.sms goes wherever admin.zalo is.
 				"admin.sms",
+				// Migration 0036 (ADR 0101 #5): admin.citizen_field goes wherever admin.zalo is.
+				"admin.citizen_field",
 			},
 		},
 		{
@@ -142,6 +144,8 @@ func RoleTemplates() []RoleTemplate {
 				"admin.village", "admin.message", "admin.mail", "admin.zalo",
 				// Migration 0035 (ADR 0099 #3): admin.sms goes wherever admin.zalo is.
 				"admin.sms",
+				// Migration 0036 (ADR 0101 #5): admin.citizen_field goes wherever admin.zalo is.
+				"admin.citizen_field",
 				"content.read", "content.update",
 				"announcement.create",
 				// Migration 0034, owner decision 16/10/2026 (file comment).

@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package vigov.identity.v1;
+
+// identity — EVENT payloads: the facts `identity` publishes. `identity.proto` holds the RPC surface; this
+// file the other half of the contract (same split, same reasons as proto/vigov/petitions/v1/events.proto —
+// read its header before adding a second event here).
+//
+// The wrapper is `vigov.events.v1.Envelope` (Go: `core/events.Envelope`): `id`, `name`, `tenant_id`,
+// `occurred_at`. `tenant_id` lives in the envelope and nowhere else (rule 1, forbidden #2). The payload
+// bytes are the protojson of the message with proto field names (`UseProtoNames`).
+
+// CitizenContactChanged is the payload of the event named:
+//
+//     identity.citizen_contact_changed.v1
+//
+// PAST TENSE, VERSIONED (rule 2, invariant 4): a row of the commune's citizen directory (`citizen_contact`,
+// ADR 0097) was created, edited, removed or imported. Owner decision 17/10/2026 (ADR 0101 #11).
+//
+// WRITTEN TO THE OUTBOX IN THE SAME TRANSACTION AS THE ROW (identity `event_outbox`), published by the
+// relay after the commit — never inside it (skills/events-and-queues #5).
+//
+// WHO LISTENS TODAY: identity itself, consumer group `<ENV>.identity.citizen-search`, which re-reads the row
+// from PostgreSQL and writes or deletes the Elasticsearch document. The event is therefore a NUDGE, not a
+// copy: the consumer never trusts anything here beyond the id, and replaying any number of these for one
+// contact converges on the row as it is now.
+//
+// NO PERSONAL DATA, by construction (rule 3, ADR 0101 #11): an opaque row id and an operation word. A queue
+// is persisted, replicated and read while debugging; a name or number put here could never be recalled.
+message CitizenContactChanged {
+  // citizen_contact.id — a ULID minted by identity. Not a lookup code, names nobody.
+  string contact_id = 1;
+  // "upsert" (created / edited / imported) or "remove" (soft-deleted). Informational: the consumer decides
+  // from the row it re-reads, so a lost or reordered `op` cannot leave the index wrong.
+  string op = 2;
+}

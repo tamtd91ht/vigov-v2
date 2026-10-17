@@ -196,6 +196,24 @@ spec:
         - { port: 6379, protocol: TCP }
         - { port: 9092, protocol: TCP }
 ---
+# 4a. Đường RA Elasticsearch 9200 — CHỈ identity (ADR 0101: tìm kiếm danh bạ người dân). Không đưa vào
+# quy tắc 4 vì quy tắc ấy áp cho MỌI pod; dịch vụ khác không có lý do gì gọi ES. Cùng món nợ địa chỉ
+# `0.0.0.0/0` như quy tắc 4 — thay bằng dải mạng thật của cụm ES khi biết.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-identity-egress-elasticsearch
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: identity }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0       # ← NỢ: thay bằng dải mạng thật của Elasticsearch
+      ports:
+        - { port: 9200, protocol: TCP }
+---
 # 4b. Đường RA gRPC 9090: mỗi bên gọi CHỈ tới đúng những dịch vụ nó quay số — mặt kia của quy tắc 3.
 #
 # Cần cả hai phía: quy tắc 1 từ chối cả vào lẫn ra, nên thiếu đường ra thì luật vào ở quy tắc 3 không

@@ -145,6 +145,7 @@ func dungMayChuHaiSigner(t *testing.T, kySigner, giaiSigner *token.Signer) http.
 		CitizenLetterDeadlineRules:      letterRulesReadSample(),
 		WriteCitizenLetterDeadlineRules: letterRulesWriteSample(),
 		CitizenDirectory:                citizenDirectorySample(),
+		CitizenFields:                   &citizenFieldsFake{},
 		AuditLog:                        &auditLogFake{},
 		// Register refuses a Deps without the profile read (logo/banner on /communes/current).
 		Profile: &profileReaderFake{},

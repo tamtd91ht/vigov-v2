@@ -273,6 +273,13 @@ var envHints = map[string]envHint{
 		place: inConfigMap,
 		shape: "<broker 1>:9092,<broker 2>:9092 — đủ mọi broker, cách nhau dấu phẩy, không tiền tố giao thức",
 	},
+	"SEARCH_HASH_KEY": {
+		meaning: "Khoá băm (HMAC) MỘT CHO TOÀN HỆ THỐNG của chỉ mục tìm kiếm danh bạ người dân (ADR 0101 #8): Elasticsearch chỉ giữ băm của số điện thoại và email, không giữ giá trị thật. " +
+			"Thiếu thì identity không ghi và không tìm được trên chỉ mục. ĐỔI KHOÁ = phải dựng lại chỉ mục của MỌI xã; identity so dấu vân tay khoá với chỉ mục và tắt tìm kiếm nếu lệch.",
+		source: "Sinh MỘT LẦN bằng `openssl rand -base64 32`, đặt GIỐNG HỆT nhau ở vigov-dev và vigov-prod (chủ dự án 17/10/2026), cất bản sao riêng. Không xoay tuỳ tiện. Không dán vào chat, tài liệu hay manifest.",
+		place:  inSecret,
+		shape:  "<base64 của ≥ 32 byte ngẫu nhiên — openssl rand -base64 32>",
+	},
 	"RABBITMQ_DSN": {
 		meaning: "Kết nối RabbitMQ cho tác vụ nền có hẹn giờ (ADR 0010) — không dùng cho sự kiện giữa các dịch vụ.",
 		source:  "Người vận hành RabbitMQ cấp user, mật khẩu và vhost.",

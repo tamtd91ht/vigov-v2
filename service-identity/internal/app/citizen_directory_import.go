@@ -118,11 +118,13 @@ func (uc *CitizenDirectory) ImportCommit(ctx context.Context, actor NguoiThucHie
 		if len(errs) > 0 {
 			return &CitizenContactImportRejected{Errors: errs}
 		}
+		ids := make([]string, 0, len(plan.rows))
 		for _, p := range plan.rows {
 			id, err := uc.newID()
 			if err != nil {
 				return fmt.Errorf("danh bạ người dân: sinh id: %w", err)
 			}
+			ids = append(ids, id)
 			c := contactFromInput(id, p.contact, domain.CitizenContactSourceExcel, &batch, at)
 			// Insert binds tx.TenantID() as $1 (rule 1, invariant 5). A unique-key refusal here is
 			// the race PhoneTaken could not see; the row number says where, the number never does.
@@ -134,6 +136,11 @@ func (uc *CitizenDirectory) ImportCommit(ctx context.Context, actor NguoiThucHie
 					return fmt.Errorf("dòng %d: %w", p.row, err)
 				}
 			}
+		}
+		// One outbox row per imported contact, in this transaction (ADR 0101 #11). Dynamic attributes are
+		// not imported yet (ADR 0101 §Còn mở #1); a required attribute is therefore not enforced here.
+		if err := uc.recordChanged(ctx, tx, ids, contactOpUpsert, at); err != nil {
+			return err
 		}
 		// ONE ENTRY FOR THE ACT OF IMPORTING — "who imported this file, when, how many rows, which
 		// batch" is the question an inspection asks; each row answers "which file" by its batch id.

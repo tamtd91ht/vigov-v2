@@ -66,10 +66,11 @@ func TestRoleTemplatesAreTheEightOfSpec41WithTheirCounts(t *testing.T) {
 		isLeader bool
 		count    int
 	}{
-		{1, "chu-tich-ubnd", "Chủ tịch UBND", true, 44},
+		// Migration 0036 (owner 17/10/2026, ADR 0101 #5): admin.citizen_field to both admin.zalo holders: 44→45, 23→24.
+		{1, "chu-tich-ubnd", "Chủ tịch UBND", true, 45},
 		{2, "pho-chu-tich-ubnd", "Phó Chủ tịch UBND", true, 29},
 		// Migration 0034 (owner 16/10/2026) moved five of these: 20→22, 12→13, 8→9, 6→8, 4→6.
-		{3, "chanh-van-phong", "Chánh Văn phòng", false, 23},
+		{3, "chanh-van-phong", "Chánh Văn phòng", false, 24},
 		{4, "truong-bo-phan", "Trưởng bộ phận", false, 13},
 		{5, "chuyen-vien", "Chuyên viên chuyên môn", false, 9},
 		{6, "ke-toan", "Kế toán", false, 6},
@@ -156,6 +157,12 @@ func TestChairmanHoldsExactlyTheKeysOf0001(t *testing.T) {
 		t.Fatalf("migration 0035 gieo %v, phép kiểm này viết cho đúng admin.sms — đọc lại quyết định trước khi sửa", of0035)
 	}
 	of0001["admin.sms"] = true
+	// Migration 0036 (ADR 0101 #5, owner 17/10/2026): admin.citizen_field, granted wherever admin.zalo is.
+	of0036 := seededKeys(t, filepath.Join("..", "..", "migrations", "0036_citizen_field.sql"))
+	if len(of0036) != 1 || !of0036["admin.citizen_field"] {
+		t.Fatalf("migration 0036 gieo %v, phép kiểm này viết cho đúng admin.citizen_field — đọc lại quyết định trước khi sửa", of0036)
+	}
+	of0001["admin.citizen_field"] = true
 	chair := RoleTemplates()[0]
 	got := map[string]bool{}
 	for _, k := range chair.Permissions {
@@ -175,7 +182,7 @@ func TestChairmanHoldsExactlyTheKeysOf0001(t *testing.T) {
 	sort.Strings(missing)
 	sort.Strings(extra)
 	if len(missing) > 0 || len(extra) > 0 {
-		t.Errorf("Chủ tịch UBND: thiếu %v, thừa %v so với 33 khoá của 0001 + 6 khoá của 0028 + 4 khoá của 0032 + admin.sms của 0035", missing, extra)
+		t.Errorf("Chủ tịch UBND: thiếu %v, thừa %v so với 33 khoá của 0001 + 6 khoá của 0028 + 4 khoá của 0032 + admin.sms của 0035 + admin.citizen_field của 0036", missing, extra)
 	}
 }
 
@@ -239,12 +246,12 @@ func TestRoleTemplatesNeverGrantTheNarrowKeysNorTheAdminRole(t *testing.T) {
 	}
 }
 
-// THE UNION IS WHAT THE CALLER MUST HOLD — and, because Chủ tịch holds all 44 (0001's 33 + 0028's
-// six + 0032's four + 0035's admin.sms), it is exactly those 44.
+// THE UNION IS WHAT THE CALLER MUST HOLD — and, because Chủ tịch holds all 45 (0001's 33 + 0028's
+// six + 0032's four + 0035's admin.sms + 0036's admin.citizen_field), it is exactly those 45.
 func TestRoleTemplatePermissionsIsTheUnion(t *testing.T) {
 	u := RoleTemplatePermissions()
-	if len(u) != 44 {
-		t.Fatalf("hợp các quyền của bộ mẫu có %d khoá, muốn 44", len(u))
+	if len(u) != 45 {
+		t.Fatalf("hợp các quyền của bộ mẫu có %d khoá, muốn 45", len(u))
 	}
 	in := map[string]bool{}
 	for _, k := range u {

@@ -17,6 +17,13 @@ import (
 
 var ErrNoTenant = errors.New("events: message carries no commune")
 
+// ErrPermanent marks a message a handler can NEVER process — a payload that does not parse, a fact
+// naming a row shape this build does not know. A consumer that sees it (errors.Is) logs the event's id
+// and name and moves past it; every OTHER handler error is treated as transient and retried, because
+// skipping a message that would have succeeded a minute later is a silent loss. Wrap it only when a
+// retry cannot change the outcome.
+var ErrPermanent = errors.New("events: message cannot be processed")
+
 // Envelope wraps every message.
 //
 // TenantID sits in the envelope and not in the payload because the payload is data the
