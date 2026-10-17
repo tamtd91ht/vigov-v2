@@ -40,7 +40,7 @@ export const SOURCE_LEGEND = "Nguồn người nhận";
 // ---- typed list -------------------------------------------------------------------------------------
 
 export const TYPED_LABEL = "Số điện thoại";
-export const TYPED_HINT = `Mỗi dòng một số, hoặc cách nhau bằng dấu phẩy. Tối đa ${vi(MAX_TYPED_PHONES)} số.`;
+export const TYPED_HINT = `Các số cách nhau bằng dấu phẩy; dán danh sách nhiều dòng cũng được. Tối đa ${vi(MAX_TYPED_PHONES)} số.`;
 export const TYPED_EMPTY = "Chưa nhập số điện thoại nào.";
 
 /** One entry per line or per comma; blanks dropped. Nothing else is decided here — comms normalises. */

@@ -1533,14 +1533,30 @@ function TypedPhones({
   return (
     <div className="flex flex-col gap-1.5" data-typed-phones="">
       <Field label={TYPED_LABEL} htmlFor="notice-typed-phones" grow="auto" hint={TYPED_HINT} error={error}>
-        <textarea
+        {/* One short line (owner 17/10/2026: "chỉ là 1 ô input 1 dòng và ngắn"): numbers separated by commas;
+            a pasted multi-line list still splits, because the line breaks become the parser's separators. */}
+        <input
           id="notice-typed-phones"
-          rows={6}
+          type="text"
+          inputMode="tel"
           value={text}
           autoComplete="off"
           spellCheck={false}
-          className="py-2"
+          className="w-full sm:max-w-sm"
+          placeholder="0900000000, 0900000001"
           onChange={(e) => onChange(e.target.value)}
+          onPaste={(e) => {
+            const pasted = e.clipboardData.getData("text");
+            if (/[\r\n]/.test(pasted)) {
+              e.preventDefault();
+              const joined = pasted
+                .split(/\r?\n|\r/)
+                .map((x) => x.trim())
+                .filter(Boolean)
+                .join(", ");
+              onChange(text.trim() === "" ? joined : `${text.replace(/[,\s]*$/, "")}, ${joined}`);
+            }
+          }}
         />
       </Field>
       <p className={MUTED} data-typed-count="">

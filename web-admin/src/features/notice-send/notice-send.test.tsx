@@ -736,8 +736,9 @@ describe("the OA card (ADR 0098, several OAs since ADR 0099 #1)", () => {
 // ---- the imported sources (ADR 0099 §Sửa đổi S1–S4) -------------------------------------------------
 
 async function typeArea(el: HTMLElement, id: string, value: string) {
-  const area = el.querySelector<HTMLTextAreaElement>(`#${id}`)!;
-  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+  const area = el.querySelector<HTMLTextAreaElement | HTMLInputElement>(`#${id}`)!;
+  const proto = area instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(proto, "value")!.set!;
   await act(async () => {
     setter.call(area, value);
     area.dispatchEvent(new Event("input", { bubbles: true }));
@@ -768,7 +769,7 @@ describe("imported source — typed list", () => {
     previewReply = () => importedPreview();
     const el = await mount(session(["notice.send"]));
     await click(el, "Nhập số điện thoại");
-    await typeArea(el, "notice-typed-phones", "0900000000\n0900000001, 0900000002\n");
+    await typeArea(el, "notice-typed-phones", "0900000000, 0900000001, 0900000002");
     expect(el.querySelector("[data-typed-count]")!.textContent).toBe("3 số đã nhập");
     expect(recipientsRow(el).textContent).toContain("3 số đã nhập");
     await toTemplateStep(el);
@@ -808,7 +809,7 @@ describe("imported source — typed list", () => {
   it("refusals: variables in a typed list, over 1.000 numbers — Xem trước locked, nothing posted", async () => {
     const el = await mount(session(["notice.send"]));
     await click(el, "Nhập số điện thoại");
-    await typeArea(el, "notice-typed-phones", Array.from({ length: 1001 }, () => "0900000000").join("\n"));
+    await typeArea(el, "notice-typed-phones", Array.from({ length: 1001 }, () => "0900000000").join(","));
     expect(el.querySelector('[data-typed-phones] [role="alert"]')!.textContent).toContain("Tối đa 1.000 số");
     await typeArea(el, "notice-typed-phones", "0900000000");
     await toTemplateStep(el);
