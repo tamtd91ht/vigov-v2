@@ -164,7 +164,10 @@ func may(t *testing.T, sua func(*Deps)) (*Server, *bytes.Buffer) {
 		ContactPhones: &contactPhoneFake{},
 		// The notice audience — fake in notice_audience_test.go. It answers nobody by default.
 		NoticeAudience: &noticeAudienceFake{},
-		Log:            slog.New(slog.NewTextHandler(nhatKy, nil)),
+		// The directory link (ADR 0102) — fake in citizen_contact_match_test.go. It finds nothing by
+		// default, so a test has to say out loud that a row exists.
+		ContactMatch: &contactMatchFake{},
+		Log:          slog.New(slog.NewTextHandler(nhatKy, nil)),
 	}
 	if sua != nil {
 		sua(&d)
@@ -619,6 +622,7 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 			Automation:           &automationFake{},
 			ContactPhones:        &contactPhoneFake{},
 			NoticeAudience:       &noticeAudienceFake{},
+			ContactMatch:         &contactMatchFake{},
 			Log:                  slog.New(slog.NewTextHandler(io.Discard, nil)),
 		}
 	}
@@ -673,6 +677,9 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 		"missing contact-phone reveal": func(d *Deps) { d.ContactPhones = nil },
 		// Missing it is the notice screen unable to preview or send (ADR 0099).
 		"missing notice audience": func(d *Deps) { d.NoticeAudience = nil },
+		// Missing it is a petition that cannot find its sender in the directory, and a directory row that
+		// cannot list its petitions (ADR 0102).
+		"missing contact match": func(d *Deps) { d.ContactMatch = nil },
 	}
 	for ten, sua := range ca {
 		t.Run(ten, func(t *testing.T) {

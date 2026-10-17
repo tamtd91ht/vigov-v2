@@ -802,7 +802,10 @@ func run(log *slog.Logger) error {
 		// and staff stores the HTTP routes read, so a preview counts exactly what the directory screens
 		// show; Reveal writes its one audit entry in the read's transaction.
 		NoticeAudience: app.NewNoticeAudience(kho, citizenContacts, canBo, citizenFields),
-		Log:            log,
+		// FindCitizenContactByPhone / GetCitizenContactMatchPhone (ADR 0102): the SAME directory store the
+		// HTTP routes read — one live predicate — and the staff register for the actor check.
+		ContactMatch: app.NewCitizenContactMatch(kho, citizenContacts, canBo),
+		Log:          log,
 	}, log)
 
 	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr())

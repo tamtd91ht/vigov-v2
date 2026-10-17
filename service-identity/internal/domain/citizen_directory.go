@@ -181,6 +181,12 @@ var (
 // record the commune will later use to reach that person. Refusing costs the typist one character.
 //
 // Neither the argument nor the result ever enters an error (rule 3, forbidden #3).
+//
+// THE SAME FOLD EXISTS AS core/phone.NormalizeNational, which service-petitions uses to match its senders
+// against the numbers this function stored (ADR 0102 #3). This package may import only the standard
+// library, so it cannot call that one; the two are pinned equal, input by input and refusal by refusal,
+// by app/citizen_contact_match_fold_test.go. Change one, change both — or a person's petitions silently
+// stop linking to their directory row.
 func NormalizeCitizenPhone(raw string) (string, error) {
 	typed, err := ChuanHoaSoDienThoai(raw)
 	switch {

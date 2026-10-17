@@ -779,6 +779,14 @@
       "no_confirm": [],
       "bang_chung": "TASK E-2: proto attribute_codes=5 / attributes=3 / ListNoticeAttributes; domain/notice_attributes.go định dạng theo loại (dateTime theo date_pattern, múi giờ hành chính); vết mở số ghi mã thuộc tính, không giá trị. go test xanh (17/10/2026).",
       "tiep_theo": "household_code luôn rỗng (cột dự trữ); trường động mã trùng mã tĩnh (vd. address) không ghép được — chưa cấm tạo."
+    },
+    {
+      "id": "lien-ket-danh-ba-rpc-17-10",
+      "viec": "identity cài FindCitizenContactByPhone + GetCitizenContactMatchPhone (ADR 0102, TASK-02)",
+      "trang_thai": "xong",
+      "bang_chung": "internal/{store,app,grpc}/citizen_contact_match.go + test (gồm pg test, test ghim domain.NormalizeCitizenPhone = core/phone.NormalizeNational); cmd/server nối ContactMatch. go test identity (grpc, app, domain, store, cmd) xanh; build mọi service xanh (17/10/2026).",
+      "no_confirm": [],
+      "tiep_theo": "Test PostgreSQL (citizen_contact_match_pg_test.go) cần DSN — chưa chạy trên PG16 thật ở máy này."
     }
   ]
 }

@@ -217,8 +217,21 @@ func noiDayGia(t *testing.T) svcgrpc.Deps {
 		ContactPhones: contactPhoneWiringFake{},
 		// Required, or NewServer refuses to build (svcgrpc.Deps.NoticeAudience).
 		NoticeAudience: noticeAudienceWiringFake{},
-		Log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
+		// Required, or NewServer refuses to build (svcgrpc.Deps.ContactMatch).
+		ContactMatch: contactMatchWiringFake{},
+		Log:          slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
+}
+
+// contactMatchWiringFake finds nothing — these wiring tests never link a petition to the directory; the
+// handler is defended in internal/grpc, the transaction in internal/app.
+type contactMatchWiringFake struct{}
+
+func (contactMatchWiringFake) FindByPhone(context.Context, string) (string, bool, error) {
+	return "", false, nil
+}
+func (contactMatchWiringFake) MatchPhone(context.Context, string, string) (string, bool, error) {
+	return "", false, nil
 }
 
 // noticeAudienceWiringFake answers nobody — these wiring tests never resolve an audience; the handler

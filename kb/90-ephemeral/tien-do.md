@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 751e7325
+derived_from_commit: eb363dd2
 expires: 2027-01-15
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -30,7 +30,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 212 |
 | chưa làm | 44 |
 | treo | 13 |
-| xong | 603 |
+| xong | 606 |
 
 ## Theo menu
 
@@ -857,7 +857,7 @@ Cập nhật 2026-10-14 · 92 mục
 
 ## `core`
 
-Cập nhật 2026-10-17 · 50 mục
+Cập nhật 2026-10-17 · 51 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -911,6 +911,7 @@ Cập nhật 2026-10-17 · 50 mục
 | `kafka-event-publisher-17-10` — Nhóm cấu hình KafkaEvent (KAFKA_EVENT_ADDRESS, USERNAME/PASSWORD/SASL_MECHANISM tuỳ chọn) + core/events/kafka Publisher (franz-go) + ratelimit ZaloOAWebhook (ADR 0100) | xong | core/config/kafka_event.go, uses/accessors/hints, .env.example, deploy/cau-hinh/README.md; core/events/kafka/kafka.go (SASL+TLS khi có tài khoản, plaintext có @security-exception khi không); franz-go v1.21.6. go test config/events/ratelimit xanh, check_env_map + check_security PASS (17/10/2026). Tiền tố profile (chủ dự án 17/10/2026, dev+prod chung một cụm): core/events/names.go events.Topic → <ENV>.<sự kiện>, events.ConsumerGroup → <ENV>.<dịch vụ>.<việc>, ENV thiếu/lạ bị từ chối; kafka.New nhận profile; service_boundary_guard kiểm 5 chặn import thư viện Kafka ngoài core/events và tên topic/group gõ tay; skill events-and-queues §Kafka names. go test core/events + test_hooks 322/322 xanh. | — | Chưa nối broker thật. check_vuln.py đỏ SẴN (stdlib go1.26.6 GO-2026-66xx, sửa ở 1.26.9) — cần nâng toolchain mọi module, việc riêng. |
 | `phone-normalize-sealmany-17-10` — core/phone NormalizeVNMobile (nhận số 9 chữ số mất số 0 do Excel) + core/crypto SealMany/OpenMany | xong | TASK D-7: core/phone, core/crypto/envelope.go; go test core/phone + core/crypto xanh (17/10/2026). | — | service-identity còn bản fold số riêng (internal/domain/citizen_directory.go) — cân nhắc chuyển sang core/phone. |
 | `kafka-consumer-es-searchhash-17-10` — core/events/kafka Consumer, core/search (ES qua net/http), core/searchhash (HMAC n-gram), nhóm cấu hình SearchHash (SEARCH_HASH_KEY) — ADR 0101 | xong | TASK E-1: go test core 36/36 gói; check_env_map PASS 51 biến (17/10/2026). NetworkPolicy allow-identity-egress-elasticsearch (9200, chỉ identity). | — | Chưa nối Kafka/ES thật. Dòng SEARCH_HASH_KEY trong .env.example để trống có chủ ý (placeholder trượt phép kiểm định dạng). |
+| `core-phone-17-10` — core/phone.NormalizeNational — chuẩn hoá SĐT dùng chung identity / petitions (ADR 0102 #3) | xong | core/phone/national.go + national_test.go; go test xanh (17/10/2026). | — | petitions dùng ở TASK-04. |
 
 ## `deploy`
 
@@ -1226,7 +1227,7 @@ Cập nhật 2026-10-15 · 44 mục
 
 ## `service-identity`
 
-Cập nhật 2026-10-17 · 90 mục
+Cập nhật 2026-10-17 · 91 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -1320,6 +1321,7 @@ Cập nhật 2026-10-17 · 90 mục
 | `danh-ba-nguoi-dan-backend-con-lai-16-10` — Backend Danh bạ người dân (ADR 0097): store (danh sách keyset created_at DESC + đếm cùng điều kiện, tìm từ khoá khớp cả một phần số, nhóm/nhãn/thôn, mở số, thành viên nhóm xoá mềm) + OwnAppSessionByPhone (hình xuyên xã thứ năm, chỉ boolean theo (tenant, số 84…)) + mẫu vai trò Go theo 0034; app (vết cùng giao dịch, che số, xem số có vết mỗi lần, nhập Excel tất-cả-hoặc-không một lô một vết); http 16 tuyến citizen-contacts / citizen-contact-searches / -count-queries / -tags / citizen-groups / 3 tuyến nhập Excel, Deps + mount + wiring, make kb → openapi + schema.gen.ts. | xong | 16217bce (store, crosstenant/doc.go hình 5, RoleTemplates 22/13/9/6/8/6) · a384a3fa (app, 20 ca) · e4e39a64 (http, 4 ca luật 5 × 16 tuyến; openapi +16; ingress +8 prefix; 16 thẻ tasks/web/open) · 10bbd08c (schema.gen.ts, check:api khớp). go test -race ./service-identity/... ./tools/{ingress,apidoc} OK; go vet; gofmt; make quyen PASS 47 khoá; make vet-actor PASS; make hooks 317/317. CHƯA CHẠY POSTGRESQL THẬT: 7 ca store *_pg_test SKIP (không VIGOV_TEST_DSN); migration 0033/0034 chưa áp. | — | Web Admin: TASK-10 API client · TASK-11 feature citizen-directory · TASK-12 /nguoi-dan + menu + 4 test (đang làm, admin-web-builder 16/10). Sau đó test-designer (TASK-13 backend, TASK-14 web). Trên cụm: chạy 0033/0034, chạy 7 ca pg (Jenkins có DSN), kiểm bằng tay: mở số 3 lần → 3 vết không chứa số; xã B không thấy dòng xã A; cột Zalo không đổi khi số có phiên ở xã khác. Ngoài lượt: Gửi tin ZNS/SMS, xuất Excel danh bạ, đồng bộ Mini App, lọc theo thôn của trưởng thôn. Nợ khách: chính sách riêng tư Mini App phải nói về phép nối số ↔ phiên trước khi lên thật (ADR 0097 §6). |
 | `rpc-nguoi-nhan-dot-tin-17-10` — RPC ResolveNoticeAudience + RevealNoticeRecipientPhones cho đợt tin ZNS/SMS, khoá admin.sms (ADR 0099 #3 #5) | xong | proto 1ade25f2; migration 0035 khoá admin.sms + vai trò mẫu (44 khoá) và impl RPC + core/identityclient 5e012a65. go test service-identity xanh (17/10/2026). | — | CHƯA KIỂM pg test RPC trên PG16. |
 | `rpc-thuoc-tinh-dot-tin-17-10` — RevealNoticeRecipientPhones trả thêm giá trị thuộc tính đã định dạng; RPC ListNoticeAttributes (ADR 0101 #12) | xong | TASK E-2: proto attribute_codes=5 / attributes=3 / ListNoticeAttributes; domain/notice_attributes.go định dạng theo loại (dateTime theo date_pattern, múi giờ hành chính); vết mở số ghi mã thuộc tính, không giá trị. go test xanh (17/10/2026). | — | household_code luôn rỗng (cột dự trữ); trường động mã trùng mã tĩnh (vd. address) không ghép được — chưa cấm tạo. |
+| `lien-ket-danh-ba-rpc-17-10` — identity cài FindCitizenContactByPhone + GetCitizenContactMatchPhone (ADR 0102, TASK-02) | xong | internal/{store,app,grpc}/citizen_contact_match.go + test (gồm pg test, test ghim domain.NormalizeCitizenPhone = core/phone.NormalizeNational); cmd/server nối ContactMatch. go test identity (grpc, app, domain, store, cmd) xanh; build mọi service xanh (17/10/2026). | — | Test PostgreSQL (citizen_contact_match_pg_test.go) cần DSN — chưa chạy trên PG16 thật ở máy này. |
 
 ## `service-petitions`
 
@@ -1616,7 +1618,7 @@ Cập nhật 2026-10-16 · 24 mục
 
 ## `web-admin`
 
-Cập nhật 2026-10-17 · 197 mục
+Cập nhật 2026-10-17 · 198 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -1815,5 +1817,6 @@ Cập nhật 2026-10-17 · 197 mục
 | `gui-tin-map-thuoc-tinh-web-17-10` — Gửi tin tới danh bạ: mỗi tham số ZNS / ô SMS chọn Giá trị chung hoặc Theo thuộc tính (dấu ? hướng dẫn); lịch sử hiện Tham số → Thuộc tính (ADR 0101 #12) | xong | TASK E-2w (17/10/2026): notice-campaigns.ts listNoticeAttributes + attribute_mapping; notice-send-form/screen. tsc 0 lỗi, eslint sạch, vitest 80/80. | — | CHƯA xem ảnh render. attribute_mapping trong schema.gen khai không-null nhưng comms trả null — web nới kiểu tại chỗ; sửa khai báo phía comms (con trỏ) để apidoc sinh nullable. |
 | `kenh-zalo-thu-gon-va-o-oa-17-10` — Cấu hình → Kênh Zalo: mọi khối có nút mũi tên thu gọn/mở rộng ở góc phải (nhớ theo trình duyệt); OA Zalo của xã xếp thành ô ngang, tối đa 4 ô một hàng, ô cuối nét đứt có dấu + để kết nối thêm OA (yêu cầu người dùng 17/10/2026) | xong | features/cau-hinh/collapsible-section.tsx (mới); zalo-channel-tab.tsx, zalo-oa-section.tsx, commune-launch-qr.tsx dùng CollapsibleSection; lưới OA_GRID 1/2/3/4 cột (md/xl/2xl). Test mới trong zalo-oa.test.tsx (lưới, ô +, thu gọn giữ thẻ trong DOM). tsc sạch ở các tệp này, eslint sạch, vitest 3 tệp / 125 ca xanh (17/10/2026). | — | CHƯA xem ảnh render thật trên trình duyệt — người dùng kiểm trên máy build. |
 | `vien-focus-bi-cat-vung-cuon-17-10` — Viền focus của ô nhập sát mép trái/phải bị cắt trong hộp thoại (Thêm người dân và mọi hộp có vùng cuộn) — rà toàn bộ web-admin | xong | 32 vùng overflow-y-auto chứa ô nhập ở 25 tệp (gồm ConfigDialog dùng chung của Cấu hình, citizen-contact-dialog) thêm -m-1 p-1 (vùng có mt-* thì -mx-1 px-1 pb-1), bỏ pr-1 cũ; quy ước ghi ở modal-dialog.tsx (LAYOUT CONTRACT). tsc sạch; vitest web-admin trừ notice-send 344 tệp / 6386 ca xanh (notice-send đỏ do việc chưa commit của phiên khác) (17/10/2026). | — | CHƯA xem ảnh render — người dùng kiểm trên máy build. Vùng cuộn có sẵn padding (p-4, px-5…) không đổi vì vòng focus không bị cắt. |
-| `huong-dan-su-dung-17-10` — Menu Hướng dẫn sử dụng: trang /huong-dan theo bản mẫu tmp/huong-dan-su-dung-vigov.html, bỏ ảnh, cập nhật tính năng mới, nút mở thẳng chức năng | xong | b0ed1304: app/huong-dan/page.tsx, features/user-guide/{guide-content,guide-visibility,user-guide}.ts(x); 20 phần (thêm Danh bạ người dân, Gửi tin ZNS/SMS, Tài khoản cá nhân; Cấu hình 11 tab); sửa 11 câu lệch mã; phần/nút ẩn theo locMenu + khoá tạo mới (coQuyen); tên xã đọc lúc chạy. muc-menu: duong /huong-dan, PENDING_SCREENS rỗng. tsc + eslint xanh; npm test 351 tệp / 6523 ca xanh (17/10/2026). | — | CHƯA xem ảnh render (cả bề rộng <640px) — người dùng kiểm trên máy build. Lệch prototype vigov-require (iframe HTML tĩnh có ảnh) là theo lựa chọn của người dùng 17/10/2026: bỏ ảnh, dùng nút mở chức năng. Ngoài phạm vi: admin.citizen_field thiếu trong KHOA_MO_CAU_HINH (muc-menu.ts:79-88); câu banner ở commune-branding.ts:70 nói hiện dưới thanh trên cùng nhưng khung đã bỏ dải banner. |
+| `huong-dan-su-dung-17-10` — Menu Hướng dẫn sử dụng: trang /huong-dan theo bản mẫu tmp/huong-dan-su-dung-vigov.html, bỏ ảnh, cập nhật tính năng mới, nút mở thẳng chức năng | xong | b0ed1304: app/huong-dan/page.tsx, features/user-guide/{guide-content,guide-visibility,user-guide}.ts(x); 20 phần (thêm Danh bạ người dân, Gửi tin ZNS/SMS, Tài khoản cá nhân; Cấu hình 11 tab); sửa 11 câu lệch mã; phần/nút ẩn theo locMenu + khoá tạo mới (coQuyen); tên xã đọc lúc chạy. muc-menu: duong /huong-dan, PENDING_SCREENS rỗng. tsc + eslint xanh; npm test 351 tệp / 6523 ca xanh (17/10/2026). | — | CHƯA xem ảnh render (cả bề rộng <640px) — người dùng kiểm trên máy build. Lệch prototype vigov-require (iframe HTML tĩnh có ảnh) là theo lựa chọn của người dùng 17/10/2026: bỏ ảnh, dùng nút mở chức năng. Ngoài phạm vi (còn): câu banner ở commune-branding.ts:70 nói hiện dưới thanh trên cùng nhưng khung đã bỏ dải banner. |
 | `mo-san-hop-tao-moi-create-17-10` — ?create=1 mở sẵn hộp thoại tạo chính trên 9 màn (Nhiệm vụ, Biên bản, Văn bản-Đơn thư, Thông báo, Người dân, Người dùng, Giải ngân, Phản ánh, Mini App-Nội dung) cho nút của trang Hướng dẫn | xong | 04aacfe6 lib/create-link.ts; lib/use-consume-create-param.ts (mở một lần, chỉ khi màn tự vẽ nút cho tài khoản, chờ khi phiên chưa đọc, rồi bỏ create khỏi địa chỉ giữ tham số khác + hash). Test: create-link.test.ts, use-consume-create-param(.screens).test.tsx, nhiem-vu/open-create.test.tsx. tsc + eslint xanh; npm test 351 tệp / 6523 ca xanh (17/10/2026). | — | CHƯA kiểm trên trình duyệt. Thông báo và Nhập biên bản không có cổng client nên link mở như nút. /van-ban có drill-down + create=1 (Hướng dẫn không sinh link này): sang tab Đơn thư mới mở hộp. Thiếu quyền ở vài màn thì create=1 ở lại địa chỉ, không mở gì. |
+| `cau-hinh-khoa-citizen-field-17-10` — Tài khoản chỉ giữ admin.citizen_field không thấy mục menu Cấu hình dù tab Thuộc tính danh bạ mở cho họ | xong | muc-menu.ts KHOA_MO_CAU_HINH thêm CITIZEN_FIELD_PERMISSION (khoá có thật, lib/quyen.ts:496, cổng tab quyen-tab.ts:139). muc-menu.test.ts: ca được phép admin.citizen_field + ca chuỗi gần giống (admin.citizen_fields, ADMIN.CITIZEN_FIELD) không mở. vitest components + user-guide + cau-hinh 93 tệp / 1665 ca xanh; tsc + eslint xanh (17/10/2026). | — | Không còn gì. |

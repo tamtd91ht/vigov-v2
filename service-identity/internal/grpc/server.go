@@ -276,6 +276,12 @@ type Deps struct {
 	// numbers and writes one audit entry in the read's transaction. Declared in notice_audience.go.
 	NoticeAudience NoticeAudienceService
 
+	// The directory side of the petition ↔ directory link (ADR 0102) — a USE CASE, *app.CitizenContactMatch
+	// in production: FindCitizenContactByPhone answers a yes/no and an id, unaudited;
+	// GetCitizenContactMatchPhone discloses one row's full number with one audit entry in the read's
+	// transaction. Declared in citizen_contact_match.go.
+	ContactMatch CitizenContactMatchService
+
 	Log *slog.Logger
 }
 
@@ -348,6 +354,8 @@ func NewServer(d Deps) *Server {
 		panic("identity/grpc: thiếu use case mở số điện thoại công dân — ResolveCitizenContactPhone sẽ panic, và mọi phản ánh gửi từ phiên đã xác thực số mà để trống ô điện thoại không tiếp nhận được")
 	case d.NoticeAudience == nil:
 		panic("identity/grpc: thiếu use case đối tượng gửi tin — ResolveNoticeAudience và RevealNoticeRecipientPhones sẽ panic, và màn Gửi tin ZNS / SMS không xem trước, không gửi được")
+	case d.ContactMatch == nil:
+		panic("identity/grpc: thiếu use case liên kết danh bạ — FindCitizenContactByPhone và GetCitizenContactMatchPhone sẽ panic, và phản ánh không đồng bộ / không xem được theo danh bạ người dân")
 	}
 	if d.Log == nil {
 		d.Log = slog.Default()
