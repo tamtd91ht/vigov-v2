@@ -88,6 +88,7 @@ sms)"*. Mở rộng #5, #6, #8; danh bạ (#5) vẫn là một nguồn như cũ.
 | S4 | Tham số ZNS (nguồn tệp) | Như S3 cách (2): mỗi tham số mẫu ZBS gõ giá trị chung hoặc chọn một cột tệp. Nhập số tay: chỉ giá trị chung |
 | S5 | Lịch sử | Lưu lịch sử từng số **kể cả số không hợp lệ** và kết quả gửi. Lượt này 3 kết quả: **số không hợp lệ** (`khong-hop-le`), **gửi thất bại** (`that-bai`, kèm **thông báo lỗi nhà cung cấp trả về** nếu có), **đã gửi** (`da-gui`); "thành công tới máy" để lượt callback (#9). Giá trị enum theo ADR 0011 |
 | S6 | Giữ số | Số đầy đủ và nội dung riêng từng dòng chỉ cần tới lúc gửi: lưu **mã hoá bằng khoá của xã** (cùng cơ chế khoá eSMS, ADR 0009) trong dòng người nhận, **xoá bản mã hoá** khi dòng có kết quả cuối; lịch sử chỉ còn số đã che + kết quả + lỗi. Chủ dự án: "chỉ cần lưu lịch sử gửi và kết quả" |
+| S8 | Thông tin map biến | Chủ dự án: *"lịch sử nên lưu thông tin map biến"*. Đợt nhập tệp lưu (bất biến) cột số điện thoại, cột nội dung, biến → cột, tham số ZNS → cột, cùng nội dung chung và cách lấy nội dung; màn lịch sử hiện lại. Lưu **tên cột**, không lưu giá trị từng dòng (S6) |
 | S7 | Gửi ra ngoài | Nội dung/tham số riêng từng người (từ tệp của cán bộ) được gửi sang eSMS/Zalo — chủ dự án yêu cầu trực tiếp (luật 3 điều kiện dừng #2), thay câu "không tham số nào lấy từ hồ sơ của từng người" của #6 cho riêng hai nguồn nhập |
 
 `.xlsx` đọc ở trình duyệt bằng `read-excel-file` (cùng tác giả `write-excel-file` đang dùng) — giả định của phiên
