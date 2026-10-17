@@ -29,9 +29,11 @@ import {
   checkRetireReason,
   draftFromField,
   fieldTypeLabel,
+  insertCode,
   moveCode,
   newFieldDraft,
   orderAfterDrop,
+  previewField,
   restoreOption,
   retireOrRemoveOption,
   setFieldType,
@@ -240,6 +242,32 @@ describe("order", () => {
     expect(orderAfterDrop(codes, "d", "a")).toEqual(["d", "a", "b", "c"]);
     expect(orderAfterDrop(codes, "b", null)).toBe(codes);
     expect(orderAfterDrop(codes, "b", "b")).toBe(codes);
+  });
+
+  it("insertCode (add at a place): the new code at the index, out of range clamped, an already-appended copy moved", () => {
+    expect(insertCode(["a", "b", "c"], "n", 1)).toEqual(["a", "n", "b", "c"]);
+    expect(insertCode(["a", "b", "c"], "n", 0)).toEqual(["n", "a", "b", "c"]);
+    expect(insertCode(["a", "b", "c"], "n", 99)).toEqual(["a", "b", "c", "n"]);
+    // After the POST the server lists it LAST: it is moved, never doubled.
+    expect(insertCode(["a", "b", "c", "n"], "n", 1)).toEqual(["a", "n", "b", "c"]);
+  });
+
+  it("previewField: what the form will draw — fallback label, type default width, no retired or blank options", () => {
+    const d = {
+      ...newFieldDraft(),
+      code: "moi000001",
+      fieldType: "singleBox" as const,
+      options: [
+        { value: "a", label: "A", retired: false, saved: true },
+        { value: "b", label: "B", retired: true, saved: true },
+        { value: "", label: " ", retired: false, saved: false },
+      ],
+    };
+    const p = previewField(d, null, "Thuộc tính mới");
+    expect(p.label).toBe("Thuộc tính mới");
+    expect(p.layout_width).toBe("half");
+    expect(p.options.map((o) => o.value)).toEqual(["a"]);
+    expect(previewField({ ...d, fieldType: "multiText", label: "Ghi chú" }, null, "x")).toMatchObject({ label: "Ghi chú", layout_width: "full", display_mode: "" });
   });
 
   it("type labels are the owner's words", () => {

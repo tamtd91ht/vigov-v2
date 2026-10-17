@@ -128,8 +128,11 @@ function selectValue(el: HTMLSelectElement, value: string) {
     el.dispatchEvent(new Event("change", { bubbles: true }));
   });
 }
-const liveOrder = (el: HTMLElement) => Array.from(el.querySelectorAll<HTMLElement>("[data-field-row]")).map((r) => r.dataset.fieldRow);
+// The order as drawn — by the designer (the default view) or by the list.
+const liveOrder = (el: HTMLElement) =>
+  Array.from(el.querySelectorAll<HTMLElement>("[data-layout-card], [data-field-row]")).map((r) => r.dataset.layoutCard ?? r.dataset.fieldRow);
 const writes = () => calls.filter((c) => c.method !== "GET");
+const widthRadios = (dlg: ParentNode) => Array.from(dlg.querySelectorAll<HTMLInputElement>("[data-layout-width] input[type=radio]"));
 
 describe("gate — admin.citizen_field, denied case first", () => {
   it("DENIED: citizen.read / admin.zalo / look-alikes do not open it, and NOTHING is requested", async () => {
@@ -590,7 +593,7 @@ function typeIntoArea(el: HTMLTextAreaElement, value: string) {
   });
 }
 
-describe("Bố cục — the 2-column layout preview (ADR 0101 #3c)", () => {
+describe("Biểu mẫu — the designer: the contact form's 2-column grid (ADR 0101 #3c)", () => {
   // A half, B full, C half, D half, E half → rows: [A, empty] [B B] [C, D] [E, empty]
   const A: CitizenField = { ...BASE, code: "aaaaaaa1", label: "A", field_type: "singleText", options: [], layout_width: "half", sort_order: 1 };
   const B: CitizenField = { ...A, code: "bbbbbbb1", label: "B", field_type: "multiText", layout_width: "full", sort_order: 2 };
@@ -602,8 +605,8 @@ describe("Bố cục — the 2-column layout preview (ADR 0101 #3c)", () => {
     H.phien = session(["admin.citizen_field"]);
     items = [E, C, A, D, B, RETIRED];
     const el = await mount();
-    expect(el.querySelector("[data-field-layout]")).toBeNull();
-    act(() => button(el, form.LAYOUT_VIEW).click());
+    // The designer is the default view.
+    expect(el.querySelector("[data-field-layout]")).not.toBeNull();
     return el;
   }
   const cards = (el: ParentNode) => Array.from(el.querySelectorAll<HTMLElement>("[data-layout-card]"));
@@ -618,8 +621,11 @@ describe("Bố cục — the 2-column layout preview (ADR 0101 #3c)", () => {
     expect(cards(el).map((c) => c.className.includes("sm:col-span-2"))).toEqual([false, true, false, false, false]);
     expect(el.querySelector("[data-layout-static-note]")!.textContent).toBe(form.LAYOUT_STATIC_NOTE);
     expect(el.querySelector("[data-layout-narrow-note]")!.className).toContain("sm:hidden");
-    // The mock follows type × display_mode; the deleted field is not drawn.
-    expect(card(el, "ddddddd1").querySelector("[data-mock-control]")!.textContent).toContain("Chưa chọn");
+    // The card draws the contact form's REAL control (type × display_mode), inert; the deleted field is not drawn.
+    const dropdown = card(el, "ddddddd1").querySelector<HTMLElement>("[data-live-control]")!;
+    expect(dropdown.hasAttribute("inert")).toBe(true);
+    expect(dropdown.querySelector("select")!.textContent).toContain("Chưa chọn");
+    expect(card(el, "eeeeeee1").querySelector("[data-live-control] input")!.getAttribute("inputmode")).toBe("numeric");
     expect(card(el, "bbbbbbb1").querySelector("[data-card-type]")!.textContent).toBe("Chữ nhiều dòng");
     expect(el.textContent).not.toContain("Thuộc tính cũ");
     // Back to the list.
@@ -684,10 +690,110 @@ describe("Bố cục — the 2-column layout preview (ADR 0101 #3c)", () => {
     await settle();
     expect(writes()).toHaveLength(0);
   });
+
+  it("is the Thêm người dân form: its title, the static fields inert in the dialog's order, then the commune's fields; panel waits", async () => {
+    const el = await openLayout();
+    const canvas = el.querySelector<HTMLElement>("[data-form-canvas]")!;
+    expect(canvas.textContent).toContain("Thêm người dân");
+    const statics = canvas.querySelector<HTMLElement>("[data-static-fields]")!;
+    expect(statics.hasAttribute("inert")).toBe(true);
+    expect(Array.from(statics.querySelectorAll("label")).map((l) => l.textContent?.replace("*", "").trim())).toEqual([
+      "Họ và tên",
+      "Số điện thoại",
+      "Email",
+      "Thôn, tổ dân phố",
+      "Địa chỉ",
+      "Nhãn",
+      "Ghi chú",
+    ]);
+    // Static first, the commune's grid after it — a field can never land among the static ones (#3c).
+    expect(statics.compareDocumentPosition(canvas.querySelector("[data-layout-grid]")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(el.querySelector("[data-panel-empty]")!.textContent).toBe(form.PANEL_EMPTY);
+  });
+
+  /** The code the panel drew for the new field, and that field as the server will list it afterwards. */
+  function newFieldFromPanel(el: HTMLElement, label: string, sortOrder: number): CitizenField {
+    const code = el.querySelector<HTMLInputElement>("[data-field-panel] #citizen-field-code")!.value;
+    return { ...A, code, label, sort_order: sortOrder };
+  }
+
+  it("+ before C: the draft card appears THERE, redrawn as it is typed; Lưu POSTs, then PUTs the order with it before C", async () => {
+    answers["POST /api/v1/citizen-fields"] = { status: 201, body: {} };
+    answers["PUT /api/v1/citizen-field-order"] = { status: 204, body: null };
+    const el = await openLayout();
+    act(() => byLabel(el, form.insertBeforeLabel("C")).click());
+    const panel = el.querySelector<HTMLElement>("[data-field-panel]")!;
+    const dlg = panel.querySelector<HTMLFormElement>("form[aria-label='Thêm thuộc tính']")!;
+    const grid = el.querySelector<HTMLElement>("[data-layout-grid]")!;
+    const draftCard = grid.querySelector<HTMLElement>("[data-new-field-card]")!;
+    // In the grid order: A, (slot), B, NEW, C, …
+    expect(draftCard.nextElementSibling).toBe(card(el, "ccccccc1"));
+    expect(draftCard.textContent).toContain(form.NEW_FIELD_LABEL);
+    typeInto(labelOf(dlg), "Nghề nghiệp");
+    expect(draftCard.querySelector("[data-live-control]")!.textContent).toContain("Nghề nghiệp");
+    act(() => widthRadios(dlg)[1]!.click());
+    expect(grid.querySelector<HTMLElement>("[data-new-field-card]")!.className).toContain("sm:col-span-2");
+
+    const created = newFieldFromPanel(el, "Nghề nghiệp", 6);
+    act(() => saveButton(dlg).click());
+    items = [E, C, A, D, B, created, RETIRED];
+    await settle();
+    expect(writes().map((c) => c.method)).toEqual(["POST", "PUT"]);
+    expect(JSON.parse(writes()[1]!.body!)).toEqual({ codes: ["aaaaaaa1", "bbbbbbb1", created.code, "ccccccc1", "ddddddd1", "eeeeeee1"] });
+    expect(H.toast.success).toHaveBeenCalledWith(form.FIELD_ADDED_TOAST);
+    expect(el.querySelector("[data-new-field-card]")).toBeNull();
+    expect(el.querySelector("[data-panel-empty]")).not.toBeNull();
+  });
+
+  it("+ at the end: POST only — identity already appends there", async () => {
+    answers["POST /api/v1/citizen-fields"] = { status: 201, body: {} };
+    const el = await openLayout();
+    act(() => el.querySelector<HTMLButtonElement>("[data-add-at-end]")!.click());
+    const dlg = el.querySelector<HTMLFormElement>("[data-field-panel] form")!;
+    expect(el.querySelector("[data-layout-grid]")!.querySelector("[data-new-field-card]")!.nextElementSibling!.querySelector("[data-add-at-end]")).not.toBeNull();
+    typeInto(labelOf(dlg), "Ghi chú hộ");
+    act(() => saveButton(dlg).click());
+    await settle();
+    expect(writes().map((c) => c.method)).toEqual(["POST"]);
+  });
+
+  it("a refused placement says the field is at the END — never a silent success", async () => {
+    answers["POST /api/v1/citizen-fields"] = { status: 201, body: {} };
+    answers["PUT /api/v1/citizen-field-order"] = { status: 409, body: { code: "conflict", message: "Thứ tự đã đổi.", trace_id: "" } };
+    const el = await openLayout();
+    act(() => byLabel(el, form.insertBeforeLabel("A")).click());
+    const dlg = el.querySelector<HTMLFormElement>("[data-field-panel] form")!;
+    typeInto(labelOf(dlg), "Đầu tiên");
+    const created = newFieldFromPanel(el, "Đầu tiên", 6);
+    act(() => saveButton(dlg).click());
+    items = [E, C, A, D, B, created, RETIRED];
+    await settle();
+    expect(H.toast.error).toHaveBeenCalledWith(`${form.PLACE_FAILED_TOAST} Thứ tự đã đổi.`);
+    expect(liveOrder(el).at(-1)).toBe(created.code);
+  });
+
+  it("the empty right slot is a +: it adds right after its lone half", async () => {
+    const el = await openLayout();
+    act(() => el.querySelector<HTMLElement>("[data-empty-slot='aaaaaaa1'] button")!.click());
+    expect(card(el, "aaaaaaa1").nextElementSibling!.hasAttribute("data-new-field-card")).toBe(true);
+  });
+
+  it("a click on a card opens it in the panel; the label is redrawn on the card as it is typed; Huỷ puts it back", async () => {
+    const el = await openLayout();
+    act(() => card(el, "ccccccc1").querySelector<HTMLElement>("[data-card-body]")!.click());
+    const dlg = el.querySelector<HTMLFormElement>("[data-field-panel] form[aria-label='Sửa thuộc tính']")!;
+    expect(card(el, "ccccccc1").dataset.selected).toBe("true");
+    typeInto(labelOf(dlg), "C mới");
+    expect(card(el, "ccccccc1").querySelector("[data-live-control]")!.textContent).toContain("C mới");
+    // The buttons keep the stored name while it is typed.
+    expect(byLabel(el, "Sửa thuộc tính C")).not.toBeNull();
+    act(() => button(dlg, "Huỷ").click());
+    expect(card(el, "ccccccc1").querySelector("[data-live-control]")!.textContent).not.toContain("C mới");
+    expect(writes()).toHaveLength(0);
+  });
 });
 
 describe("Độ rộng trên biểu mẫu — in the field dialog", () => {
-  const widthRadios = (dlg: ParentNode) => Array.from(dlg.querySelectorAll<HTMLInputElement>("[data-layout-width] input[type=radio]"));
 
   it("add: the type's default is checked (singleText half, multiText full) and null is sent when untouched", async () => {
     H.phien = session(["admin.citizen_field"]);

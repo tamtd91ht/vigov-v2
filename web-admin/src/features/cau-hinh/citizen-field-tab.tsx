@@ -63,6 +63,7 @@ import {
   OPTIONS_HINT,
   ORDER_FAILED_TOAST,
   ORDER_SAVED_TOAST,
+  PLACE_FAILED_TOAST,
   RETIRE_REASON_MAX,
   WIDTH_FAILED_TOAST,
   WIDTH_SAVED_TOAST,
@@ -79,6 +80,7 @@ import {
   hasErrors,
   hasOptions,
   hasPlaceholder,
+  insertCode,
   isCodeCollision,
   layoutWidthBody,
   limitReachedText,
@@ -99,7 +101,7 @@ import {
   type FieldFormErrors,
 } from "./citizen-field-form";
 import { DRAG_INSTRUCTIONS, orderAnnouncements, useOrderSensors } from "./citizen-field-dnd";
-import { FieldLayoutPreview } from "./citizen-field-layout";
+import { FormDesigner } from "./citizen-field-layout";
 import { ConfigDialog } from "./config-dialog";
 import { citizenFieldTabDecision } from "./quyen-tab";
 
@@ -117,7 +119,8 @@ const DANGER_OUTLINE = "border-danger/30 text-danger hover:not-disabled:bg-dange
 const inputCls = cn(controlClass, "bg-white");
 const selectCls = cn(controlClass, "bg-white pr-8");
 
-type DialogState = { mode: "add"; idempotencyKey: string } | { mode: "edit"; field: CitizenField };
+/** `insertAt`: the index of the live order the new field is to take (= the count of live fields: at the end). */
+type DialogState = { mode: "add"; idempotencyKey: string; insertAt: number } | { mode: "edit"; field: CitizenField };
 
 /**
  * "Cấu hình → Thuộc tính danh bạ" (ADR 0101 #1–#5): the commune's own fields of the citizen directory.
@@ -129,9 +132,16 @@ type DialogState = { mode: "add"; idempotencyKey: string } | { mode: "edit"; fie
  * move a row; the new order shows at once and `PUT` saves the whole live list. A refusal puts the old
  * order back and says so — the screen never shows an order the server does not hold.
  *
- * "BỐ CỤC" (ADR 0101 #3c) is the same live list drawn as the contact form's 2-column grid: the same reorder,
- * plus "Nửa hàng / Cả hàng" per field, saved by a PATCH of `layout_width` alone. The new width shows at once;
- * a refusal puts the old one back and says so, like the order.
+ * "BIỂU MẪU" (ADR 0101 #3c; user 17/10/2026: "mở lại chính layout của view thêm danh bạ người dân, chọn thêm
+ * thuộc tính ngay trên layout ở vị trí mong muốn") is the default view: the Thêm người dân form itself, its
+ * static part inert on top, the live fields in its 2-column grid, a "+" at every place a field can go, and the
+ * add / edit form in a side panel whose draft is drawn live in place. "Nửa hàng / Cả hàng" per field is saved by
+ * a PATCH of `layout_width` alone; the new width shows at once and a refusal puts the old one back.
+ *
+ * ADDING AT A PLACE = POST, THEN PUT ORDER. The create route takes no position (identity appends at the end),
+ * so a field asked for anywhere but the end is moved there by the same whole-list PUT a drag sends. Two
+ * writes, each audited; if the second is refused the field exists at the end and the toast says exactly that
+ * — never a silent "done". No backend contract change for a screen convenience.
  *
  * "XOÁ" IS A SOFT DELETE OF THE DEFINITION ONLY (owner, 17/10/2026): `DELETE` retires it server-side, the values
  * already typed on every person stay (#4, rule 7). Deleted fields are NOT drawn, but they are still loaded
@@ -146,9 +156,12 @@ export function CitizenFieldTab() {
   const [fields, setFields] = useState<KetQua<CitizenField[]> | null>(null);
   /** The live order while a reorder is being saved — shown at once, dropped on success or refusal. */
   const [pendingOrder, setPendingOrder] = useState<readonly string[] | null>(null);
+  /** What the form edits: the designer's side panel in "Biểu mẫu", a dialog in "Danh sách". */
   const [dialog, setDialog] = useState<DialogState | null>(null);
+  /** The open form's draft, drawn live on the designer. */
+  const [draft, setDraft] = useState<CitizenFieldDraft | null>(null);
   const [deleting, setDeleting] = useState<CitizenField | null>(null);
-  const [view, setView] = useState<"list" | "layout">("list");
+  const [view, setView] = useState<"list" | "layout">("layout");
   /** Codes whose width is being saved — their toggle waits, so two PATCHes of one field never race. */
   const [widthSaving, setWidthSaving] = useState<readonly string[]>([]);
 
@@ -235,17 +248,71 @@ export function CitizenFieldTab() {
     toast.success(WIDTH_SAVED_TOAST);
   }
 
+  function open(next: DialogState) {
+    setDraft(null);
+    setDialog(next);
+  }
+
+  function startAdd(at: number) {
+    if (full) return;
+    open({ mode: "add", idempotencyKey: crypto.randomUUID(), insertAt: at });
+  }
+
+  /** The new field is at the end (identity appends); move it to where it was asked for. */
+  async function place(code: string, at: number) {
+    const r = await listCitizenFields(true);
+    if (!r.ok) {
+      toast.error(PLACE_FAILED_TOAST);
+      return;
+    }
+    const order = splitFields(r.duLieu.items).live.map((f) => f.code);
+    const next = insertCode(order, code, at);
+    if (!order.includes(code) || next.join() === order.join()) {
+      setFields({ ok: true, duLieu: r.duLieu.items });
+      return;
+    }
+    const put = await reorderCitizenFields(next);
+    if (!put.ok) toast.error(put.thongBao === LOI_KHONG_RO ? PLACE_FAILED_TOAST : `${PLACE_FAILED_TOAST} ${put.thongBao}`);
+    await reload();
+  }
+
+  function closeEditor(saved: boolean, code?: string) {
+    const was = dialog;
+    setDialog(null);
+    setDraft(null);
+    if (!saved) return;
+    if (was?.mode === "add" && code !== undefined && was.insertAt < codes.length) void place(code, was.insertAt);
+    else void reload();
+  }
+
   const addButton = (
     <Button
       type="button"
       variant="primary"
       disabled={full}
       icon={<Plus aria-hidden="true" focusable="false" />}
-      onClick={() => setDialog({ mode: "add", idempotencyKey: crypto.randomUUID() })}
+      onClick={() => {
+        // From either view the new field is placed on the form: the designer shows where it lands.
+        setView("layout");
+        startAdd(codes.length);
+      }}
     >
       {ADD_FIELD_BUTTON}
     </Button>
   );
+
+  const editor =
+    dialog === null ? null : (
+      <CitizenFieldEditor
+        key={dialog.mode === "edit" ? dialog.field.code : dialog.idempotencyKey}
+        state={dialog}
+        takenCodes={fields.duLieu.map((f) => f.code)}
+        retiredCodes={retired.map((f) => f.code)}
+        onClose={closeEditor}
+        onDraft={setDraft}
+        compact
+      />
+    );
 
   return (
     <div className="flex min-w-0 flex-col gap-4" data-citizen-fields="">
@@ -283,41 +350,50 @@ export function CitizenFieldTab() {
           />
         )}
 
-        {live.length === 0 ? (
+        {live.length === 0 && view === "list" && (
           <p className="text-ink-muted m-0 mt-4 text-[12.5px]" data-fields-empty="">
             {NO_FIELDS}
           </p>
-        ) : view === "layout" ? (
-          <FieldLayoutPreview
+        )}
+        {view === "layout" ? (
+          <FormDesigner
             fields={live}
             busy={pendingOrder !== null}
+            full={full}
             widthSaving={widthSaving}
+            selection={
+              dialog === null ? null : dialog.mode === "add" ? { kind: "add", at: dialog.insertAt } : { kind: "edit", code: dialog.field.code }
+            }
+            draft={draft}
+            panel={editor}
+            onInsert={startAdd}
+            onEdit={(f) => open({ mode: "edit", field: f })}
+            onDelete={setDeleting}
             onMove={(from, to) => void saveOrder(moveCode(codes, from, to))}
             onDrop={(active, over) => void saveOrder(orderAfterDrop(codes, active, over))}
             onWidth={(f, w) => void saveWidth(f, w)}
           />
         ) : (
-          <LiveFieldList
-            fields={live}
-            busy={pendingOrder !== null}
-            onMove={(from, to) => void saveOrder(moveCode(codes, from, to))}
-            onDrop={(active, over) => void saveOrder(orderAfterDrop(codes, active, over))}
-            onEdit={(f) => setDialog({ mode: "edit", field: f })}
-            onDelete={setDeleting}
-          />
+          live.length > 0 && (
+            <LiveFieldList
+              fields={live}
+              busy={pendingOrder !== null}
+              onMove={(from, to) => void saveOrder(moveCode(codes, from, to))}
+              onDrop={(active, over) => void saveOrder(orderAfterDrop(codes, active, over))}
+              onEdit={(f) => open({ mode: "edit", field: f })}
+              onDelete={setDeleting}
+            />
+          )
         )}
       </section>
 
-      {dialog !== null && (
+      {view === "list" && dialog !== null && (
         <CitizenFieldDialog
           key={dialog.mode === "edit" ? dialog.field.code : dialog.idempotencyKey}
           state={dialog}
           takenCodes={fields.duLieu.map((f) => f.code)}
           retiredCodes={retired.map((f) => f.code)}
-          onClose={(saved) => {
-            setDialog(null);
-            if (saved) void reload();
-          }}
+          onClose={closeEditor}
         />
       )}
 
@@ -500,19 +576,44 @@ function FieldRow({
  * a new random one.
  * The Idempotency-Key of the POST is made when the dialog opens and kept across a retry inside it.
  */
-export function CitizenFieldDialog({
-  state,
-  takenCodes,
-  retiredCodes,
-  onClose,
-}: {
+export function CitizenFieldDialog(props: EditorProps) {
+  const editing = props.state.mode === "edit";
+  // A dismiss while the editor saves is ignored, as its own buttons are disabled then.
+  const [busy, setBusy] = useState(false);
+  return (
+    <ConfigDialog
+      title={editing ? EDIT_FIELD_TITLE : ADD_FIELD_TITLE}
+      description={props.state.mode === "edit" ? props.state.field.label : undefined}
+      size="lg"
+      onDismiss={() => {
+        if (!busy) props.onClose(false);
+      }}
+    >
+      <CitizenFieldEditor {...props} onBusy={setBusy} />
+    </ConfigDialog>
+  );
+}
+
+type EditorProps = {
   state: DialogState;
   /** Every code the commune holds, deleted (retired) ones included (the DB key covers both). */
   takenCodes: readonly string[];
   /** The deleted subset of `takenCodes` — only changes the sentence. */
   retiredCodes: readonly string[];
-  onClose: (saved: boolean) => void;
-}) {
+  /** `code` = the field just saved (add: the new code, so the tab can put it where it was asked for). */
+  onClose: (saved: boolean, code?: string) => void;
+  /** Every draft change, for the designer's live card. */
+  onDraft?: (d: CitizenFieldDraft) => void;
+  /** One column: the designer's side panel is too narrow for the dialog's two. */
+  compact?: boolean;
+  onBusy?: (busy: boolean) => void;
+};
+
+/**
+ * The add / edit form itself, without a frame: inside `CitizenFieldDialog` (the list view) or in the
+ * designer's side panel, next to the form it changes.
+ */
+export function CitizenFieldEditor({ state, takenCodes, retiredCodes, onClose, onDraft, compact = false, onBusy }: EditorProps) {
   const editing = state.mode === "edit";
   // Add only, drawn once at open. `null` (twenty draws all taken — a broken random source) leaves Mã empty
   // and opens it for typing instead of proposing a code known to be taken.
@@ -537,6 +638,14 @@ export function CitizenFieldDialog({
   const drawCode = (extra: readonly string[] = []) => freeRandomFieldCode(new Set([...allTaken, ...extra]));
   const manualError = !editing && codeMode === "manual" ? manualCodeError(draft.code, liveSet, retiredSet) : undefined;
   const codeError = errors.code ?? manualError;
+
+  useEffect(() => {
+    onDraft?.(draft);
+  }, [draft, onDraft]);
+
+  useEffect(() => {
+    onBusy?.(busy);
+  }, [busy, onBusy]);
 
   useEffect(() => {
     if (codeMode === "manual" && focusCode.current) {
@@ -591,249 +700,240 @@ export function CitizenFieldDialog({
       return;
     }
     toast.success(editing ? FIELD_SAVED_TOAST : FIELD_ADDED_TOAST);
-    onClose(true);
+    onClose(true, draft.code.trim());
   }
 
   const t = draft.fieldType;
   return (
-    <ConfigDialog
-      title={editing ? EDIT_FIELD_TITLE : ADD_FIELD_TITLE}
-      description={editing ? state.field.label : undefined}
-      size="lg"
-      onDismiss={() => {
-        if (!busy) onClose(false);
+    <form
+      aria-label={editing ? EDIT_FIELD_TITLE : ADD_FIELD_TITLE}
+      className="m-0 flex flex-col gap-4"
+      autoComplete="off"
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
       }}
     >
-      <form
-        aria-label={editing ? EDIT_FIELD_TITLE : ADD_FIELD_TITLE}
-        className="m-0 flex flex-col gap-4"
-        autoComplete="off"
-        noValidate
-        onSubmit={(e) => {
-          e.preventDefault();
-          void submit();
-        }}
-      >
-        <fieldset disabled={busy} className="m-0 flex min-w-0 flex-col gap-4 border-0 p-0">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <FormField
-              id={id("code")}
-              label="Mã"
-              required={!editing}
-              error={codeError}
-              hint={editing ? CODE_LOCKED_HINT : CODE_HINT}
-            >
-              {/* Edit: read-only, no Sửa — every value typed on every person is keyed by this code (ADR 0101 #1). */}
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <input
-                  ref={codeInput}
-                  id={id("code")}
-                  type="text"
-                  spellCheck={false}
-                  className={cn(inputCls, "min-w-0 flex-1 font-mono", (editing || codeMode === "random") && "bg-surface-muted")}
-                  maxLength={12}
-                  value={draft.code}
-                  readOnly={editing || codeMode === "random"}
-                  aria-readonly={editing || codeMode === "random" || undefined}
-                  aria-invalid={codeError !== undefined}
-                  data-code-mode={editing ? "locked" : codeMode}
-                  onChange={(e) => {
-                    setDraft({ ...draft, code: e.target.value.toLowerCase() });
-                    setErrors({ ...errors, code: undefined });
-                  }}
-                />
-                {!editing && codeMode === "random" && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="min-h-0 shrink-0"
-                    aria-label="Sửa mã thuộc tính"
-                    icon={<Pencil aria-hidden="true" focusable="false" className="size-3.5" />}
-                    onClick={() => {
-                      focusCode.current = true;
-                      setCodeMode("manual");
-                    }}
-                  >
-                    {CODE_EDIT_BUTTON}
-                  </Button>
-                )}
-                {!editing && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="min-h-0 shrink-0"
-                    icon={<RotateCcw aria-hidden="true" focusable="false" className="size-3.5" />}
-                    onClick={redraw}
-                  >
-                    {CODE_REDRAW}
-                  </Button>
-                )}
-              </div>
-            </FormField>
-            <FormField id={id("label")} label="Tên hiển thị" required error={errors.label}>
+      <fieldset disabled={busy} className="m-0 flex min-w-0 flex-col gap-4 border-0 p-0">
+        <div className={cn("grid gap-4", !compact && "sm:grid-cols-2")}>
+          <FormField
+            id={id("code")}
+            label="Mã"
+            required={!editing}
+            error={codeError}
+            hint={editing ? CODE_LOCKED_HINT : CODE_HINT}
+          >
+            {/* Edit: read-only, no Sửa — every value typed on every person is keyed by this code (ADR 0101 #1). */}
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <input
-                id={id("label")}
+                ref={codeInput}
+                id={id("code")}
+                type="text"
+                spellCheck={false}
+                className={cn(inputCls, "min-w-0 flex-1 font-mono", (editing || codeMode === "random") && "bg-surface-muted")}
+                maxLength={12}
+                value={draft.code}
+                readOnly={editing || codeMode === "random"}
+                aria-readonly={editing || codeMode === "random" || undefined}
+                aria-invalid={codeError !== undefined}
+                data-code-mode={editing ? "locked" : codeMode}
+                onChange={(e) => {
+                  setDraft({ ...draft, code: e.target.value.toLowerCase() });
+                  setErrors({ ...errors, code: undefined });
+                }}
+              />
+              {!editing && codeMode === "random" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="min-h-0 shrink-0"
+                  aria-label="Sửa mã thuộc tính"
+                  icon={<Pencil aria-hidden="true" focusable="false" className="size-3.5" />}
+                  onClick={() => {
+                    focusCode.current = true;
+                    setCodeMode("manual");
+                  }}
+                >
+                  {CODE_EDIT_BUTTON}
+                </Button>
+              )}
+              {!editing && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="min-h-0 shrink-0"
+                  icon={<RotateCcw aria-hidden="true" focusable="false" className="size-3.5" />}
+                  onClick={redraw}
+                >
+                  {CODE_REDRAW}
+                </Button>
+              )}
+            </div>
+          </FormField>
+          <FormField id={id("label")} label="Tên hiển thị" required error={errors.label}>
+            <input
+              id={id("label")}
+              type="text"
+              className={inputCls}
+              value={draft.label}
+              aria-invalid={errors.label !== undefined}
+              onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+            />
+          </FormField>
+          <FormField id={id("type")} label="Loại" required={!editing} hint={editing ? "Loại không đổi sau khi tạo." : undefined}>
+            {editing ? (
+              <input id={id("type")} type="text" className={inputCls} value={fieldTypeLabel(t)} readOnly aria-readonly="true" />
+            ) : (
+              <select id={id("type")} className={selectCls} value={t} onChange={(e) => setDraft(setFieldType(draft, e.target.value as CitizenFieldDraft["fieldType"]))}>
+                {FIELD_TYPES.map((x) => (
+                  <option key={x.value} value={x.value}>
+                    {x.label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
+
+          {hasPlaceholder(t) && (
+            <FormField id={id("placeholder")} label="Gợi ý nhập (placeholder)" error={errors.placeholder}>
+              <input
+                id={id("placeholder")}
                 type="text"
                 className={inputCls}
-                value={draft.label}
-                aria-invalid={errors.label !== undefined}
-                onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+                value={draft.placeholder}
+                aria-invalid={errors.placeholder !== undefined}
+                onChange={(e) => setDraft({ ...draft, placeholder: e.target.value })}
               />
             </FormField>
-            <FormField id={id("type")} label="Loại" required={!editing} hint={editing ? "Loại không đổi sau khi tạo." : undefined}>
+          )}
+          {t === "number" && (
+            <FormField id={id("number-kind")} label="Kiểu số" hint={editing ? "Kiểu số không đổi sau khi tạo." : undefined}>
               {editing ? (
-                <input id={id("type")} type="text" className={inputCls} value={fieldTypeLabel(t)} readOnly aria-readonly="true" />
+                <input
+                  id={id("number-kind")}
+                  type="text"
+                  className={inputCls}
+                  value={NUMBER_KINDS.find((k) => k.value === draft.numberKind)?.label ?? draft.numberKind}
+                  readOnly
+                  aria-readonly="true"
+                />
               ) : (
-                <select id={id("type")} className={selectCls} value={t} onChange={(e) => setDraft(setFieldType(draft, e.target.value as CitizenFieldDraft["fieldType"]))}>
-                  {FIELD_TYPES.map((x) => (
-                    <option key={x.value} value={x.value}>
-                      {x.label}
+                <select
+                  id={id("number-kind")}
+                  className={selectCls}
+                  value={draft.numberKind}
+                  onChange={(e) => setDraft({ ...draft, numberKind: e.target.value as CitizenFieldDraft["numberKind"] })}
+                >
+                  {NUMBER_KINDS.map((k) => (
+                    <option key={k.value} value={k.value}>
+                      {k.label}
                     </option>
                   ))}
                 </select>
               )}
             </FormField>
-
-            {hasPlaceholder(t) && (
-              <FormField id={id("placeholder")} label="Gợi ý nhập (placeholder)" error={errors.placeholder}>
-                <input
-                  id={id("placeholder")}
-                  type="text"
-                  className={inputCls}
-                  value={draft.placeholder}
-                  aria-invalid={errors.placeholder !== undefined}
-                  onChange={(e) => setDraft({ ...draft, placeholder: e.target.value })}
-                />
-              </FormField>
-            )}
-            {t === "number" && (
-              <FormField id={id("number-kind")} label="Kiểu số" hint={editing ? "Kiểu số không đổi sau khi tạo." : undefined}>
-                {editing ? (
-                  <input
-                    id={id("number-kind")}
-                    type="text"
-                    className={inputCls}
-                    value={NUMBER_KINDS.find((k) => k.value === draft.numberKind)?.label ?? draft.numberKind}
-                    readOnly
-                    aria-readonly="true"
-                  />
-                ) : (
-                  <select
-                    id={id("number-kind")}
-                    className={selectCls}
-                    value={draft.numberKind}
-                    onChange={(e) => setDraft({ ...draft, numberKind: e.target.value as CitizenFieldDraft["numberKind"] })}
-                  >
-                    {NUMBER_KINDS.map((k) => (
-                      <option key={k.value} value={k.value}>
-                        {k.label}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </FormField>
-            )}
-            {t === "dateTime" && (
-              <FormField id={id("date-pattern")} label="Định dạng ngày">
-                <select
-                  id={id("date-pattern")}
-                  className={selectCls}
-                  value={draft.datePattern}
-                  onChange={(e) => setDraft({ ...draft, datePattern: e.target.value as DatePattern })}
-                >
-                  {DATE_PATTERNS.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
-            )}
-          </div>
-
-          {hasOptions(t) && <OptionsEditor draft={draft} setDraft={setDraft} errors={errors} idPrefix={id("option")} />}
-
-          {hasOptions(t) && (
-            // Editable on edit too: it changes the drawing only, never a stored value.
-            <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0" data-display-mode="">
-              <legend className={cn(FIELD_LABEL, "p-0")}>{DISPLAY_MODE_LABEL}</legend>
-              <div className="flex flex-wrap gap-x-6 gap-y-2">
-                {DISPLAY_MODES.map((m) => (
-                  <label key={m.value} className="text-ink m-0 flex cursor-pointer items-center gap-2 text-[13px] font-normal">
-                    <input
-                      type="radio"
-                      name={id("display-mode")}
-                      value={m.value}
-                      className="accent-brand m-0 size-4 shrink-0"
-                      checked={draft.displayMode === m.value}
-                      onChange={() => setDraft({ ...draft, displayMode: m.value })}
-                    />
-                    {m.label}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
           )}
+          {t === "dateTime" && (
+            <FormField id={id("date-pattern")} label="Định dạng ngày">
+              <select
+                id={id("date-pattern")}
+                className={selectCls}
+                value={draft.datePattern}
+                onChange={(e) => setDraft({ ...draft, datePattern: e.target.value as DatePattern })}
+              >
+                {DATE_PATTERNS.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+          )}
+        </div>
 
-          {/* Add: nothing picked = the type's default is drawn checked and `null` is sent (#3c). */}
-          <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0" data-layout-width="">
-            <legend className={cn(FIELD_LABEL, "p-0")}>{LAYOUT_WIDTH_LABEL}</legend>
+        {hasOptions(t) && <OptionsEditor draft={draft} setDraft={setDraft} errors={errors} idPrefix={id("option")} />}
+
+        {hasOptions(t) && (
+          // Editable on edit too: it changes the drawing only, never a stored value.
+          <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0" data-display-mode="">
+            <legend className={cn(FIELD_LABEL, "p-0")}>{DISPLAY_MODE_LABEL}</legend>
             <div className="flex flex-wrap gap-x-6 gap-y-2">
-              {LAYOUT_WIDTHS.map((w) => (
-                <label key={w.value} className="text-ink m-0 flex cursor-pointer items-center gap-2 text-[13px] font-normal">
+              {DISPLAY_MODES.map((m) => (
+                <label key={m.value} className="text-ink m-0 flex cursor-pointer items-center gap-2 text-[13px] font-normal">
                   <input
                     type="radio"
-                    name={id("layout-width")}
-                    value={w.value}
+                    name={id("display-mode")}
+                    value={m.value}
                     className="accent-brand m-0 size-4 shrink-0"
-                    checked={(draft.layoutWidth ?? defaultLayoutWidth(t)) === w.value}
-                    onChange={() => setDraft({ ...draft, layoutWidth: w.value })}
+                    checked={draft.displayMode === m.value}
+                    onChange={() => setDraft({ ...draft, displayMode: m.value })}
                   />
-                  {w.label}
+                  {m.label}
                 </label>
               ))}
             </div>
-            <p className={HINT}>{LAYOUT_WIDTH_HINT}</p>
           </fieldset>
-
-          <div className="flex flex-wrap gap-x-6 gap-y-2">
-            <label className="text-ink m-0 flex cursor-pointer items-center gap-2 text-[13px] font-normal">
-              <input
-                type="checkbox"
-                className="accent-brand m-0 size-4 shrink-0"
-                checked={draft.required}
-                onChange={(e) => setDraft({ ...draft, required: e.target.checked })}
-              />
-              Bắt buộc
-            </label>
-            <label className="text-ink m-0 flex cursor-pointer items-center gap-2 text-[13px] font-normal">
-              <input
-                type="checkbox"
-                className="accent-brand m-0 size-4 shrink-0"
-                checked={draft.showInList}
-                onChange={(e) => setDraft({ ...draft, showInList: e.target.checked })}
-              />
-              Hiện ở danh sách
-            </label>
-          </div>
-        </fieldset>
-        {formError !== "" && (
-          <p className={ERROR} role="alert" data-form-error="">
-            {formError}
-          </p>
         )}
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button type="submit" variant="primary" disabled={busy || isCodeCollision(manualError)} aria-busy={busy}>
-            Lưu
-          </Button>
-          <Button type="button" variant="outline" disabled={busy} onClick={() => onClose(false)}>
-            {NUT_HUY}
-          </Button>
+
+        {/* Add: nothing picked = the type's default is drawn checked and `null` is sent (#3c). */}
+        <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0" data-layout-width="">
+          <legend className={cn(FIELD_LABEL, "p-0")}>{LAYOUT_WIDTH_LABEL}</legend>
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
+            {LAYOUT_WIDTHS.map((w) => (
+              <label key={w.value} className="text-ink m-0 flex cursor-pointer items-center gap-2 text-[13px] font-normal">
+                <input
+                  type="radio"
+                  name={id("layout-width")}
+                  value={w.value}
+                  className="accent-brand m-0 size-4 shrink-0"
+                  checked={(draft.layoutWidth ?? defaultLayoutWidth(t)) === w.value}
+                  onChange={() => setDraft({ ...draft, layoutWidth: w.value })}
+                />
+                {w.label}
+              </label>
+            ))}
+          </div>
+          <p className={HINT}>{LAYOUT_WIDTH_HINT}</p>
+        </fieldset>
+
+        <div className="flex flex-wrap gap-x-6 gap-y-2">
+          <label className="text-ink m-0 flex cursor-pointer items-center gap-2 text-[13px] font-normal">
+            <input
+              type="checkbox"
+              className="accent-brand m-0 size-4 shrink-0"
+              checked={draft.required}
+              onChange={(e) => setDraft({ ...draft, required: e.target.checked })}
+            />
+            Bắt buộc
+          </label>
+          <label className="text-ink m-0 flex cursor-pointer items-center gap-2 text-[13px] font-normal">
+            <input
+              type="checkbox"
+              className="accent-brand m-0 size-4 shrink-0"
+              checked={draft.showInList}
+              onChange={(e) => setDraft({ ...draft, showInList: e.target.checked })}
+            />
+            Hiện ở danh sách
+          </label>
         </div>
-      </form>
-    </ConfigDialog>
+      </fieldset>
+      {formError !== "" && (
+        <p className={ERROR} role="alert" data-form-error="">
+          {formError}
+        </p>
+      )}
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button type="submit" variant="primary" disabled={busy || isCodeCollision(manualError)} aria-busy={busy}>
+          Lưu
+        </Button>
+        <Button type="button" variant="outline" disabled={busy} onClick={() => onClose(false)}>
+          {NUT_HUY}
+        </Button>
+      </div>
+    </form>
   );
 }
 

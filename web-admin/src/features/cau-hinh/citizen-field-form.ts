@@ -13,6 +13,7 @@
  */
 
 import {
+  defaultLayoutWidth,
   displayModeOf,
   layoutWidthOf,
   type CitizenField,
@@ -104,11 +105,54 @@ export const LAYOUT_WIDTHS: readonly { readonly value: CitizenFieldLayoutWidth; 
 /* ---- the layout preview (ADR 0101 #3c) ---- */
 
 export const LIST_VIEW = "Danh sách";
-export const LAYOUT_VIEW = "Bố cục";
-export const LAYOUT_TITLE = "Bố cục biểu mẫu";
-export const LAYOUT_STATIC_NOTE = "Các ô cố định (Họ tên, Số điện thoại, …) hiển thị phía trên theo mẫu.";
+export const LAYOUT_VIEW = "Biểu mẫu";
+export const LAYOUT_TITLE = "Biểu mẫu Thêm người dân";
+export const LAYOUT_HINT =
+  "Đây là biểu mẫu cán bộ thấy khi thêm người dân. Bấm + ở chỗ muốn thêm thuộc tính, bấm vào một thuộc tính để sửa; kéo hoặc dùng Lên / Xuống để đổi chỗ.";
+export const LAYOUT_STATIC_NOTE = "Ô cố định của biểu mẫu — giữ nguyên, không sửa ở đây.";
+export const LAYOUT_DYNAMIC_TITLE = "Thuộc tính của xã";
 export const LAYOUT_NARROW_NOTE = "Màn hình hẹp (dưới 640px): biểu mẫu thật cũng xếp mỗi thuộc tính một hàng như dưới đây.";
 export const EMPTY_SLOT_HINT = "Ô bên phải còn trống";
+export const NEW_FIELD_LABEL = "Thuộc tính mới";
+export const PANEL_EMPTY = "Chọn một thuộc tính trên biểu mẫu để sửa, hoặc bấm + ở chỗ muốn thêm thuộc tính mới.";
+export const PLACE_FAILED_TOAST =
+  "Đã thêm thuộc tính nhưng chưa đặt được vào chỗ đã chọn — thuộc tính đang ở cuối biểu mẫu. Kéo hoặc dùng Lên / Xuống để đưa về chỗ muốn.";
+
+export function insertBeforeLabel(label: string): string {
+  return `Chèn thuộc tính trước ${label}`;
+}
+
+/** `code` moved to index `at` of the live order (it may already be in it, at the end, after a POST). */
+export function insertCode(codes: readonly string[], code: string, at: number): string[] {
+  const rest = codes.filter((c) => c !== code);
+  const i = Math.max(0, Math.min(at, rest.length));
+  return [...rest.slice(0, i), code, ...rest.slice(i)];
+}
+
+/**
+ * The field the designer draws for a draft — what the contact form would show once it is saved. `base` is
+ * the stored field on edit (its sort order and dates are kept); a new field has none. Retired options are
+ * left out, as the contact form leaves them out for a person who holds none.
+ */
+export function previewField(d: CitizenFieldDraft, base: CitizenField | null, fallbackLabel: string): CitizenField {
+  return {
+    code: d.code,
+    label: d.label.trim() === "" ? fallbackLabel : d.label,
+    field_type: d.fieldType,
+    placeholder: d.placeholder,
+    options: d.options.filter((o) => !o.retired && o.label.trim() !== "").map((o) => ({ value: o.value, label: o.label, retired: false })),
+    number_kind: d.fieldType === "number" ? d.numberKind : "",
+    date_pattern: d.fieldType === "dateTime" ? d.datePattern : "",
+    required: d.required,
+    show_in_list: d.showInList,
+    sort_order: base?.sort_order ?? 0,
+    created_at: base?.created_at ?? "",
+    updated_at: base?.updated_at ?? "",
+    retired_at: null,
+    display_mode: hasOptions(d.fieldType) ? d.displayMode : "",
+    layout_width: d.layoutWidth ?? defaultLayoutWidth(d.fieldType),
+  };
+}
 export const WIDTH_SAVED_TOAST = "Đã lưu độ rộng.";
 export const WIDTH_FAILED_TOAST = "Chưa lưu được độ rộng. Độ rộng cũ được giữ.";
 

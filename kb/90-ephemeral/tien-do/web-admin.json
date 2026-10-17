@@ -1702,6 +1702,14 @@
       "bang_chung": "features/cau-hinh/collapsible-section.tsx (mới); zalo-channel-tab.tsx, zalo-oa-section.tsx, commune-launch-qr.tsx dùng CollapsibleSection; lưới OA_GRID 1/2/3/4 cột (md/xl/2xl). Test mới trong zalo-oa.test.tsx (lưới, ô +, thu gọn giữ thẻ trong DOM). tsc sạch ở các tệp này, eslint sạch, vitest 3 tệp / 125 ca xanh (17/10/2026).",
       "no_confirm": [],
       "tiep_theo": "CHƯA xem ảnh render thật trên trình duyệt — người dùng kiểm trên máy build."
+    },
+    {
+      "id": "thuoc-tinh-thiet-ke-tren-bieu-mau-17-10",
+      "viec": "Cấu hình → Thuộc tính danh bạ: chế độ Biểu mẫu = chính hộp Thêm người dân; thêm thuộc tính bằng nút + ngay tại vị trí muốn, sửa bằng bảng bên cạnh vẽ lại trực tiếp (ADR 0101 #3d, yêu cầu người dùng 17/10/2026)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "citizen-field-layout.tsx viết lại thành FormDesigner (phần tĩnh inert theo citizen-contact-dialog, ô thuộc tính vẽ bằng CitizenAttributeInputs inert, + trước mỗi ô / ô phải còn trống / cuối lưới, bảng bên cạnh sticky từ lg); citizen-field-tab.tsx tách CitizenFieldEditor khỏi CitizenFieldDialog, mặc định chế độ Biểu mẫu, thêm giữa = POST rồi PUT citizen-field-order (insertCode), PUT lỗi báo PLACE_FAILED_TOAST. Test: 7 ca mới ở citizen-field-tab.test.tsx + 2 ca thuần ở citizen-field-form.test.ts; tsc sạch, eslint sạch, vitest cau-hinh + citizen-directory 75 tệp / 1346 ca xanh (17/10/2026).",
+      "no_confirm": [],
+      "tiep_theo": "(1) CHƯA xem ảnh render thật (rộng ≥1024 có bảng bên cạnh; hẹp bảng xuống dưới và tự cuộn tới) — người dùng kiểm trên máy build. (2) Phần tĩnh vẽ lại theo citizen-contact-dialog.tsx: đổi ô tĩnh bên đó thì phải đổi StaticFields theo (có test khoá danh sách nhãn). (3) Chọn ô khác khi đang gõ dở trong bảng sẽ bỏ bản nháp, chưa hỏi lại."
     }
   ]
 }
