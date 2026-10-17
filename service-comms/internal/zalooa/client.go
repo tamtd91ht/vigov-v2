@@ -495,16 +495,29 @@ func zaloPhone(phone string) (string, bool) {
 // body and nowhere else (see the package comment).
 func (c *Client) SendTemplateMessage(ctx context.Context, accessToken secret.Secret, phone, templateID string,
 	templateData map[string]string, trackingID string) (string, Outcome) {
+	id, o, _ := c.SendTemplateMessageReport(ctx, accessToken, phone, templateID, templateData, trackingID)
+	return id, o
+}
+
+// maxProviderMessage bounds the provider text handed on (the history keeps ≤ 500 characters after scrub).
+const maxProviderMessage = 2000
+
+// SendTemplateMessageReport is SendTemplateMessage plus Zalo's own `message` text when Zalo answered with a
+// non-zero `error` (the owner's S5: "kèm thông báo lỗi nhà cung cấp trả về"). "" for any other outcome —
+// nothing of the request, the URL or the token is ever echoed. NEVER log the returned text: it may quote
+// the number (the caller scrubs digit runs before storing it).
+func (c *Client) SendTemplateMessageReport(ctx context.Context, accessToken secret.Secret, phone, templateID string,
+	templateData map[string]string, trackingID string) (string, Outcome, string) {
 
 	if accessToken.Rong() {
-		return "", OutcomeTokenRejected
+		return "", OutcomeTokenRejected, ""
 	}
 	if templateID == "" || trackingID == "" || len(trackingID) > MaxTrackingIDLen {
-		return "", OutcomeRejected // a caller fault; Zalo is not asked
+		return "", OutcomeRejected, "" // a caller fault; Zalo is not asked
 	}
 	p84, ok := zaloPhone(phone)
 	if !ok {
-		return "", OutcomeRecipientRejected
+		return "", OutcomeRecipientRejected, ""
 	}
 	if templateData == nil {
 		templateData = map[string]string{}
@@ -516,12 +529,13 @@ func (c *Client) SendTemplateMessage(ctx context.Context, accessToken secret.Sec
 		TrackingID   string            `json:"tracking_id"`
 	}{Phone: p84, TemplateID: templateID, TemplateData: templateData, TrackingID: trackingID})
 	if err != nil {
-		return "", OutcomeRejected
+		return "", OutcomeRejected, ""
 	}
 	defer clear(body)
 	var raw struct {
-		Error json.RawMessage `json:"error"`
-		Data  struct {
+		Error   json.RawMessage `json:"error"`
+		Message json.RawMessage `json:"message"`
+		Data    struct {
 			MsgID json.RawMessage `json:"msg_id"`
 		} `json:"data"`
 	}
@@ -529,22 +543,29 @@ func (c *Client) SendTemplateMessage(ctx context.Context, accessToken secret.Sec
 	o := c.call(ctx, http.MethodPost, c.business+"/message/template", hdr, bytes.NewReader(body), "application/json",
 		classifyStatus, &raw)
 	if o != OutcomeOK {
-		return "", o
+		return "", o, ""
 	}
 	if code, present := errorCode(raw.Error); present && code != 0 {
+		msg, _ := scalarText(raw.Message)
+		if len(msg) > maxProviderMessage {
+			msg = msg[:maxProviderMessage]
+		}
+		if tok := string(accessToken.Lo()); tok != "" {
+			msg = strings.ReplaceAll(msg, tok, secret.Che)
+		}
 		switch {
 		case tokenErrorCodes[code]:
-			return "", OutcomeTokenRejected
+			return "", OutcomeTokenRejected, msg
 		case recipientErrorCodes[code]:
-			return "", OutcomeRecipientRejected
+			return "", OutcomeRecipientRejected, msg
 		}
-		return "", OutcomeRejected
+		return "", OutcomeRejected, msg
 	}
 	id, ok := scalarText(raw.Data.MsgID)
 	if !ok || !validMsgID(id) {
-		return "", OutcomeMalformedResponse
+		return "", OutcomeMalformedResponse, ""
 	}
-	return id, OutcomeOK
+	return id, OutcomeOK, ""
 }
 
 // rawParam reads a parameter entry in either spelling.

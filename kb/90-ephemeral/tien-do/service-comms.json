@@ -585,6 +585,15 @@
       "no_confirm": [],
       "bang_chung": "TASK W-1 (17/10/2026): domain/zalo_oa_event.go (chữ ký mac sha256, tìm oa_id), app/zalo_oa_events.go, http/zalo_oa_events.go (Public, rate limit ZaloOAWebhook 600/phút), crosstenant TenantByLiveOAID, main.go dựng publisher khi có KAFKA_EVENT_ADDRESS; proto/vigov/comms/v1/events.proto. gofmt + go vet + go test service-comms 17 gói xanh, buf lint/breaking sạch, check_env_map + check_security PASS.",
       "tiep_theo": "CHƯA KIỂM: pg test TenantByLiveOAID (chỉ kiểm dạng SQL); chưa nối Kafka thật, chưa nhận webhook thật — với user_seen_message/user_received_message OA có thể nằm ở sender, khi đó sự kiện bị bỏ (fail closed). VẬN HÀNH: tạo topic dev.comms.zalo_oa_event_received.v1 và prod.comms.zalo_oa_event_received.v1 (chung một cụm, tiền tố ENV); đặt ZALO_OA_WEBHOOK_SECRET (comms-secrets, BẮT BUỘC ở prod), KAFKA_EVENT_ADDRESS (bắt buộc ở prod), tuỳ chọn KAFKA_EVENT_USERNAME/PASSWORD/SASL_MECHANISM; khai Webhook URL trên Zalo App (deploy/README.md §14.6); NetworkPolicy egress chỉ mở 9092. CÒN MỞ: ai tiêu thụ topic, thời gian giữ (ADR 0100); biến CA nội bộ cho TLS Kafka nếu cần."
+    },
+    {
+      "id": "dot-tin-nhap-so-nhap-tep-17-10",
+      "menu": "cau-hinh",
+      "viec": "Gửi đợt tin: người nhận nhập số / nhập tệp, SMS cột nội dung hoặc nội dung chung có biến, ZNS tham số theo cột, lịch sử từng số + thông tin map biến (ADR 0099 §Sửa đổi S1–S8)",
+      "trang_thai": "dang_lam",
+      "no_confirm": [],
+      "bang_chung": "TASK D-7 (17/10/2026): migration 0033 (2 audience mới, so-nhap, khong-hop-le, phone_sealed/payload_sealed mã hoá DEK xã, error_message che dãy ≥7 số, recipient_mapping, đóng failure_class); domain/app/sender typed; tuyến GET notice-campaigns/{id}/recipients; esms/zalooa *Report trả lời từ chối. go vet + go test service-comms 17 gói xanh; check_audit_actor/security/khoa_duy_nhat PASS; make kb.",
+      "tiep_theo": "CHƯA KIỂM: pg test TestPgNoticeTypedRecipients/TestPgNoticeCampaignLifecycle trên PG16 (VIGOV_TEST_DSN); tên trường lỗi ErrorMessage (eSMS) / message (Zalo) chưa đối chiếu phản hồi thật; chưa gửi thật. Web còn khối UNTIL REGEN (TASK D-7) trong lib/api/notice-campaigns.ts — thay bằng kiểu schema.gen (đã sinh)."
     }
   ]
 }

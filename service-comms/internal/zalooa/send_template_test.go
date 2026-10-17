@@ -86,3 +86,21 @@ func TestSendTemplateMessageNeverLogs(t *testing.T) {
 		t.Fatalf("the adapter logged: %s", buf.String())
 	}
 }
+
+// SendTemplateMessageReport hands on Zalo's `message` for a non-zero `error` (ADR 0099 S5), with the access
+// token cut out should Zalo quote it; nothing for an acceptance or a transport failure.
+func TestSendTemplateMessageReportReturnsZalosMessage(t *testing.T) {
+	c, _, _ := start(t, jsonAnswer(http.StatusOK, `{"error":-108,"message":"Phone number invalid `+testAccess+`"}`))
+	_, o, text := c.SendTemplateMessageReport(context.Background(), secret.Secret(testAccess), testPhone, "1001", nil, "R1")
+	if o != OutcomeRecipientRejected || text != "Phone number invalid ***" {
+		t.Fatalf("= %v %q", o, text)
+	}
+	c, _, _ = start(t, jsonAnswer(http.StatusOK, `{"error":0,"message":"Success","data":{"msg_id":"m1"}}`))
+	if _, o, text := c.SendTemplateMessageReport(context.Background(), secret.Secret(testAccess), testPhone, "1001", nil, "R1"); o != OutcomeOK || text != "" {
+		t.Fatalf("ok: %v %q", o, text)
+	}
+	c, _, _ = start(t, jsonAnswer(http.StatusServiceUnavailable, `{"message":"down"}`))
+	if _, o, text := c.SendTemplateMessageReport(context.Background(), secret.Secret(testAccess), testPhone, "1001", nil, "R1"); o != OutcomeUnavailable || text != "" {
+		t.Fatalf("5xx: %v %q", o, text)
+	}
+}

@@ -635,6 +635,10 @@ export type comms_noticeCampaignIn = {
   "template_ref": string;
   "audience": comms_noticeAudienceIn;
   "params": Record<string, string>;
+  "recipients"?: Array<comms_noticeRecipientIn>;
+  "sms_content_mode"?: string;
+  "content"?: string;
+  "mapping"?: comms_noticeMappingIn | null;
 };
 
 export type comms_noticeCampaignListOut = {
@@ -657,6 +661,10 @@ export type comms_noticeCampaignOut = {
   "skipped_count": number;
   "sent_count": number;
   "failed_count": number;
+  "invalid_count": number;
+  "content": string | null;
+  "sms_content_mode": string | null;
+  "recipient_mapping": comms_noticeMappingIn | null;
   "unit_price": string | null;
   "estimated_cost": string | null;
   "status": string;
@@ -666,6 +674,13 @@ export type comms_noticeCampaignOut = {
   "finished_at": string | null;
 };
 
+export type comms_noticeMappingIn = {
+  "phone_column": string;
+  "content_column"?: string;
+  "variables"?: Record<string, string>;
+  "params"?: Record<string, string>;
+};
+
 export type comms_noticePreviewIn = {
   "channel": string;
   "oa_id"?: string;
@@ -673,15 +688,42 @@ export type comms_noticePreviewIn = {
   "template_ref": string;
   "audience": comms_noticeAudienceIn;
   "params": Record<string, string>;
+  "recipients"?: Array<comms_noticeRecipientIn>;
+  "sms_content_mode"?: string;
+  "content"?: string;
+  "mapping"?: comms_noticeMappingIn | null;
 };
 
 export type comms_noticePreviewOut = {
   "content": string | null;
   "recipient_count": number;
   "skipped_count": number;
+  "invalid_count": number;
+  "duplicate_count": number;
   "unit_price": string | null;
   "estimated_cost": string | null;
   "missing_params": Array<string>;
+};
+
+export type comms_noticeRecipientIn = {
+  "phone": string;
+  "content"?: string;
+  "values"?: Record<string, string>;
+};
+
+export type comms_noticeRecipientListOut = {
+  "items": Array<comms_noticeRecipientOut>;
+  "next_cursor": string;
+};
+
+export type comms_noticeRecipientOut = {
+  "id": string;
+  "phone_masked": string;
+  "status": string;
+  "failure_class": string | null;
+  "error_message": string | null;
+  "sent_at": string | null;
+  "created_at": string;
 };
 
 export type comms_noticeTemplateParamOut = {
@@ -10380,6 +10422,31 @@ export type comms_get_notice_campaigns_by_id = {
     500: httpx_Error;
   };
   errorCodes: {
+    404: "not_found";
+  };
+};
+
+/** GET /api/v1/notice-campaigns/{id}/recipients — Lịch sử từng số của một đợt tin — số đã che, kết quả (cho-gui · da-gui · that-bai · bo-qua · khong-hop-le), lớp lỗi, thông báo lỗi nhà cung cấp (đã che dãy số), lúc gửi; 100 dòng mỗi trang (con trỏ `cursor`); mã đợt của xã khác trả 404 như mã không có */
+export type comms_get_notice_campaigns_by_id_recipients = {
+  duongDan: "/api/v1/notice-campaigns/{id}/recipients";
+  phuongThuc: "GET";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+    "cursor"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: comms_noticeRecipientListOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "notice_invalid";
     404: "not_found";
   };
 };

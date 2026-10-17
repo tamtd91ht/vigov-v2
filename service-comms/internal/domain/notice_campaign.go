@@ -35,12 +35,18 @@ const (
 	NoticeAudienceCitizenTag   = "nguoi-dan-theo-nhan"
 	NoticeAudienceStaffAll     = "can-bo-tat-ca"
 	NoticeAudienceStaffUnit    = "can-bo-theo-bo-phan"
+	// The two audiences of numbers NOT in any directory (migration 0033; ADR 0099 §Sửa đổi S1): typed /
+	// pasted by staff (≤ 1 000), and the rows of a file the browser read (≤ 10 000; the file is not kept, S2).
+	NoticeAudienceTypedList    = "danh-sach-so"
+	NoticeAudienceImportedFile = "tep-nhap"
 )
 
 // The recipient kinds — 0032 notice_recipient_kind_known.
 const (
 	NoticeRecipientCitizen = "nguoi-dan"
 	NoticeRecipientStaff   = "can-bo"
+	// NoticeRecipientTyped — a typed / imported number (0033). Its recipient_ref is the row's own id.
+	NoticeRecipientTyped = "so-nhap"
 )
 
 // The campaign statuses — 0032 notice_campaign_status_known. Forward only: dang-gui → one terminal value.
@@ -57,6 +63,17 @@ const (
 	NoticeRecipientSent    = "da-gui"
 	NoticeRecipientFailed  = "that-bai"
 	NoticeRecipientSkipped = "bo-qua"
+	// NoticeRecipientInvalid — the typed / imported number did not normalise (0033, S5): written final, never
+	// sent, counted in the campaign's invalid_count.
+	NoticeRecipientInvalid = "khong-hop-le"
+)
+
+// The SMS content modes of a typed / imported campaign — 0033 notice_campaign_sms_content_mode_known (S3).
+const (
+	// SmsContentPerRow — each row carries its own text (a file column).
+	SmsContentPerRow = "cot-trong-tep"
+	// SmsContentShared — one text for every row, with optional {{variable_i}} each row's values fill.
+	SmsContentShared = "noi-dung-chung"
 )
 
 // THE FAILURE CLASSES of a recipient row — the CLOSED list 0032 left "OWED BY GO" (its CHECK is a shape
@@ -78,7 +95,7 @@ const (
 )
 
 // NoticeFailureClasses is the closed list, in the order above — for the test that keeps it inside 0032's
-// shape CHECK, and for the migration that will close that CHECK.
+// shape CHECK, and for migration 0033's notice_recipient_failure_class_known that closes it.
 func NoticeFailureClasses() []string {
 	return []string{NoticeFailKeyRejected, NoticeFailBrandnameInactive, NoticeFailTemplateRejected,
 		NoticeFailUnavailable, NoticeFailRateLimited, NoticeFailRejected, NoticeFailMalformed,
@@ -128,7 +145,7 @@ var (
 )
 
 // NoticeAudience is the "Gửi cho ai" choice as stored: the kind and the chosen group / tag / unit ids
-// (0032 audience_ids — empty exactly for the two "all" kinds).
+// (0032 audience_ids — empty for the two "all" kinds and the two typed kinds, 0033).
 type NoticeAudience struct {
 	Kind string
 	IDs  []string
@@ -136,10 +153,21 @@ type NoticeAudience struct {
 
 // RecipientKind is the directory the audience's refs point into.
 func (a NoticeAudience) RecipientKind() string {
+	if a.Typed() {
+		return NoticeRecipientTyped
+	}
 	if a.Kind == NoticeAudienceStaffAll || a.Kind == NoticeAudienceStaffUnit {
 		return NoticeRecipientStaff
 	}
 	return NoticeRecipientCitizen
+}
+
+// Typed — the audience is numbers staff typed or imported, not a directory (0033).
+func (a NoticeAudience) Typed() bool { return IsTypedNoticeAudience(a.Kind) }
+
+// IsTypedNoticeAudience — kind is danh-sach-so or tep-nhap.
+func IsTypedNoticeAudience(kind string) bool {
+	return kind == NoticeAudienceTypedList || kind == NoticeAudienceImportedFile
 }
 
 // NoticeCampaign is one notice_campaign row.
@@ -149,16 +177,25 @@ type NoticeCampaign struct {
 	Channel      string
 	OARowID      string // ZNS only
 	SmsAccountID string // SMS only
-	TemplateRef  string // ZBS template_id (ZNS) or sms_template.id (SMS)
+	TemplateRef  string // ZBS template_id (ZNS) or sms_template.id (SMS); "" (NULL) for SMS to typed numbers
 	TemplateName string
-	// TemplateContent — SMS: the template text with its `{P1,20}` slots, as it stood at send. ZNS: "".
+	// TemplateContent — SMS: the template text with its `{P1,20}` slots, as it stood at send; for SMS to
+	// typed numbers in SmsContentShared mode the shared text (variables unexpanded), in SmsContentPerRow "".
+	// ZNS: "".
 	TemplateContent string
+	// SmsContentMode — SMS to typed numbers only (SmsContentPerRow / SmsContentShared); "" otherwise.
+	SmsContentMode string
+	// RecipientMapping — tep-nhap only: which file column fed what (0033 recipient_mapping); nil otherwise.
+	RecipientMapping *NoticeRecipientMapping
 	// Params — what staff typed for the whole campaign (ADR 0099 #6): ZNS keyed by Zalo's param name,
 	// SMS keyed by slot position ("1", "2", … — names may repeat, see SmsTemplateParam).
 	Params         map[string]string
 	Audience       NoticeAudience
 	RecipientCount int
 	SkippedCount   int
+	// InvalidCount — typed / imported rows whose number did not normalise ('khong-hop-le', 0033). Never in
+	// RecipientCount, never in FailedCount.
+	InvalidCount int
 	// UnitPrice / EstimatedCost — decimal text ("200.00") or both "" (0032 notice_campaign_estimate_pair).
 	UnitPrice     string
 	EstimatedCost string
@@ -177,21 +214,29 @@ func (c NoticeCampaign) Subject() string { return "notice-campaign/" + c.ID }
 // Finished — the campaign left dang-gui.
 func (c NoticeCampaign) Finished() bool { return c.Status != NoticeCampaignSending }
 
-// NoticeRecipient is one notice_recipient row to be written: the ref and the MASKED number only.
+// NoticeRecipient is one notice_recipient row to be written: the ref and the MASKED number — and, for a
+// typed / imported number still owed, its full number and its own message SEALED under the commune's DEK
+// (0033, S6). Status "" is NoticeRecipientPending.
 type NoticeRecipient struct {
-	ID          string
-	Ref         string
-	Kind        string
-	PhoneMasked string
+	ID            string
+	Ref           string
+	Kind          string
+	PhoneMasked   string
+	Status        string
+	PhoneSealed   []byte
+	PayloadSealed []byte
 }
 
-// DueNoticeRecipient is one row the sender claimed.
+// DueNoticeRecipient is one row the sender claimed. The sealed pair is present for a typed / imported row
+// only (Kind == NoticeRecipientTyped).
 type DueNoticeRecipient struct {
-	ID         string
-	CampaignID string
-	Ref        string
-	Kind       string
-	Attempts   int // AFTER the claim counted this attempt
+	ID            string
+	CampaignID    string
+	Ref           string
+	Kind          string
+	Attempts      int // AFTER the claim counted this attempt
+	PhoneSealed   []byte
+	PayloadSealed []byte
 }
 
 // ---- validation -----------------------------------------------------------------------------------------
@@ -249,7 +294,7 @@ func validOpaqueID(s string) bool {
 func NormalizeNoticeAudience(kind string, ids, tags []string) (NoticeAudience, error) {
 	var list []string
 	switch kind {
-	case NoticeAudienceCitizenAll, NoticeAudienceStaffAll:
+	case NoticeAudienceCitizenAll, NoticeAudienceStaffAll, NoticeAudienceTypedList, NoticeAudienceImportedFile:
 		if len(ids) > 0 || len(tags) > 0 {
 			return NoticeAudience{}, ErrNoticeAudience
 		}
@@ -526,12 +571,14 @@ func NoticeRetryBackoff(attempts int) time.Duration {
 }
 
 // NoticeCampaignOutcome is the campaign's status from its rows' counts: dang-gui while any row is owed;
-// then da-gui when every row was accepted, that-bai when none was, gui-mot-phan otherwise.
-func NoticeCampaignOutcome(total, pending, sent int) string {
+// then da-gui when every row was accepted AND no typed number was invalid, that-bai when none was
+// accepted, gui-mot-phan otherwise (a number that could not even be read was a number not reached — S5).
+// total is recipient_count (the rows to send), invalid the campaign's invalid_count.
+func NoticeCampaignOutcome(total, pending, sent, invalid int) string {
 	switch {
 	case pending > 0:
 		return NoticeCampaignSending
-	case sent >= total:
+	case sent >= total && invalid == 0:
 		return NoticeCampaignSent
 	case sent == 0:
 		return NoticeCampaignFailed

@@ -381,3 +381,77 @@ func TestNeverRenders(t *testing.T) {
 		}
 	}
 }
+
+// countingStore counts DEK reads — SealMany / OpenMany exist to read the DEK once per call, not per value.
+type countingStore struct {
+	*memStore
+	reads int
+}
+
+func (c *countingStore) GetDEK(ctx context.Context) (WrappedDEK, error) {
+	c.reads++
+	return c.memStore.GetDEK(ctx)
+}
+
+func TestSealManyOpenManyRoundTripWithOneDEKRead(t *testing.T) {
+	store := &countingStore{memStore: newMemStore()}
+	e := mustNew(t, store, kekA)
+	ctx := ctxFor(communeA)
+	values := []secret.Secret{secret.Secret("value-one-FAKE"), secret.Secret("value-two-FAKE"), secret.Secret("")}
+	aads := [][]byte{[]byte("row/1"), []byte("row/2"), []byte("row/3")}
+	sealed, err := e.SealMany(ctx, values, aads)
+	if err != nil || len(sealed) != 3 {
+		t.Fatalf("seal many: %d %v", len(sealed), err)
+	}
+	if store.reads != 1 {
+		t.Fatalf("SealMany read the DEK %d times, want 1", store.reads)
+	}
+	// Interoperable with the single-value calls, both ways.
+	if got, err := e.Open(ctx, sealed[1], aads[1]); err != nil || string(got.Lo()) != "value-two-FAKE" {
+		t.Fatalf("Open of a SealMany value: %q %v", got.Lo(), err)
+	}
+	single, err := e.Seal(ctx, secret.Secret("value-four-FAKE"), []byte("row/4"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.reads = 0
+	// Row 3's bytes under row 1's aad do not open: the binding is per value.
+	opened, err := e.OpenMany(ctx, [][]byte{sealed[0], sealed[2], single, sealed[2]},
+		[][]byte{aads[0], aads[2], []byte("row/4"), aads[0]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if store.reads != 1 {
+		t.Fatalf("OpenMany read the DEK %d times, want 1", store.reads)
+	}
+	if string(opened[0].Lo()) != "value-one-FAKE" || opened[1] == nil || len(opened[1]) != 0 ||
+		string(opened[2].Lo()) != "value-four-FAKE" || opened[3] != nil {
+		t.Fatalf("opened = %q", opened)
+	}
+	// Another commune opens nothing.
+	other, err := e.OpenMany(ctxFor(communeB), [][]byte{sealed[0]}, [][]byte{aads[0]})
+	if err == nil && other[0] != nil {
+		t.Fatal("a value sealed for commune A opened in commune B")
+	}
+}
+
+func TestSealManyRefusesBadInput(t *testing.T) {
+	e := mustNew(t, newMemStore(), kekA)
+	ctx := ctxFor(communeA)
+	if _, err := e.SealMany(ctx, []secret.Secret{secret.Secret("x")}, [][]byte{nil}); !errors.Is(err, ErrEmptyAAD) {
+		t.Fatalf("empty aad: %v", err)
+	}
+	if _, err := e.SealMany(ctx, []secret.Secret{secret.Secret("x")}, nil); err == nil {
+		t.Fatal("mismatched lengths accepted")
+	}
+	if _, err := e.SealMany(context.Background(), []secret.Secret{secret.Secret("x")}, [][]byte{aad}); !errors.Is(err, tenant.ErrNoTenant) {
+		t.Fatalf("no commune: %v", err)
+	}
+	var none *Envelope
+	if _, err := none.SealMany(ctx, nil, nil); !errors.Is(err, ErrNotConfigured) {
+		t.Fatalf("nil envelope: %v", err)
+	}
+	if _, err := none.OpenMany(ctx, nil, nil); !errors.Is(err, ErrNotConfigured) {
+		t.Fatalf("nil envelope: %v", err)
+	}
+}

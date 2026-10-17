@@ -25173,6 +25173,109 @@
         }
       }
     },
+    "/api/v1/notice-campaigns/{id}/recipients": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Lịch sử từng số của một đợt tin — số đã che, kết quả (cho-gui · da-gui · that-bai · bo-qua · khong-hop-le), lớp lỗi, thông báo lỗi nhà cung cấp (đã che dãy số), lúc gửi; 100 dòng mỗi trang (con trỏ `cursor`); mã đợt của xã khác trả 404 như mã không có",
+        "operationId": "comms_get_notice_campaigns_by_id_recipients",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0099 §Sửa đổi S5 — Gửi tin ZNS / SMS, lịch sử từng số của đợt",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "notice.send"
+        },
+        "x-vigov-task": "38da2d4cd9c0",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.noticeRecipientListOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "notice_invalid"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "not_found"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/notice-templates": {
       "get": {
         "summary": "Mẫu để soạn đợt tin — mọi mẫu ZBS đang ENABLE của mọi OA đang nối của xã (kèm đơn giá ước tính theo loại mẫu) và mọi mẫu tin CSKH eSMS còn liệt kê của mọi tài khoản SMS đang dùng (mỗi nội dung một mục); mỗi mẫu kèm các tham số cần gõ và `field` để điền",
@@ -44386,6 +44489,28 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.noticeRecipientIn"
+            }
+          },
+          "sms_content_mode": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "mapping": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/comms.noticeMappingIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -44470,6 +44595,31 @@
           "failed_count": {
             "type": "integer"
           },
+          "invalid_count": {
+            "type": "integer"
+          },
+          "content": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sms_content_mode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "recipient_mapping": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/comms.noticeMappingIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "unit_price": {
             "type": [
               "string",
@@ -44507,6 +44657,7 @@
           "audience_ids",
           "audience_kind",
           "channel",
+          "content",
           "created_at",
           "created_by",
           "created_by_name",
@@ -44514,17 +44665,47 @@
           "failed_count",
           "finished_at",
           "id",
+          "invalid_count",
           "oa_id",
           "recipient_count",
+          "recipient_mapping",
           "sent_count",
           "skipped_count",
           "sms_account_id",
+          "sms_content_mode",
           "source_name",
           "status",
           "template_name",
           "template_ref",
           "title",
           "unit_price"
+        ],
+        "additionalProperties": false
+      },
+      "comms.noticeMappingIn": {
+        "type": "object",
+        "properties": {
+          "phone_column": {
+            "type": "string"
+          },
+          "content_column": {
+            "type": "string"
+          },
+          "variables": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "phone_column"
         ],
         "additionalProperties": false
       },
@@ -44551,6 +44732,28 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.noticeRecipientIn"
+            }
+          },
+          "sms_content_mode": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "mapping": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/comms.noticeMappingIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -44576,6 +44779,12 @@
           "skipped_count": {
             "type": "integer"
           },
+          "invalid_count": {
+            "type": "integer"
+          },
+          "duplicate_count": {
+            "type": "integer"
+          },
           "unit_price": {
             "type": [
               "string",
@@ -44597,11 +44806,100 @@
         },
         "required": [
           "content",
+          "duplicate_count",
           "estimated_cost",
+          "invalid_count",
           "missing_params",
           "recipient_count",
           "skipped_count",
           "unit_price"
+        ],
+        "additionalProperties": false
+      },
+      "comms.noticeRecipientIn": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "phone"
+        ],
+        "additionalProperties": false
+      },
+      "comms.noticeRecipientListOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.noticeRecipientOut"
+            }
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "additionalProperties": false
+      },
+      "comms.noticeRecipientOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "phone_masked": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "failure_class": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error_message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sent_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "created_at",
+          "error_message",
+          "failure_class",
+          "id",
+          "phone_masked",
+          "sent_at",
+          "status"
         ],
         "additionalProperties": false
       },

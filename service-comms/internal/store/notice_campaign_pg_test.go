@@ -92,7 +92,7 @@ func TestPgNoticeCampaignLifecycle(t *testing.T) {
 		if err := campaigns.MarkSent(ctx1, tx, rs[0].ID, "SMS123", noticeAt); err != nil {
 			return err
 		}
-		if err := campaigns.Fail(ctx1, tx, rs[1].ID, domain.NoticeFailRejected, noticeAt); err != nil {
+		if err := campaigns.Fail(ctx1, tx, rs[1].ID, domain.NoticeFailRejected, "", noticeAt); err != nil {
 			return err
 		}
 		if err := campaigns.Retry(ctx1, tx, rs[2].ID, noticeAt.Add(time.Minute), noticeAt); err != nil {
@@ -106,7 +106,7 @@ func TestPgNoticeCampaignLifecycle(t *testing.T) {
 	}
 	// A finished row keeps its outcome.
 	if err := run(ctx1, func(tx *pkgstore.ScopedTx) error {
-		return campaigns.Fail(ctx1, tx, rs[0].ID, domain.NoticeFailRejected, noticeAt)
+		return campaigns.Fail(ctx1, tx, rs[0].ID, domain.NoticeFailRejected, "", noticeAt)
 	}); !errors.Is(err, ErrNoticeRowChanged) {
 		t.Fatalf("re-settling a sent row: %v", err)
 	}
@@ -126,5 +126,92 @@ func TestPgNoticeCampaignLifecycle(t *testing.T) {
 	}
 	if byID, err := campaigns.CampaignsByID(ctx1, []string{campID, "nope"}); err != nil || len(byID) != 1 {
 		t.Fatalf("by id = %v %v", byID, err)
+	}
+}
+
+// Migration 0033 against a REAL PostgreSQL: an imported SMS campaign with its mapping, an owed row SEALED and
+// an invalid row final; the claim returns the sealed pair; the failure UPDATE empties it and keeps the
+// provider's scrubbed text; the database refuses a finished row that still holds a seal and a text carrying
+// a 7-digit run; the per-number history pages and stays in its commune. SKIPPED WITHOUT VIGOV_TEST_DSN.
+func TestPgNoticeTypedRecipients(t *testing.T) {
+	db := moKetNoi(t)
+	c1, c2 := xaRieng(t)
+	h := pkgstore.New(db)
+	ctx1, ctx2 := ctxXa(tenant.ID(c1)), ctxXa(tenant.ID(c2))
+	accounts, campaigns := NewSmsAccountStore(h), NewNoticeCampaignStore(h)
+	run := func(ctx context.Context, fn func(tx *pkgstore.ScopedTx) error) error { return h.For(ctx).Tx(ctx, fn) }
+	const accID, campID = "01JNOTICEPGACC000000000002", "01JNOTICEPGCAMP00000000002"
+	if err := run(ctx1, func(tx *pkgstore.ScopedTx) error {
+		return accounts.InsertLive(ctx1, tx, smsAccountRow(accID, "eSMS nhập tệp", false), fakeSealed, fakeSealed)
+	}); err != nil {
+		t.Fatalf("account: %v", err)
+	}
+	c := domain.NoticeCampaign{ID: campID, Title: "Nhắc lịch", Channel: domain.NoticeChannelSMS, SmsAccountID: accID,
+		TemplateContent: "Moi {{variable_1}} hop", SmsContentMode: domain.SmsContentShared, Params: map[string]string{},
+		Audience:         domain.NoticeAudience{Kind: domain.NoticeAudienceImportedFile, IDs: []string{}},
+		RecipientMapping: &domain.NoticeRecipientMapping{PhoneColumn: "SĐT", Variables: map[string]string{"variable_1": "Tên"}},
+		RecipientCount:   1, InvalidCount: 1, CreatedAt: noticeAt, CreatedBy: "CB-00123"}
+	rs := []domain.NoticeRecipient{
+		{ID: "01JNOTICEPGTYP000000000001", Ref: "01JNOTICEPGTYP000000000001", Kind: domain.NoticeRecipientTyped,
+			PhoneMasked: "09****0000", Status: domain.NoticeRecipientPending, PhoneSealed: fakeSealed, PayloadSealed: fakeSealed},
+		{ID: "01JNOTICEPGTYP000000000002", Ref: "01JNOTICEPGTYP000000000002", Kind: domain.NoticeRecipientTyped,
+			PhoneMasked: "***", Status: domain.NoticeRecipientInvalid},
+	}
+	if err := run(ctx1, func(tx *pkgstore.ScopedTx) error {
+		if err := campaigns.InsertCampaign(ctx1, tx, c); err != nil {
+			return err
+		}
+		return campaigns.InsertRecipients(ctx1, tx, campID, rs, noticeAt)
+	}); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	// A finished row holding a seal is refused (0033 notice_recipient_sealed_exactly_while_owed).
+	if err := run(ctx1, func(tx *pkgstore.ScopedTx) error {
+		return campaigns.InsertRecipients(ctx1, tx, campID, []domain.NoticeRecipient{{ID: "01JNOTICEPGTYP000000000009",
+			Ref: "01JNOTICEPGTYP000000000009", Kind: domain.NoticeRecipientTyped, PhoneMasked: "***",
+			Status: domain.NoticeRecipientInvalid, PhoneSealed: fakeSealed, PayloadSealed: fakeSealed}}, noticeAt)
+	}); err == nil {
+		t.Fatal("an invalid row kept a sealed number")
+	}
+	got, found, err := campaigns.Get(ctx1, campID)
+	if err != nil || !found || got.Campaign.TemplateRef != "" || got.Campaign.InvalidCount != 1 ||
+		got.Campaign.SmsContentMode != domain.SmsContentShared || got.Campaign.RecipientMapping == nil ||
+		got.Campaign.RecipientMapping.Variables["variable_1"] != "Tên" {
+		t.Fatalf("campaign = %+v %v %v", got.Campaign, found, err)
+	}
+	var due []domain.DueNoticeRecipient
+	if err := run(ctx1, func(tx *pkgstore.ScopedTx) (err error) {
+		due, err = campaigns.ClaimDue(ctx1, tx, noticeAt, noticeAt.Add(15*time.Minute), 500)
+		return err
+	}); err != nil || len(due) != 1 || len(due[0].PhoneSealed) == 0 || len(due[0].PayloadSealed) == 0 {
+		t.Fatalf("claim = %+v %v", due, err)
+	}
+	// A provider text with a 7-digit run is refused by the database, whatever Go does.
+	if err := run(ctx1, func(tx *pkgstore.ScopedTx) error {
+		return campaigns.Fail(ctx1, tx, rs[0].ID, domain.NoticeFailTemplateRejected, "so 0900000000 sai", noticeAt)
+	}); err == nil {
+		t.Fatal("a phone-length digit run was stored")
+	}
+	var status string
+	if err := run(ctx1, func(tx *pkgstore.ScopedTx) error {
+		if err := campaigns.Fail(ctx1, tx, rs[0].ID, domain.NoticeFailTemplateRejected, "Template not match", noticeAt); err != nil {
+			return err
+		}
+		var err error
+		status, err = campaigns.Settle(ctx1, tx, campID, noticeAt)
+		return err
+	}); err != nil || status != domain.NoticeCampaignFailed {
+		t.Fatalf("settle = %q %v", status, err)
+	}
+	page, err := campaigns.ListRecipients(ctx1, campID, "", 1)
+	if err != nil || len(page) != 2 || page[0].Status != domain.NoticeRecipientFailed || page[0].ErrorMessage != "Template not match" ||
+		page[1].Status != domain.NoticeRecipientInvalid {
+		t.Fatalf("history = %+v %v", page, err)
+	}
+	if rest, err := campaigns.ListRecipients(ctx1, campID, page[0].ID, 10); err != nil || len(rest) != 1 {
+		t.Fatalf("second page = %+v %v", rest, err)
+	}
+	if other, err := campaigns.ListRecipients(ctx2, campID, "", 10); err != nil || len(other) != 0 {
+		t.Fatalf("commune 2 reads commune 1's history: %+v %v", other, err)
 	}
 }

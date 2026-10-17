@@ -20,6 +20,10 @@ package app
 // THE ESTIMATE IS NEVER A GATE (ADR 0099 #7): ZNS is priced from the template's Zalo tag (the table in
 // internal/domain), SMS by eSMS's price estimate; an estimate that cannot be had is stored as NULL and the
 // send goes ahead.
+//
+// TYPED / IMPORTED NUMBERS (audience danh-sach-so / tep-nhap; ADR 0099 §Sửa đổi S1–S7) are notice_typed.go:
+// no identity call at all, the numbers normalised here, each owed row's number and message SEALED under the
+// commune's DEK and written in the same transaction as the campaign.
 
 import (
 	"context"
@@ -69,6 +73,12 @@ type NoticeSmsPricer interface {
 	EstimateCSKH(ctx context.Context, creds esms.Credentials, brandname, content string, isUnicode bool) (string, esms.Outcome)
 }
 
+// NoticeSealer seals the typed rows' numbers and messages under the commune's DEK (ADR 0099 S6). The
+// commune envelope (*crypto.Envelope) satisfies it — a nil one refuses with crypto.ErrNotConfigured.
+type NoticeSealer interface {
+	SealMany(ctx context.Context, plaintexts []secret.Secret, aads [][]byte) ([][]byte, error)
+}
+
 // NoticeCampaignRepo is the campaign store's half this use case writes and reads.
 // *docstore.NoticeCampaignStore satisfies it; every method reads through db.For(ctx) — the context's
 // commune is tenant_id = $1.
@@ -77,6 +87,7 @@ type NoticeCampaignRepo interface {
 	InsertRecipients(ctx context.Context, tx *store.ScopedTx, campaignID string, rs []domain.NoticeRecipient, at time.Time) error
 	List(ctx context.Context, after domain.NoticeCursor, limit int) ([]docstore.NoticeCampaignView, error)
 	Get(ctx context.Context, id string) (docstore.NoticeCampaignView, bool, error)
+	ListRecipients(ctx context.Context, campaignID, afterID string, limit int) ([]domain.NoticeRecipientView, error)
 }
 
 var (
@@ -117,14 +128,34 @@ type NoticeInput struct {
 	AudienceTags []string
 	Params       map[string]string
 	Title        string // send only
+	// Typed / imported audiences only (danh-sach-so, tep-nhap): the rows, the SMS content mode and, for
+	// SmsContentShared, the shared text. Refused for a directory audience.
+	Recipients     []NoticeRecipientInput
+	SmsContentMode string
+	Content        string
+	// Mapping — tep-nhap only: which file column fed what (stored on the campaign). Refused otherwise.
+	Mapping *domain.NoticeRecipientMapping
+}
+
+// NoticeRecipientInput is one typed / imported row as the browser sent it. Phone is the cell as typed — it
+// is normalised here, never trusted. Content is the row's own SMS text (SmsContentPerRow); Values the
+// row's mapped columns ({{variable_i}} for SMS, ZBS parameter names for ZNS). Never logged.
+type NoticeRecipientInput struct {
+	Phone   string
+	Content string
+	Values  map[string]string
 }
 
 // NoticePreview is POST notice-campaign-previews. Content is nil for ZNS (Zalo keeps the template body;
-// comms has none). UnitPrice / EstimatedCost are "" when no estimate could be had.
+// comms has none); for SMS to typed numbers it is the FIRST valid row's text, a sample. UnitPrice /
+// EstimatedCost are "" when no estimate could be had. InvalidCount / DuplicateCount: typed rows whose
+// number did not normalise / normalised duplicates dropped (0 for a directory audience).
 type NoticePreview struct {
 	Content        *string
 	RecipientCount int
 	SkippedCount   int
+	InvalidCount   int
+	DuplicateCount int
 	UnitPrice      string
 	EstimatedCost  string
 	MissingParams  []string
@@ -178,19 +209,22 @@ type NoticeCampaigns struct {
 	oas      NoticeOASource
 	sms      NoticeSmsSource
 	pricer   NoticeSmsPricer
+	sealer   NoticeSealer
 
 	newID func() (string, error)
 	now   func() time.Time
 }
 
 // NewNoticeCampaigns panics on a missing dependency — at construction, not on the first request.
+// sealer may be a nil *crypto.Envelope (no SECRET_ENCRYPTION_KEYS): a send to typed numbers then answers
+// crypto.ErrNotConfigured by name, and everything else still works.
 func NewNoticeCampaigns(db *store.DB, repo NoticeCampaignRepo, audience NoticeAudienceSource, oas NoticeOASource,
-	sms NoticeSmsSource, pricer NoticeSmsPricer) *NoticeCampaigns {
+	sms NoticeSmsSource, pricer NoticeSmsPricer, sealer NoticeSealer) *NoticeCampaigns {
 
-	if db == nil || repo == nil || audience == nil || oas == nil || sms == nil || pricer == nil {
+	if db == nil || repo == nil || audience == nil || oas == nil || sms == nil || pricer == nil || sealer == nil {
 		panic("app: NewNoticeCampaigns thiếu phụ thuộc")
 	}
-	return &NoticeCampaigns{db: db, repo: repo, audience: audience, oas: oas, sms: sms, pricer: pricer,
+	return &NoticeCampaigns{db: db, repo: repo, audience: audience, oas: oas, sms: sms, pricer: pricer, sealer: sealer,
 		newID: ulid.Moi, now: time.Now}
 }
 
@@ -260,20 +294,42 @@ type composed struct {
 	missing                                                                    []string
 	content                                                                    *string
 	unitPrice                                                                  string // "" = no estimate
+	// Typed / imported audiences only (notice_typed.go).
+	smsContentMode   string
+	rows             []typedRow // every input row except normalised duplicates, in input order
+	valid            int
+	invalid          int
+	duplicate        int
+	missingVariables bool // c.missing names the shared SMS text's variables, not template parameters
+	mapping          *domain.NoticeRecipientMapping
 }
 
 // compose validates the request alone, then against its source and template — the checks Preview and
 // Send share. The SMS estimate needs a filled text, so it is asked only when nothing is missing.
 func (uc *NoticeCampaigns) compose(ctx context.Context, in NoticeInput) (composed, error) {
-	if err := domain.ValidateNoticeSource(in.Channel, in.OARowID, in.SmsAccountID, in.TemplateRef); err != nil {
-		return composed{}, err
-	}
 	audience, err := domain.NormalizeNoticeAudience(in.AudienceKind, in.AudienceIDs, in.AudienceTags)
 	if err != nil {
 		return composed{}, err
 	}
 	params, err := domain.NormalizeNoticeParams(in.Params)
 	if err != nil {
+		return composed{}, err
+	}
+	if audience.Typed() {
+		return uc.composeTyped(ctx, in, audience, params)
+	}
+	// A directory audience: the rows come from identity, so none may come from the client.
+	switch {
+	case len(in.Recipients) > 0:
+		return composed{}, domain.ErrNoticeRecipients
+	case in.SmsContentMode != "":
+		return composed{}, domain.ErrNoticeContentMode
+	case in.Content != "":
+		return composed{}, domain.ErrNoticeContent
+	case in.Mapping != nil:
+		return composed{}, domain.ErrNoticeMapping
+	}
+	if err := domain.ValidateNoticeSource(in.Channel, in.OARowID, in.SmsAccountID, in.TemplateRef); err != nil {
 		return composed{}, err
 	}
 	c := composed{channel: in.Channel, oaRowID: in.OARowID, smsAccountID: in.SmsAccountID, templateRef: in.TemplateRef,
@@ -284,19 +340,28 @@ func (uc *NoticeCampaigns) compose(ctx context.Context, in NoticeInput) (compose
 	return uc.composeSMS(ctx, c, params)
 }
 
-func (uc *NoticeCampaigns) composeZNS(ctx context.Context, c composed, params map[string]string) (composed, error) {
-	t, err := uc.oas.TemplateForSend(ctx, c.oaRowID, c.templateRef)
+// znsTemplate reads the ZBS template of the campaign's OA, mapping the source's errors onto the campaign's.
+func (uc *NoticeCampaigns) znsTemplate(ctx context.Context, oaRowID, templateRef string) (domain.ZaloOATemplate, error) {
+	t, err := uc.oas.TemplateForSend(ctx, oaRowID, templateRef)
 	switch {
 	case errors.Is(err, ErrCommuneZaloOAMissing):
-		return composed{}, ErrNoticeSourceMissing
+		return domain.ZaloOATemplate{}, ErrNoticeSourceMissing
 	case errors.Is(err, ErrZaloOANeedsReauthorization):
-		return composed{}, ErrNoticeSourceUnavailable
+		return domain.ZaloOATemplate{}, ErrNoticeSourceUnavailable
 	case errors.Is(err, ErrZaloOATemplateMissing):
-		return composed{}, ErrNoticeTemplateMissing
+		return domain.ZaloOATemplate{}, ErrNoticeTemplateMissing
 	case errors.Is(err, ErrZaloOATemplateNotSendable):
-		return composed{}, ErrNoticeTemplateNotSendable
+		return domain.ZaloOATemplate{}, ErrNoticeTemplateNotSendable
 	case err != nil:
-		return composed{}, fmt.Errorf("notice_campaign: read the ZBS template: %w", err)
+		return domain.ZaloOATemplate{}, fmt.Errorf("notice_campaign: read the ZBS template: %w", err)
+	}
+	return t, nil
+}
+
+func (uc *NoticeCampaigns) composeZNS(ctx context.Context, c composed, params map[string]string) (composed, error) {
+	t, err := uc.znsTemplate(ctx, c.oaRowID, c.templateRef)
+	if err != nil {
+		return composed{}, err
 	}
 	missing, err := domain.MissingZnsParams(t.Params, params)
 	if err != nil {
@@ -442,6 +507,9 @@ func (uc *NoticeCampaigns) Preview(ctx context.Context, in NoticeInput) (NoticeP
 	if err != nil {
 		return NoticePreview{}, err
 	}
+	if c.audience.Typed() {
+		return typedPreview(c), nil
+	}
 	counts, err := uc.audience.CountNoticeAudience(ctx, identityAudience(c.audience))
 	if err != nil {
 		return NoticePreview{}, fmt.Errorf("%w: %w", ErrNoticeIdentityUnavailable, err)
@@ -472,7 +540,13 @@ func (uc *NoticeCampaigns) Send(ctx context.Context, in NoticeInput, actor audit
 		return NoticeCampaignItem{}, err
 	}
 	if len(c.missing) > 0 {
+		if c.missingVariables {
+			return NoticeCampaignItem{}, &domain.NoticeMissingVariablesError{Missing: c.missing}
+		}
 		return NoticeCampaignItem{}, &NoticeMissingParamsError{Missing: c.missing}
+	}
+	if c.audience.Typed() {
+		return uc.sendTyped(ctx, c, title, actor)
 	}
 
 	// identity, OUTSIDE any transaction (transaction-boundaries gui_dot_tin_zns_sms (2)).
@@ -541,12 +615,23 @@ func (uc *NoticeCampaigns) Send(ctx context.Context, in NoticeInput, actor audit
 func writeNoticeCampaignAudit(ctx context.Context, tx *store.ScopedTx, actor audit.Actor, c domain.NoticeCampaign,
 	at time.Time) error {
 
-	delta, err := json.Marshal(map[string]any{
+	fields := map[string]any{
 		"title": c.Title, "channel": c.Channel, "oa_row_id": c.OARowID, "sms_account_id": c.SmsAccountID,
 		"template_ref": c.TemplateRef, "template_name": c.TemplateName, "params": c.Params,
 		"audience_kind": c.Audience.Kind, "audience_ids": c.Audience.IDs, "recipient_count": c.RecipientCount,
 		"skipped_count": c.SkippedCount, "unit_price": c.UnitPrice, "estimated_cost": c.EstimatedCost,
-	})
+	}
+	if c.Audience.Typed() {
+		// COUNTS ONLY for typed / imported numbers: the shared text and the fixed parameters stay on the
+		// campaign row (the archival record); each row's own message is sealed and gone at its outcome, and
+		// must not survive in the trail instead (S6).
+		delete(fields, "template_name")
+		delete(fields, "params")
+		fields["sms_content_mode"] = c.SmsContentMode
+		fields["invalid_count"] = c.InvalidCount
+		fields["recipient_mapping"] = c.RecipientMapping // column HEADERS only, never a value
+	}
+	delta, err := json.Marshal(fields)
 	if err != nil {
 		return fmt.Errorf("notice_campaign: encode delta: %w", err)
 	}
@@ -593,6 +678,32 @@ func (uc *NoticeCampaigns) List(ctx context.Context, cursor string) ([]NoticeCam
 		out = append(out, noticeItem(v))
 	}
 	return out, next, nil
+}
+
+// Recipients reads one page of one campaign's per-number history (S5): masked number, outcome, the
+// provider's scrubbed message. The campaign must be this commune's (ErrNoticeCampaignNotFound otherwise —
+// the same for another commune's id). next is "" on the last page.
+func (uc *NoticeCampaigns) Recipients(ctx context.Context, campaignID, cursor string) ([]domain.NoticeRecipientView, string, error) {
+	after, err := domain.DecodeNoticeRecipientCursor(cursor)
+	if err != nil {
+		return nil, "", err
+	}
+	// Scoped: the store reads through db.For(ctx) — the context's commune is tenant_id = $1.
+	if _, found, err := uc.repo.Get(ctx, campaignID); err != nil {
+		return nil, "", err
+	} else if !found {
+		return nil, "", ErrNoticeCampaignNotFound
+	}
+	rows, err := uc.repo.ListRecipients(ctx, campaignID, after, domain.NoticeRecipientPageSize)
+	if err != nil {
+		return nil, "", err
+	}
+	next := ""
+	if len(rows) > domain.NoticeRecipientPageSize {
+		rows = rows[:domain.NoticeRecipientPageSize]
+		next = domain.EncodeNoticeRecipientCursor(rows[len(rows)-1].ID)
+	}
+	return rows, next, nil
 }
 
 // Get reads one campaign of this commune (ErrNoticeCampaignNotFound — the same for another commune's id).

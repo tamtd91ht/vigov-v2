@@ -201,6 +201,17 @@ func (r *fakeCampaignRepo) List(_ context.Context, after domain.NoticeCursor, _ 
 	return r.views, nil
 }
 
+func (r *fakeCampaignRepo) ListRecipients(_ context.Context, campaignID, afterID string, limit int) ([]domain.NoticeRecipientView, error) {
+	r.listAfter = domain.NoticeCursor{ID: afterID}
+	out := []domain.NoticeRecipientView{}
+	for _, x := range r.recipients {
+		if x.ID > afterID && len(out) < limit+1 {
+			out = append(out, domain.NoticeRecipientView{ID: x.ID, PhoneMasked: x.PhoneMasked, Status: x.Status})
+		}
+	}
+	return out, nil
+}
+
 func (r *fakeCampaignRepo) Get(_ context.Context, id string) (docstore.NoticeCampaignView, bool, error) {
 	for _, v := range r.views {
 		if v.Campaign.ID == id {
@@ -217,6 +228,7 @@ type noticeRig struct {
 	pricer   *fakePricer
 	audience *fakeAudience
 	repo     *fakeCampaignRepo
+	env      *crypto.Envelope
 	uc       *NoticeCampaigns
 	ctx      context.Context
 }
@@ -239,7 +251,8 @@ func newNoticeRig(t *testing.T) *noticeRig {
 			}},
 		repo: &fakeCampaignRepo{},
 	}
-	r.uc = NewNoticeCampaigns(store.New(sql.OpenDB(f)), r.repo, r.audience, r.oas, r.sms, r.pricer)
+	r.env = testEnvelope(t)
+	r.uc = NewNoticeCampaigns(store.New(sql.OpenDB(f)), r.repo, r.audience, r.oas, r.sms, r.pricer, r.env)
 	n := 0
 	r.uc.newID = func() (string, error) { n++; return fmt.Sprintf("01JNOTICEID%015d", n), nil }
 	r.uc.now = func() time.Time { return noticeClock }

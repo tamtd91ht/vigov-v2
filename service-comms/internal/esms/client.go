@@ -10,7 +10,10 @@
 // request body dumped while debugging prints both keys. So:
 //
 //   - NO METHOD RETURNS AN error. Every call answers an Outcome — a CLASS — and nothing else about a
-//     failure leaves this package: not eSMS's ErrorMessage, not a status line, not a URL.
+//     failure leaves this package: not a status line, not a URL. ONE NARROW EXCEPTION, the owner's (ADR
+//     0099 §Sửa đổi S5, "kèm thông báo lỗi nhà cung cấp trả về"): SendCSKHReport also returns eSMS's own
+//     `ErrorMessage` text for a REFUSED send, with any occurrence of the account's two keys cut out here.
+//     The caller scrubs digit runs (domain.ScrubProviderMessage) before storing it and never logs it.
 //   - NOTHING HERE LOGS, and no request, URL, header or body is ever rendered. Message refuses to print
 //     its phone number and content (Format / LogValue).
 //   - REDIRECTS ARE NOT FOLLOWED. A 3xx would resend the body — both keys and a citizen's number —
@@ -355,12 +358,24 @@ func (c *Client) EstimateCSKH(ctx context.Context, creds Credentials, brandname,
 // OutcomeOK ("" on OutcomeDuplicateRequest, which carries none). A message missing what eSMS requires is
 // refused here without asking eSMS (OutcomeInvalidRequest) — a caller fault.
 func (c *Client) SendCSKH(ctx context.Context, creds Credentials, m Message) (string, Outcome) {
+	id, o, _ := c.SendCSKHReport(ctx, creds, m)
+	return id, o
+}
+
+// maxProviderMessage bounds the provider text handed on (the history keeps ≤ 500 characters after scrub).
+const maxProviderMessage = 2000
+
+// SendCSKHReport is SendCSKH plus eSMS's own ErrorMessage when eSMS answered and REFUSED the send (any
+// class but OK / DuplicateRequest / Unavailable / Malformed). "" otherwise — a transport failure has no
+// eSMS text, and nothing of the request is ever echoed. Both keys are cut out of the text should eSMS
+// quote them. NEVER log the returned text: it may still quote the number (the caller scrubs it).
+func (c *Client) SendCSKHReport(ctx context.Context, creds Credentials, m Message) (string, Outcome, string) {
 	if creds.empty() {
-		return "", OutcomeKeyRejected
+		return "", OutcomeKeyRejected, ""
 	}
 	if m.Phone == "" || m.Content == "" || m.Brandname == "" || m.RequestID == "" || len(m.RequestID) > MaxRequestIDLen ||
 		len(m.CampaignID) > maxCampaignIDLen {
-		return "", OutcomeInvalidRequest
+		return "", OutcomeInvalidRequest, ""
 	}
 	body := map[string]string{
 		"ApiKey": string(creds.APIKey.Lo()), "SecretKey": string(creds.SecretKey.Lo()),
@@ -371,26 +386,47 @@ func (c *Client) SendCSKH(ctx context.Context, creds Credentials, m Message) (st
 		body["campaignid"] = m.CampaignID
 	}
 	var raw struct {
-		Code  json.RawMessage `json:"CodeResult"`
-		Error json.RawMessage `json:"error"`
-		SMSID json.RawMessage `json:"SMSID"`
+		Code     json.RawMessage `json:"CodeResult"`
+		Error    json.RawMessage `json:"error"`
+		SMSID    json.RawMessage `json:"SMSID"`
+		ErrorMsg json.RawMessage `json:"ErrorMessage"`
 	}
 	o := c.post(ctx, "/SendMultipleMessage_V4_post_json/", body, &raw)
 	clearMap(body)
 	if o != OutcomeOK {
-		return "", o
+		return "", o, ""
 	}
 	if o := classifyCode(raw.Code, raw.Error); o != OutcomeOK {
-		return "", o
+		if o == OutcomeDuplicateRequest || o == OutcomeMalformedResponse {
+			return "", o, ""
+		}
+		msg, _ := scalarText(raw.ErrorMsg)
+		if msg == "" {
+			msg, _ = scalarText(raw.Error)
+		}
+		return "", o, cutKeys(msg, creds)
 	}
 	id, ok := scalarText(raw.SMSID)
 	if !ok || id == "" {
 		// 100 without the message id it promises: not the documented shape, so it is reported as such
 		// rather than guessed. eSMS may nonetheless hold the request — a repeat with the SAME RequestId
 		// then answers 124 (OutcomeDuplicateRequest), never a second message.
-		return "", OutcomeMalformedResponse
+		return "", OutcomeMalformedResponse, ""
 	}
-	return id, OutcomeOK
+	return id, OutcomeOK, ""
+}
+
+// cutKeys bounds a provider text and removes either key from it, should eSMS ever quote one back.
+func cutKeys(msg string, creds Credentials) string {
+	if len(msg) > maxProviderMessage {
+		msg = msg[:maxProviderMessage]
+	}
+	for _, k := range []string{string(creds.APIKey.Lo()), string(creds.SecretKey.Lo())} {
+		if k != "" {
+			msg = strings.ReplaceAll(msg, k, secret.Che)
+		}
+	}
+	return msg
 }
 
 func flag(b bool) string {

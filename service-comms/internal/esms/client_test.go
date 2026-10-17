@@ -377,3 +377,28 @@ func TestOutcomeStringsAreClassesOnly(t *testing.T) {
 		}
 	}
 }
+
+// SendCSKHReport hands on eSMS's own text for a REFUSED send (ADR 0099 S5) — never for a transport failure,
+// an acceptance or an unreadable answer — and cuts either key out of it should eSMS quote one.
+func TestSendCSKHReportReturnsTheRefusalTextWithoutKeys(t *testing.T) {
+	m := Message{Phone: testPhone, Content: "x", Brandname: testBrand, RequestID: testRequestID}
+	c, _ := start(t, jsonAnswer(200, `{"CodeResult":"146","ErrorMessage":"Template not match for key `+testAPIKey+`"}`))
+	id, o, text := c.SendCSKHReport(context.Background(), testCreds, m)
+	if id != "" || o != OutcomeTemplateMismatch || text != "Template not match for key ***" {
+		t.Fatalf("= %q %v %q", id, o, text)
+	}
+	for body, want := range map[string]Outcome{
+		`{"CodeResult":"100","SMSID":"s1","ErrorMessage":"ignored"}`: OutcomeOK,
+		`{"CodeResult":"124","ErrorMessage":"dup"}`:                  OutcomeDuplicateRequest,
+		`{"nothing":1}`: OutcomeMalformedResponse,
+	} {
+		c, _ := start(t, jsonAnswer(200, body))
+		if _, o, text := c.SendCSKHReport(context.Background(), testCreds, m); o != want || text != "" {
+			t.Errorf("%s: %v %q", body, o, text)
+		}
+	}
+	c, _ = start(t, jsonAnswer(503, `{"ErrorMessage":"down"}`))
+	if _, o, text := c.SendCSKHReport(context.Background(), testCreds, m); o != OutcomeUnavailable || text != "" {
+		t.Fatalf("5xx: %v %q", o, text)
+	}
+}

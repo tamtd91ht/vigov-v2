@@ -58,6 +58,18 @@ func sampleNoticeItem() app.NoticeCampaignItem {
 		CreatedAt: at, CreatedBy: maCanBoGhi}}
 }
 
+func (f *fakeNoticeCampaigns) Recipients(ctx context.Context, id, cursor string) ([]domain.NoticeRecipientView, string, error) {
+	f.note(ctx)
+	f.lastID, f.lastCursor = id, cursor
+	at := time.Date(2026, 10, 17, 3, 0, 0, 0, time.UTC)
+	return []domain.NoticeRecipientView{
+		{ID: "R1", PhoneMasked: "09****0000", Status: domain.NoticeRecipientSent, SentAt: at, CreatedAt: at},
+		{ID: "R2", PhoneMasked: "***", Status: domain.NoticeRecipientInvalid, CreatedAt: at},
+		{ID: "R3", PhoneMasked: "09****0001", Status: domain.NoticeRecipientFailed, FailureClass: domain.NoticeFailTemplateRejected,
+			ErrorMessage: "Template not match", CreatedAt: at},
+	}, "NEXTR", f.err
+}
+
 func (f *fakeNoticeCampaigns) Templates(ctx context.Context) (app.NoticeTemplates, error) {
 	f.note(ctx)
 	return app.NoticeTemplates{
@@ -176,6 +188,7 @@ func noticeRoutes() []mapAssetRoute {
 		{"send", http.MethodPost, "/api/v1/notice-campaigns", noticeSendBody, "notice.send", "admin.sms", http.StatusCreated},
 		{"list", http.MethodGet, "/api/v1/notice-campaigns?cursor=abc", "", "notice.send", "content.read", http.StatusOK},
 		{"get", http.MethodGet, "/api/v1/notice-campaigns/" + testCampaignID, "", "notice.send", "admin.zalo", http.StatusOK},
+		{"recipients", http.MethodGet, "/api/v1/notice-campaigns/" + testCampaignID + "/recipients?cursor=c1", "", "notice.send", "admin.sms", http.StatusOK},
 	}
 }
 
@@ -327,7 +340,7 @@ func TestNoticePreviewShapeAndListCursor(t *testing.T) {
 	s.grant(xaA, "notice.send")
 	w := s.call(t, http.MethodPost, "/api/v1/notice-campaign-previews", hostA, canBoGhi(xaA), noticePreviewBody)
 	doiMa(t, w, http.StatusOK)
-	if got := strings.TrimSpace(w.Body.String()); got != `{"content":null,"recipient_count":10,"skipped_count":2,"unit_price":null,`+
+	if got := strings.TrimSpace(w.Body.String()); got != `{"content":null,"recipient_count":10,"skipped_count":2,"invalid_count":0,"duplicate_count":0,"unit_price":null,`+
 		`"estimated_cost":null,"missing_params":["thoi_gian"]}` {
 		t.Fatalf("preview = %s", got)
 	}
@@ -393,5 +406,133 @@ func TestNoticeNamesDownStillAnswers(t *testing.T) {
 	h.ServeHTTP(w, r)
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"created_by_name":""`) {
 		t.Fatalf("= %d %s", w.Code, w.Body.String())
+	}
+}
+
+// --- typed / imported numbers (0033; ADR 0099 §Sửa đổi) ---------------------------------------------------
+
+const noticeTypedBody = `{"title":"Nhắc lịch","channel":"sms","sms_account_id":"ACC1","template_ref":"",` +
+	`"audience":{"kind":"tep-nhap","ids":[],"tags":[]},"params":{},"sms_content_mode":"noi-dung-chung",` +
+	`"content":"Chào {{variable_1}}","mapping":{"phone_column":"SĐT","variables":{"variable_1":"Tên"}},` +
+	`"recipients":[{"phone":"0900000000","values":{"variable_1":"An"}},{"phone":""}]}`
+
+func TestNoticeTypedBodyReachesTheUseCase(t *testing.T) {
+	s := newNoticeServer(t)
+	s.grant(xaA, "notice.send")
+	doiMa(t, s.call(t, http.MethodPost, "/api/v1/notice-campaigns", hostA, canBoGhi(xaA), noticeTypedBody), http.StatusCreated)
+	in := s.fake.lastInput
+	if in.Title != "Nhắc lịch" || in.AudienceKind != domain.NoticeAudienceImportedFile || in.SmsContentMode != domain.SmsContentShared ||
+		in.Content != "Chào {{variable_1}}" || len(in.Recipients) != 2 || in.Recipients[0].Values["variable_1"] != "An" ||
+		in.Recipients[1].Phone != "" || in.Mapping == nil || in.Mapping.PhoneColumn != "SĐT" || in.Mapping.Variables["variable_1"] != "Tên" {
+		t.Fatalf("input = %+v", in)
+	}
+	// The preview carries the same body.
+	w := s.call(t, http.MethodPost, "/api/v1/notice-campaign-previews", hostA, canBoGhi(xaA), noticeTypedBody)
+	doiMa(t, w, http.StatusOK)
+	if !strings.Contains(w.Body.String(), `"invalid_count":0`) || !strings.Contains(w.Body.String(), `"duplicate_count":0`) {
+		t.Fatalf("preview = %s", w.Body.String())
+	}
+}
+
+func TestNoticeBodyCapAdmitsTenThousandRows(t *testing.T) {
+	s := newNoticeServer(t)
+	s.grant(xaA, "notice.send")
+	var b strings.Builder
+	b.WriteString(`{"channel":"sms","sms_account_id":"ACC1","audience":{"kind":"tep-nhap"},"sms_content_mode":"cot-trong-tep",` +
+		`"mapping":{"phone_column":"SĐT","content_column":"ND"},"recipients":[`)
+	for i := 0; i < 10000; i++ {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		b.WriteString(`{"phone":"0900000000","content":"` + strings.Repeat("x", 300) + `"}`)
+	}
+	b.WriteString("]}")
+	if b.Len() < 1<<20 || b.Len() > noticeBodyCap {
+		t.Fatalf("body of %d bytes does not test the cap", b.Len())
+	}
+	doiMa(t, s.call(t, http.MethodPost, "/api/v1/notice-campaign-previews", hostA, canBoGhi(xaA), b.String()), http.StatusOK)
+	if len(s.fake.lastInput.Recipients) != 10000 {
+		t.Fatalf("%d rows reached the use case", len(s.fake.lastInput.Recipients))
+	}
+	// Over the cap: refused before the use case.
+	s = newNoticeServer(t)
+	s.grant(xaA, "notice.send")
+	huge := `{"channel":"sms","content":"` + strings.Repeat("x", noticeBodyCap) + `"}`
+	doiMa(t, s.call(t, http.MethodPost, "/api/v1/notice-campaign-previews", hostA, canBoGhi(xaA), huge), http.StatusBadRequest)
+	if s.fake.calls != 0 {
+		t.Fatal("an over-cap body reached the use case")
+	}
+}
+
+func TestNoticeTypedErrorsAre400(t *testing.T) {
+	cases := []struct {
+		err  error
+		want string
+	}{
+		{&domain.NoticeMissingVariablesError{Missing: []string{"variable_2"}}, "variable_2"},
+		{&domain.NoticeRowContentError{Row: 7}, "Dòng 7"},
+		{domain.ErrNoticeMapping, "ghép cột"},
+		{domain.ErrNoticeRecipients, "10.000"},
+		{domain.ErrNoticeContentMode, "cách lấy nội dung"},
+		{domain.ErrNoticeContent, "Nội dung chung"},
+		{domain.ErrNoticeRowValues, "giá trị cột"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.want, func(t *testing.T) {
+			s := newNoticeServer(t)
+			s.grant(xaA, "notice.send")
+			s.fake.err = tc.err
+			w := s.call(t, http.MethodPost, "/api/v1/notice-campaigns", hostA, canBoGhi(xaA), noticeTypedBody)
+			if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), `"notice_invalid"`) ||
+				!strings.Contains(w.Body.String(), tc.want) {
+				t.Fatalf("= %d %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestNoticeRecipientsShape(t *testing.T) {
+	s := newNoticeServer(t)
+	s.grant(xaA, "notice.send")
+	w := s.call(t, http.MethodGet, "/api/v1/notice-campaigns/"+testCampaignID+"/recipients?cursor=c1", hostA, canBoGhi(xaA), "")
+	doiMa(t, w, http.StatusOK)
+	if s.fake.lastID != testCampaignID || s.fake.lastCursor != "c1" {
+		t.Fatalf("passed %q %q", s.fake.lastID, s.fake.lastCursor)
+	}
+	var out struct {
+		Items []map[string]any `json:"items"`
+		Next  string           `json:"next_cursor"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || len(out.Items) != 3 || out.Next != "NEXTR" {
+		t.Fatalf("%s %v", w.Body.String(), err)
+	}
+	for _, k := range []string{"id", "phone_masked", "status", "failure_class", "error_message", "sent_at", "created_at"} {
+		if _, ok := out.Items[0][k]; !ok {
+			t.Errorf("item lacks %q", k)
+		}
+	}
+	if out.Items[1]["sent_at"] != nil || out.Items[1]["status"] != "khong-hop-le" || out.Items[2]["error_message"] != "Template not match" ||
+		out.Items[2]["failure_class"] != domain.NoticeFailTemplateRejected {
+		t.Fatalf("items = %v", out.Items)
+	}
+	s.fake.err = app.ErrNoticeCampaignNotFound
+	doiMa(t, s.call(t, http.MethodGet, "/api/v1/notice-campaigns/nope/recipients", hostA, canBoGhi(xaA), ""), http.StatusNotFound)
+}
+
+func TestNoticeCampaignOutCarriesMappingAndContent(t *testing.T) {
+	it := sampleNoticeItem()
+	it.Campaign.Audience.Kind = domain.NoticeAudienceImportedFile
+	it.Campaign.TemplateContent, it.Campaign.SmsContentMode, it.Campaign.InvalidCount = "Chào {{variable_1}}", domain.SmsContentShared, 3
+	it.Campaign.RecipientMapping = &domain.NoticeRecipientMapping{PhoneColumn: "SĐT", Variables: map[string]string{"variable_1": "Tên"}}
+	b, _ := json.Marshal(noticeCampaignToOut(it, nil))
+	for _, want := range []string{`"invalid_count":3`, `"content":"Chào {{variable_1}}"`, `"sms_content_mode":"noi-dung-chung"`,
+		`"recipient_mapping":{"phone_column":"SĐT","variables":{"variable_1":"Tên"}}`} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("out lacks %s: %s", want, b)
+		}
+	}
+	b, _ = json.Marshal(noticeCampaignToOut(sampleNoticeItem(), nil))
+	if !strings.Contains(string(b), `"recipient_mapping":null`) || !strings.Contains(string(b), `"sms_content_mode":null`) {
+		t.Fatalf("directory campaign out = %s", b)
 	}
 }

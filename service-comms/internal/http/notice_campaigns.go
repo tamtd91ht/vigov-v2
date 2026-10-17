@@ -7,19 +7,25 @@ package http
 //	POST /api/v1/notice-campaigns             notice.send  "Gửi" — campaign + every recipient row, one transaction
 //	GET  /api/v1/notice-campaigns             notice.send  the "Đã gửi" history, newest first, keyset pages
 //	GET  /api/v1/notice-campaigns/{id}        notice.send  one campaign (its progress while it sends)
+//	GET  /api/v1/notice-campaigns/{id}/recipients  notice.send  the per-number history (masked) of one campaign
 //
 // `notice.send` — "Gửi thông báo tới người dân, cán bộ" — seeded by service-identity migration 0028.
 //
 // THE COMMUNE IS THE CONTEXT'S (rule 1): TenantMiddleware resolved it from Host before any handler here;
 // the use case reads and writes through db.For(ctx). No route takes a commune from the client.
 //
-// NO PHONE NUMBER LEAVES HERE, masked or not: a campaign reply carries counts, never recipients (ADR 0099
-// "Lệch prototype": no "Ví dụ người nhận"). No reply names another commune: an id of another commune is
-// the same 404 as an id that does not exist.
+// NO FULL PHONE NUMBER LEAVES HERE: a campaign reply carries counts; the per-number history (owner,
+// ADR 0099 §Sửa đổi S5) carries the MASKED number and the outcome only. No reply names another commune: an
+// id of another commune is the same 404 as an id that does not exist.
+//
+// TYPED / IMPORTED NUMBERS (audience danh-sach-so / tep-nhap, S1): the browser reads the file and sends the
+// rows (`recipients`); the file never reaches here. The rows ARE personal data — this file never logs a
+// body, a row or a value.
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -39,6 +45,7 @@ import (
 // NoticeCampaignUseCase is the use case. *app.NoticeCampaigns satisfies it. The commune is the context's
 // (rule 1); the send opens its own transaction and writes its audit entry inside it (rule 6).
 type NoticeCampaignUseCase interface {
+	Recipients(ctx context.Context, campaignID, cursor string) ([]domain.NoticeRecipientView, string, error)
 	Templates(ctx context.Context) (app.NoticeTemplates, error)
 	Preview(ctx context.Context, in app.NoticeInput) (app.NoticePreview, error)
 	Send(ctx context.Context, in app.NoticeInput, actor audit.Actor) (app.NoticeCampaignItem, error)
@@ -58,8 +65,10 @@ type NoticeCampaignDeps struct {
 
 type noticeCampaignHandler struct{ d NoticeCampaignDeps }
 
-// noticeBodyCap — 50 parameters of up to 500 characters fit with room; the shared 64 KiB cap may not.
-const noticeBodyCap = 128 << 10
+// noticeBodyCap — the preview and the send carry up to 10 000 imported rows (S1), each with its number,
+// its own text (≤ 1 000 characters) or its mapped values: 8 MiB (the contract's figure). The browser caps
+// the file at 5 MB (S1); rows of plain text plus JSON overhead fit.
+const noticeBodyCap = 8 << 20
 
 // ---- wire shapes --------------------------------------------------------------------------------------
 
@@ -107,35 +116,74 @@ type noticeTemplatesOut struct {
 }
 
 // noticeAudienceIn — `kind` is an ADR 0011 value: nguoi-dan-tat-ca · nguoi-dan-theo-nhom (ids = citizen
-// group ids) · nguoi-dan-theo-nhan (tags) · can-bo-tat-ca · can-bo-theo-bo-phan (ids = org unit ids).
-// Exactly the list the kind uses is non-empty; at most 50.
+// group ids) · nguoi-dan-theo-nhan (tags) · can-bo-tat-ca · can-bo-theo-bo-phan (ids = org unit ids) ·
+// danh-sach-so (typed numbers) · tep-nhap (rows of a file) — the last two with ids/tags empty and the rows
+// in the body's `recipients`. Exactly the list the kind uses is non-empty; at most 50.
 type noticeAudienceIn struct {
 	Kind string   `json:"kind"`
 	IDs  []string `json:"ids"`
 	Tags []string `json:"tags"`
 }
 
+// noticeRecipientIn is one typed / imported row. `phone` as typed — the server normalises it (a number that
+// does not normalise is kept as 'khong-hop-le'). `content`: the row's own SMS text (sms_content_mode
+// cot-trong-tep, ≤ 1 000). `values`: the row's mapped columns — "variable_i" for SMS noi-dung-chung, the ZBS
+// parameter `field` for ZNS (overrides the fixed `params` value for this row).
+type noticeRecipientIn struct {
+	Phone   string            `json:"phone"`
+	Content string            `json:"content,omitempty"`
+	Values  map[string]string `json:"values,omitempty"`
+}
+
+// noticeMappingIn — tep-nhap only: the file's column HEADERS (row 1, as written; ≤ 100 characters, ≤ 50
+// entries) that fed the number, each row's text, each variable, each ZNS parameter. Stored on the campaign.
+type noticeMappingIn struct {
+	PhoneColumn   string            `json:"phone_column"`
+	ContentColumn string            `json:"content_column,omitempty"`
+	Variables     map[string]string `json:"variables,omitempty"`
+	Params        map[string]string `json:"params,omitempty"`
+}
+
 // noticePreviewIn is the body of POST notice-campaign-previews. `channel` zalo-zns needs `oa_id`, sms needs
-// `sms_account_id` — never both. `template_ref` is the `template_ref` of GET notice-templates. `params` is
-// keyed by the template parameters' `field`; an empty value counts as missing.
+// `sms_account_id` — never both. `template_ref` is the `template_ref` of GET notice-templates (empty for SMS
+// to danh-sach-so / tep-nhap: no template). `params` is keyed by the template parameters' `field`; an empty
+// value counts as missing. `recipients` (≤ 1 000 / ≤ 10 000), `sms_content_mode` (cot-trong-tep |
+// noi-dung-chung, SMS only), `content` (noi-dung-chung's shared text with optional {{variable_i}}) and
+// `mapping` (tep-nhap only) belong to the two typed audiences and are refused for any other.
 type noticePreviewIn struct {
-	Channel      string            `json:"channel"`
-	OAID         string            `json:"oa_id,omitempty"`
-	SmsAccountID string            `json:"sms_account_id,omitempty"`
-	TemplateRef  string            `json:"template_ref"`
-	Audience     noticeAudienceIn  `json:"audience"`
-	Params       map[string]string `json:"params"`
+	Channel        string              `json:"channel"`
+	OAID           string              `json:"oa_id,omitempty"`
+	SmsAccountID   string              `json:"sms_account_id,omitempty"`
+	TemplateRef    string              `json:"template_ref"`
+	Audience       noticeAudienceIn    `json:"audience"`
+	Params         map[string]string   `json:"params"`
+	Recipients     []noticeRecipientIn `json:"recipients,omitempty"`
+	SmsContentMode string              `json:"sms_content_mode,omitempty"`
+	Content        string              `json:"content,omitempty"`
+	Mapping        *noticeMappingIn    `json:"mapping,omitempty"`
 }
 
 // noticeCampaignIn is the body of POST notice-campaigns: the preview's body plus `title` (≤ 200).
+// The fields are spelled out rather than embedding noticePreviewIn: apidoc does not read embedded fields,
+// and a contract it cannot read is a contract the web types silently lose. preview() converts.
 type noticeCampaignIn struct {
-	Title        string            `json:"title"`
-	Channel      string            `json:"channel"`
-	OAID         string            `json:"oa_id,omitempty"`
-	SmsAccountID string            `json:"sms_account_id,omitempty"`
-	TemplateRef  string            `json:"template_ref"`
-	Audience     noticeAudienceIn  `json:"audience"`
-	Params       map[string]string `json:"params"`
+	Title          string              `json:"title"`
+	Channel        string              `json:"channel"`
+	OAID           string              `json:"oa_id,omitempty"`
+	SmsAccountID   string              `json:"sms_account_id,omitempty"`
+	TemplateRef    string              `json:"template_ref"`
+	Audience       noticeAudienceIn    `json:"audience"`
+	Params         map[string]string   `json:"params"`
+	Recipients     []noticeRecipientIn `json:"recipients,omitempty"`
+	SmsContentMode string              `json:"sms_content_mode,omitempty"`
+	Content        string              `json:"content,omitempty"`
+	Mapping        *noticeMappingIn    `json:"mapping,omitempty"`
+}
+
+func (in noticeCampaignIn) preview() noticePreviewIn {
+	return noticePreviewIn{Channel: in.Channel, OAID: in.OAID, SmsAccountID: in.SmsAccountID,
+		TemplateRef: in.TemplateRef, Audience: in.Audience, Params: in.Params, Recipients: in.Recipients,
+		SmsContentMode: in.SmsContentMode, Content: in.Content, Mapping: in.Mapping}
 }
 
 // noticePreviewOut — `content`: the SMS text with the typed values filled and the missing slots left as
@@ -144,10 +192,17 @@ type noticeCampaignIn struct {
 // number). `unit_price` / `estimated_cost`: decimal text, ESTIMATE, null when none could be had (SMS:
 // while a parameter is missing, or when eSMS's estimate did not answer). `missing_params`: the keys still
 // empty — a send answers 422 until it is empty.
+//
+// Typed / imported audiences: `content` is the FIRST valid row's text (a sample); `recipient_count` the
+// valid unique numbers; `invalid_count` the rows whose number did not normalise; `duplicate_count` the
+// normalised duplicates dropped; `missing_params` the {{variable_i}} no row provides (SMS) or the ZBS
+// parameters with neither a fixed value nor a column (ZNS).
 type noticePreviewOut struct {
 	Content        *string  `json:"content"`
 	RecipientCount int      `json:"recipient_count"`
 	SkippedCount   int      `json:"skipped_count"`
+	InvalidCount   int      `json:"invalid_count"`
+	DuplicateCount int      `json:"duplicate_count"`
 	UnitPrice      *string  `json:"unit_price"`
 	EstimatedCost  *string  `json:"estimated_cost"`
 	MissingParams  []string `json:"missing_params"`
@@ -158,29 +213,36 @@ type noticePreviewOut struct {
 // the send, plus (once finished) the rows the sender skipped. `sent_count` / `failed_count` are partial
 // while `status` is dang-gui. "Đã gửi" means the PROVIDER ACCEPTED the message (ADR 0099 #9), not that it
 // reached the handset. `created_by` is the staff business code; `created_by_name` "" when identity could not
-// be asked.
+// be asked. `invalid_count`: typed / imported numbers that did not normalise (never sent, never in
+// failed_count). `content` / `sms_content_mode`: the SMS text kept as sent (the template text, or the
+// shared text with its {{variable_i}}) and the typed-audience mode; `recipient_mapping`: tep-nhap's column
+// headers (null otherwise) — so the history shows what was mapped into what.
 type noticeCampaignOut struct {
-	ID            string     `json:"id"`
-	Title         string     `json:"title"`
-	Channel       string     `json:"channel"`
-	OAID          *string    `json:"oa_id"`
-	SmsAccountID  *string    `json:"sms_account_id"`
-	SourceName    string     `json:"source_name"`
-	TemplateRef   string     `json:"template_ref"`
-	TemplateName  string     `json:"template_name"`
-	AudienceKind  string     `json:"audience_kind"`
-	AudienceIDs   []string   `json:"audience_ids"`
-	Recipients    int        `json:"recipient_count"`
-	Skipped       int        `json:"skipped_count"`
-	Sent          int        `json:"sent_count"`
-	Failed        int        `json:"failed_count"`
-	UnitPrice     *string    `json:"unit_price"`
-	EstimatedCost *string    `json:"estimated_cost"`
-	Status        string     `json:"status"`
-	CreatedAt     time.Time  `json:"created_at"`
-	CreatedBy     string     `json:"created_by"`
-	CreatedByName string     `json:"created_by_name"`
-	FinishedAt    *time.Time `json:"finished_at"`
+	ID            string           `json:"id"`
+	Title         string           `json:"title"`
+	Channel       string           `json:"channel"`
+	OAID          *string          `json:"oa_id"`
+	SmsAccountID  *string          `json:"sms_account_id"`
+	SourceName    string           `json:"source_name"`
+	TemplateRef   string           `json:"template_ref"`
+	TemplateName  string           `json:"template_name"`
+	AudienceKind  string           `json:"audience_kind"`
+	AudienceIDs   []string         `json:"audience_ids"`
+	Recipients    int              `json:"recipient_count"`
+	Skipped       int              `json:"skipped_count"`
+	Sent          int              `json:"sent_count"`
+	Failed        int              `json:"failed_count"`
+	Invalid       int              `json:"invalid_count"`
+	Content       *string          `json:"content"`
+	SmsMode       *string          `json:"sms_content_mode"`
+	Mapping       *noticeMappingIn `json:"recipient_mapping"`
+	UnitPrice     *string          `json:"unit_price"`
+	EstimatedCost *string          `json:"estimated_cost"`
+	Status        string           `json:"status"`
+	CreatedAt     time.Time        `json:"created_at"`
+	CreatedBy     string           `json:"created_by"`
+	CreatedByName string           `json:"created_by_name"`
+	FinishedAt    *time.Time       `json:"finished_at"`
 }
 
 // noticeCampaignListOut — `next_cursor` "" on the last page; pass it back as `?cursor=`.
@@ -207,7 +269,12 @@ func noticeCampaignToOut(it app.NoticeCampaignItem, names map[string]string) not
 		TemplateName: c.TemplateName, AudienceKind: c.Audience.Kind, AudienceIDs: ids, Recipients: c.RecipientCount,
 		Skipped: it.Skipped, Sent: c.SentCount, Failed: c.FailedCount, UnitPrice: optText(c.UnitPrice),
 		EstimatedCost: optText(c.EstimatedCost), Status: c.Status, CreatedAt: c.CreatedAt, CreatedBy: c.CreatedBy,
-		CreatedByName: names[c.CreatedBy]}
+		CreatedByName: names[c.CreatedBy], Invalid: c.InvalidCount, Content: optText(c.TemplateContent),
+		SmsMode: optText(c.SmsContentMode)}
+	if m := c.RecipientMapping; m != nil {
+		out.Mapping = &noticeMappingIn{PhoneColumn: m.PhoneColumn, ContentColumn: m.ContentColumn, Variables: m.Variables,
+			Params: m.Params}
+	}
 	if !c.FinishedAt.IsZero() {
 		f := c.FinishedAt
 		out.FinishedAt = &f
@@ -324,6 +391,62 @@ func RegisterNoticeCampaigns(mux *http.ServeMux, d NoticeCampaignDeps) {
 	mux.Handle("GET /api/v1/notice-campaigns/{id}",
 		authz.RequirePermission(d.Checker, "notice.send")(
 			http.HandlerFunc(h.Get)))
+
+	// NO idem.* DECLARATION: a GET. No audit entry: masked numbers only — no full personal data is read.
+	//
+	// @summary  Lịch sử từng số của một đợt tin — số đã che, kết quả (cho-gui · da-gui · that-bai · bo-qua · khong-hop-le), lớp lỗi, thông báo lỗi nhà cung cấp (đã che dãy số), lúc gửi; 100 dòng mỗi trang (con trỏ `cursor`); mã đợt của xã khác trả 404 như mã không có
+	// @screen   ADR 0099 §Sửa đổi S5 — Gửi tin ZNS / SMS, lịch sử từng số của đợt
+	// @reply    200 noticeRecipientListOut
+	// @reply    400 httpx.Error notice_invalid
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error not_found
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/notice-campaigns/{id}/recipients",
+		authz.RequirePermission(d.Checker, "notice.send")(
+			http.HandlerFunc(h.Recipients)))
+}
+
+// noticeRecipientOut is one number of one campaign. `phone_masked` only — never the full number. `status`:
+// cho-gui · da-gui · that-bai · bo-qua · khong-hop-le. `failure_class`: the class of a failed / skipped row
+// (null otherwise). `error_message`: the provider's own message on that-bai, digit runs masked (null when
+// none).
+type noticeRecipientOut struct {
+	ID           string     `json:"id"`
+	PhoneMasked  string     `json:"phone_masked"`
+	Status       string     `json:"status"`
+	FailureClass *string    `json:"failure_class"`
+	ErrorMessage *string    `json:"error_message"`
+	SentAt       *time.Time `json:"sent_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+}
+
+// noticeRecipientListOut — `next_cursor` "" on the last page; pass it back as `?cursor=`.
+type noticeRecipientListOut struct {
+	Items      []noticeRecipientOut `json:"items"`
+	NextCursor string               `json:"next_cursor"`
+}
+
+// Recipients — GET /api/v1/notice-campaigns/{id}/recipients
+func (h *noticeCampaignHandler) Recipients(w http.ResponseWriter, r *http.Request) {
+	// The commune is the context's (TenantMiddleware, from Host): the use case reads through db.For(ctx),
+	// tenant_id = $1 — another commune's campaign id is the same 404 as an unknown one.
+	rows, next, err := h.d.Campaigns.Recipients(r.Context(), r.PathValue("id"), r.URL.Query().Get("cursor"))
+	if err != nil {
+		h.fail(w, r, "đọc lịch sử từng số", err)
+		return
+	}
+	out := noticeRecipientListOut{Items: make([]noticeRecipientOut, 0, len(rows)), NextCursor: next}
+	for _, v := range rows {
+		o := noticeRecipientOut{ID: v.ID, PhoneMasked: v.PhoneMasked, Status: v.Status, FailureClass: optText(v.FailureClass),
+			ErrorMessage: optText(v.ErrorMessage), CreatedAt: v.CreatedAt}
+		if !v.SentAt.IsZero() {
+			at := v.SentAt
+			o.SentAt = &at
+		}
+		out.Items = append(out.Items, o)
+	}
+	vietJSON(w, http.StatusOK, out)
 }
 
 // ---- handlers -----------------------------------------------------------------------------------------
@@ -357,8 +480,20 @@ func (h *noticeCampaignHandler) Templates(w http.ResponseWriter, r *http.Request
 }
 
 func previewInput(in noticePreviewIn) app.NoticeInput {
-	return app.NoticeInput{Channel: in.Channel, OARowID: in.OAID, SmsAccountID: in.SmsAccountID, TemplateRef: in.TemplateRef,
-		AudienceKind: in.Audience.Kind, AudienceIDs: in.Audience.IDs, AudienceTags: in.Audience.Tags, Params: in.Params}
+	out := app.NoticeInput{Channel: in.Channel, OARowID: in.OAID, SmsAccountID: in.SmsAccountID, TemplateRef: in.TemplateRef,
+		AudienceKind: in.Audience.Kind, AudienceIDs: in.Audience.IDs, AudienceTags: in.Audience.Tags, Params: in.Params,
+		SmsContentMode: in.SmsContentMode, Content: in.Content}
+	if len(in.Recipients) > 0 {
+		out.Recipients = make([]app.NoticeRecipientInput, len(in.Recipients))
+		for i, r := range in.Recipients {
+			out.Recipients[i] = app.NoticeRecipientInput{Phone: r.Phone, Content: r.Content, Values: r.Values}
+		}
+	}
+	if m := in.Mapping; m != nil {
+		out.Mapping = &domain.NoticeRecipientMapping{PhoneColumn: m.PhoneColumn, ContentColumn: m.ContentColumn,
+			Variables: m.Variables, Params: m.Params}
+	}
+	return out
 }
 
 // Preview — POST /api/v1/notice-campaign-previews
@@ -377,7 +512,8 @@ func (h *noticeCampaignHandler) Preview(w http.ResponseWriter, r *http.Request) 
 		missing = []string{}
 	}
 	vietJSON(w, http.StatusOK, noticePreviewOut{Content: p.Content, RecipientCount: p.RecipientCount, SkippedCount: p.SkippedCount,
-		UnitPrice: optText(p.UnitPrice), EstimatedCost: optText(p.EstimatedCost), MissingParams: missing})
+		InvalidCount: p.InvalidCount, DuplicateCount: p.DuplicateCount, UnitPrice: optText(p.UnitPrice),
+		EstimatedCost: optText(p.EstimatedCost), MissingParams: missing})
 }
 
 // Send — POST /api/v1/notice-campaigns
@@ -393,8 +529,7 @@ func (h *noticeCampaignHandler) Send(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
 		return
 	}
-	input := previewInput(noticePreviewIn{Channel: in.Channel, OAID: in.OAID, SmsAccountID: in.SmsAccountID,
-		TemplateRef: in.TemplateRef, Audience: in.Audience, Params: in.Params})
+	input := previewInput(in.preview())
 	input.Title = in.Title
 	it, err := h.d.Campaigns.Send(r.Context(), input, actor)
 	if err != nil {
@@ -475,6 +610,12 @@ var noticeRefusals = []refusal{
 	{domain.ErrNoticeParamLong, "Có giá trị tham số dài hơn mức mẫu cho phép."},
 	{domain.ErrNoticeParams, "Giá trị tham số không hợp lệ: không xuống dòng, không chứa dấu ngoặc nhọn, tối đa 500 ký tự."},
 	{domain.ErrNoticeCursor, "Con trỏ trang không hợp lệ. Hãy tải lại danh sách từ đầu."},
+	{domain.ErrNoticeRecipients, "Danh sách số không hợp lệ: nhập số cần ít nhất 1 và tối đa 1.000 số, nhập tệp tối đa 10.000 dòng; đối tượng lấy từ danh bạ thì không gửi kèm danh sách số."},
+	{domain.ErrNoticeContentMode, "Gửi SMS tới danh sách số / tệp cần chọn cách lấy nội dung (cột trong tệp hoặc nội dung chung) và không chọn mẫu tin."},
+	{domain.ErrNoticeContent, "Nội dung chung cần nhập (tối đa 1.000 ký tự) khi chọn nội dung chung, và để trống trong các trường hợp khác."},
+	{domain.ErrNoticeRowContent, "Có dòng thiếu nội dung tin, hoặc nội dung sau khi điền biến dài quá 1.000 ký tự."},
+	{domain.ErrNoticeRowValues, "Có dòng mang giá trị cột không hợp lệ (tối đa 50 cột, mỗi giá trị tối đa 500 ký tự, không ký tự điều khiển)."},
+	{domain.ErrNoticeMapping, "Thông tin ghép cột của tệp không hợp lệ: cần cột số điện thoại; SMS theo cột cần cột nội dung; nội dung chung cần ghép đúng các biến có trong nội dung; ZNS chỉ ghép cột cho tham số của mẫu. Tên cột tối đa 100 ký tự."},
 }
 
 // fail maps a use-case error to its reply. The wrapped error never reaches the client (rule 3), and never
@@ -482,7 +623,18 @@ var noticeRefusals = []refusal{
 func (h *noticeCampaignHandler) fail(w http.ResponseWriter, r *http.Request, op string, err error) {
 	xa := string(tenant.MustFrom(r.Context()))
 	var missing *app.NoticeMissingParamsError
+	var missingVars *domain.NoticeMissingVariablesError
+	var rowContent *domain.NoticeRowContentError
 	switch {
+	case errors.As(err, &rowContent):
+		// The row's NUMBER in the list sent (1-based) — never its content or its phone.
+		httpx.WriteError(w, http.StatusBadRequest, "notice_invalid", fmt.Sprintf(
+			"Dòng %d của danh sách thiếu nội dung tin, hoặc nội dung sau khi điền biến dài quá 1.000 ký tự. Chưa có gì được gửi.",
+			rowContent.Row), "")
+	case errors.As(err, &missingVars):
+		// Variable NAMES only, never a value.
+		httpx.WriteError(w, http.StatusBadRequest, "notice_invalid",
+			"Nội dung chung có biến chưa ghép cột / chưa có giá trị: "+strings.Join(missingVars.Missing, ", ")+". Chưa có gì được gửi.", "")
 	case errors.As(err, &missing):
 		// Parameter KEYS only (names / positions of the template), never a value.
 		httpx.WriteError(w, http.StatusUnprocessableEntity, "missing_params",

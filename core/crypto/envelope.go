@@ -155,6 +155,101 @@ func (e *Envelope) Open(ctx context.Context, sealed, aad []byte) (secret.Secret,
 	return secret.Secret(plain), nil
 }
 
+// SealMany is Seal for several values of ONE commune with ONE read and unwrap of its DEK — for a write
+// that seals one value per row of thousands of rows (a notice campaign's imported numbers, ADR 0099
+// §Sửa đổi S6), where Seal would read the DEK row once per value. aads[i] binds plaintexts[i] exactly as
+// Seal's aad does; every one must be non-empty. All or nothing: any failure returns no output.
+func (e *Envelope) SealMany(ctx context.Context, plaintexts []secret.Secret, aads [][]byte) ([][]byte, error) {
+	if e == nil {
+		return nil, ErrNotConfigured
+	}
+	tid, ok := tenant.From(ctx)
+	if !ok {
+		return nil, fmt.Errorf("crypto: seal: %w", tenant.ErrNoTenant)
+	}
+	if len(plaintexts) != len(aads) {
+		return nil, errors.New("crypto: seal: one aad per value is required")
+	}
+	for _, a := range aads {
+		if len(a) == 0 {
+			return nil, ErrEmptyAAD
+		}
+	}
+	if len(plaintexts) == 0 {
+		return [][]byte{}, nil
+	}
+	dek, err := e.dekForSeal(ctx, tid)
+	if err != nil {
+		return nil, err
+	}
+	defer clear(dek)
+	aead, err := newAEAD(dek)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: seal: %w", err)
+	}
+	out := make([][]byte, len(plaintexts))
+	for i, p := range plaintexts {
+		b := make([]byte, 1+nonceSize, sealedMin+len(p))
+		b[0] = formatVersion
+		if _, err := rand.Read(b[1:]); err != nil {
+			return nil, fmt.Errorf("crypto: nonce: %w", err)
+		}
+		out[i] = aead.Seal(b, b[1:], p.Lo(), dataAD(tid, aads[i]))
+	}
+	return out, nil
+}
+
+// OpenMany is Open for several values of ONE commune with ONE read and unwrap of its DEK. out[i] is nil
+// when sealed[i] does not open under aads[i] (tampered, wrong row, wrong commune — Open's ErrOpenFailed,
+// per value, so one broken row does not stop the others). The error is for the call as a whole: no
+// envelope, no commune, no DEK, the DEK store down.
+func (e *Envelope) OpenMany(ctx context.Context, sealed, aads [][]byte) ([]secret.Secret, error) {
+	if e == nil {
+		return nil, ErrNotConfigured
+	}
+	tid, ok := tenant.From(ctx)
+	if !ok {
+		return nil, fmt.Errorf("crypto: open: %w", tenant.ErrNoTenant)
+	}
+	if len(sealed) != len(aads) {
+		return nil, errors.New("crypto: open: one aad per value is required")
+	}
+	if len(sealed) == 0 {
+		return []secret.Secret{}, nil
+	}
+	w, err := e.store.GetDEK(ctx)
+	if errors.Is(err, ErrDEKNotFound) {
+		return nil, ErrNoDEK
+	}
+	if err != nil {
+		return nil, fmt.Errorf("crypto: read DEK: %w", err)
+	}
+	dek, err := e.ring.unwrap(tid, w)
+	if err != nil {
+		return nil, err
+	}
+	defer clear(dek)
+	aead, err := newAEAD(dek)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: open: %w", err)
+	}
+	out := make([]secret.Secret, len(sealed))
+	for i, s := range sealed {
+		if len(aads[i]) == 0 || len(s) < sealedMin || s[0] != formatVersion {
+			continue
+		}
+		plain, err := aead.Open(nil, s[1:1+nonceSize], s[1+nonceSize:], dataAD(tid, aads[i]))
+		if err != nil {
+			continue
+		}
+		if plain == nil {
+			plain = []byte{} // an empty value that opened is not a value that did not
+		}
+		out[i] = secret.Secret(plain)
+	}
+	return out, nil
+}
+
 // RewrapDEK re-wraps the commune's DEK under the newest KEK. It reports false when the DEK is
 // already current or the commune has none. The data sealed under the DEK is untouched — that is
 // what makes KEK rotation one row per commune (ADR 0009 #5).

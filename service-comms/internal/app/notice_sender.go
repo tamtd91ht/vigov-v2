@@ -27,6 +27,11 @@ package app
 // provider calls, cleared right after, never logged, never stored, never put in an error, an audit delta or
 // a log line. The same for the OA token and the eSMS keys. Log lines carry the commune, counts and error
 // classes — nothing else.
+//
+// TYPED / IMPORTED ROWS (recipient_kind 'so-nhap', migration 0033; ADR 0099 S6): identity is NOT asked —
+// the row's own sealed number and message are opened (ONE OpenMany per campaign of the batch, the commune's
+// DEK read once), used for the one provider call, wiped; the outcome UPDATE empties both sealed columns.
+// A refused send records the provider's message, scrubbed (domain.ScrubProviderMessage — no 7-digit run).
 
 import (
 	"context"
@@ -74,7 +79,7 @@ type NoticeSendRepo interface {
 	CampaignsByID(ctx context.Context, ids []string) (map[string]domain.NoticeCampaign, error)
 	MarkSent(ctx context.Context, tx *store.ScopedTx, id, messageID string, at time.Time) error
 	Retry(ctx context.Context, tx *store.ScopedTx, id string, next, at time.Time) error
-	Fail(ctx context.Context, tx *store.ScopedTx, id, class string, at time.Time) error
+	Fail(ctx context.Context, tx *store.ScopedTx, id, class, errorMessage string, at time.Time) error
 	Skip(ctx context.Context, tx *store.ScopedTx, id, class string, at time.Time) error
 	Settle(ctx context.Context, tx *store.ScopedTx, campaignID string, at time.Time) (string, error)
 }
@@ -96,15 +101,23 @@ type NoticeSmsOpener interface {
 	OpenForSend(ctx context.Context, accountID string) (domain.SmsAccount, esms.Credentials, error)
 }
 
-// ZnsMessenger sends one ZBS template message. *zalooa.Client satisfies it.
+// ZnsMessenger sends one ZBS template message; the third result is Zalo's own message on a refusal (never
+// logged). *zalooa.Client satisfies it.
 type ZnsMessenger interface {
-	SendTemplateMessage(ctx context.Context, accessToken secret.Secret, phone, templateID string,
-		templateData map[string]string, trackingID string) (string, zalooa.Outcome)
+	SendTemplateMessageReport(ctx context.Context, accessToken secret.Secret, phone, templateID string,
+		templateData map[string]string, trackingID string) (string, zalooa.Outcome, string)
 }
 
-// SmsMessenger sends one CSKH SMS. *esms.Client satisfies it.
+// SmsMessenger sends one CSKH SMS; the third result is eSMS's ErrorMessage on a refusal (never logged).
+// *esms.Client satisfies it.
 type SmsMessenger interface {
-	SendCSKH(ctx context.Context, creds esms.Credentials, m esms.Message) (string, esms.Outcome)
+	SendCSKHReport(ctx context.Context, creds esms.Credentials, m esms.Message) (string, esms.Outcome, string)
+}
+
+// NoticeOpener opens typed rows' sealed numbers and messages (ADR 0099 S6). The commune envelope
+// (*crypto.Envelope) satisfies it; a nil one answers crypto.ErrNotConfigured and the rows stay owed.
+type NoticeOpener interface {
+	OpenMany(ctx context.Context, sealed, aads [][]byte) ([]secret.Secret, error)
 }
 
 // NoticeSenderDeps wires the sender. Registry tells a merged commune (left untouched) from an active one.
@@ -118,6 +131,7 @@ type NoticeSenderDeps struct {
 	Accounts NoticeSmsOpener
 	Zns      ZnsMessenger
 	Sms      SmsMessenger
+	Opener   NoticeOpener
 	Log      *slog.Logger
 }
 
@@ -132,7 +146,7 @@ type NoticeSender struct {
 // NewNoticeSender builds the sender.
 func NewNoticeSender(d NoticeSenderDeps) (*NoticeSender, error) {
 	if d.DB == nil || d.Repo == nil || d.Locks == nil || d.Registry == nil || d.Phones == nil || d.OAs == nil ||
-		d.Accounts == nil || d.Zns == nil || d.Sms == nil {
+		d.Accounts == nil || d.Zns == nil || d.Sms == nil || d.Opener == nil {
 		return nil, errors.New("gui_dot_tin: việc nền thiếu phụ thuộc")
 	}
 	if d.Log == nil {
@@ -194,6 +208,15 @@ type noticeResult struct {
 	kind      string // the domain.NoticeRecipient* status it moves to; NoticeRecipientPending = retry
 	class     string // failure class (fail / skip), or the retryable fault's class (retry)
 	messageID string // sent only
+	errorText string // the provider's message, SCRUBBED (domain.ScrubProviderMessage); fail only
+}
+
+// withProviderText attaches a provider's refusal text, scrubbed, to a failure (nothing else keeps it).
+func withProviderText(r noticeResult, text string) noticeResult {
+	if r.kind == domain.NoticeRecipientFailed || r.kind == domain.NoticeRecipientPending {
+		r.errorText = domain.ScrubProviderMessage(text)
+	}
+	return r
 }
 
 func sentResult(id string) noticeResult {
@@ -288,10 +311,23 @@ func (s *NoticeSender) sendBatch(ctx context.Context, due []domain.DueNoticeReci
 			setAll(results, rows, failResult(domain.NoticeFailRejected))
 			continue
 		}
-		if c.Channel == domain.NoticeChannelZNS {
-			s.sendZNS(ctx, c, rows, results)
-		} else {
-			s.sendSMS(ctx, c, rows, results)
+		var typed, directory []domain.DueNoticeRecipient
+		for _, d := range rows {
+			if d.Kind == domain.NoticeRecipientTyped {
+				typed = append(typed, d)
+			} else {
+				directory = append(directory, d)
+			}
+		}
+		if len(directory) > 0 {
+			if c.Channel == domain.NoticeChannelZNS {
+				s.sendZNS(ctx, c, directory, results)
+			} else {
+				s.sendSMS(ctx, c, directory, results)
+			}
+		}
+		if len(typed) > 0 {
+			s.sendTyped(ctx, c, typed, results)
 		}
 	}
 	return results
@@ -363,8 +399,8 @@ func (s *NoticeSender) sendZNS(ctx context.Context, c domain.NoticeCampaign, row
 			case ctx.Err() != nil:
 				results[d.ID] = retryResult(domain.NoticeFailUnavailable)
 			default:
-				msgID, o := s.d.Zns.SendTemplateMessage(ctx, token, phone, c.TemplateRef, c.Params, d.ID)
-				results[d.ID] = znsResult(msgID, o)
+				msgID, o, text := s.d.Zns.SendTemplateMessageReport(ctx, token, phone, c.TemplateRef, c.Params, d.ID)
+				results[d.ID] = withProviderText(znsResult(msgID, o), text)
 			}
 		}
 		clear(phones)
@@ -413,9 +449,9 @@ func (s *NoticeSender) sendSMS(ctx context.Context, c domain.NoticeCampaign, row
 			case ctx.Err() != nil:
 				results[d.ID] = retryResult(domain.NoticeFailUnavailable)
 			default:
-				msgID, o := s.d.Sms.SendCSKH(ctx, creds, esms.Message{Phone: phone, Content: content,
+				msgID, o, text := s.d.Sms.SendCSKHReport(ctx, creds, esms.Message{Phone: phone, Content: content,
 					Brandname: account.Brandname, IsUnicode: unicode, RequestID: d.ID, CampaignID: c.ID})
-				results[d.ID] = smsResult(d.ID, msgID, o)
+				results[d.ID] = withProviderText(smsResult(d.ID, msgID, o), text)
 			}
 		}
 		clear(phones)
@@ -501,14 +537,14 @@ func (s *NoticeSender) record(ctx context.Context, due []domain.DueNoticeRecipie
 				label += ":" + r.class
 			case domain.NoticeRecipientPending:
 				if d.Attempts >= domain.MaxNoticeSendAttempts {
-					err = s.d.Repo.Fail(ctx, tx, d.ID, r.class, done)
+					err = s.d.Repo.Fail(ctx, tx, d.ID, r.class, r.errorText, done)
 					label = domain.NoticeRecipientFailed + ":" + r.class
 				} else {
 					err = s.d.Repo.Retry(ctx, tx, d.ID, done.Add(domain.NoticeRetryBackoff(d.Attempts)), done)
 					label = "thu_lai:" + r.class
 				}
 			default:
-				err = s.d.Repo.Fail(ctx, tx, d.ID, r.class, done)
+				err = s.d.Repo.Fail(ctx, tx, d.ID, r.class, r.errorText, done)
 				label += ":" + r.class
 			}
 			if errors.Is(err, docstore.ErrNoticeRowChanged) {

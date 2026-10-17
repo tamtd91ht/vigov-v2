@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vihat/vigov/core/crypto"
 	"github.com/vihat/vigov/core/identityclient"
 	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/store"
@@ -65,6 +66,7 @@ type senderRepo struct {
 	calls    []string // "op:id:arg"
 	settled  []string
 	status   string
+	texts    []string // "id:provider text" of failures that carried one
 }
 
 func (r *senderRepo) ClaimDue(_ context.Context, tx *store.ScopedTx, now, lease time.Time, limit int) ([]domain.DueNoticeRecipient, error) {
@@ -95,8 +97,11 @@ func (r *senderRepo) Retry(_ context.Context, _ *store.ScopedTx, id string, next
 	return nil
 }
 
-func (r *senderRepo) Fail(_ context.Context, _ *store.ScopedTx, id, class string, _ time.Time) error {
+func (r *senderRepo) Fail(_ context.Context, _ *store.ScopedTx, id, class, text string, _ time.Time) error {
 	r.calls = append(r.calls, "fail:"+id+":"+class)
+	if text != "" {
+		r.texts = append(r.texts, id+":"+text)
+	}
 	return nil
 }
 
@@ -155,28 +160,30 @@ func (a *senderAccounts) OpenForSend(context.Context, string) (domain.SmsAccount
 
 type senderZns struct {
 	outcomes map[string]zalooa.Outcome // by phone
+	texts    map[string]string         // provider message by phone
 	sent     []string                  // "phone|template|tracking|param"
 }
 
-func (z *senderZns) SendTemplateMessage(_ context.Context, _ secret.Secret, phone, tpl string, data map[string]string, tracking string) (string, zalooa.Outcome) {
+func (z *senderZns) SendTemplateMessageReport(_ context.Context, _ secret.Secret, phone, tpl string, data map[string]string, tracking string) (string, zalooa.Outcome, string) {
 	z.sent = append(z.sent, phone+"|"+tpl+"|"+tracking+"|"+data["su_kien"])
 	if o, ok := z.outcomes[phone]; ok {
-		return "", o
+		return "", o, z.texts[phone]
 	}
-	return "zmsg-" + tracking, zalooa.OutcomeOK
+	return "zmsg-" + tracking, zalooa.OutcomeOK, ""
 }
 
 type senderSms struct {
 	outcomes map[string]esms.Outcome
+	texts    map[string]string // provider message by phone
 	messages []esms.Message
 }
 
-func (s *senderSms) SendCSKH(_ context.Context, _ esms.Credentials, m esms.Message) (string, esms.Outcome) {
+func (s *senderSms) SendCSKHReport(_ context.Context, _ esms.Credentials, m esms.Message) (string, esms.Outcome, string) {
 	s.messages = append(s.messages, m)
 	if o, ok := s.outcomes[m.Phone]; ok {
-		return "", o
+		return "", o, s.texts[m.Phone]
 	}
-	return "SMS-" + m.RequestID, esms.OutcomeOK
+	return "SMS-" + m.RequestID, esms.OutcomeOK, ""
 }
 
 type senderRegistry struct{ inactive bool }
@@ -195,10 +202,11 @@ type senderRig struct {
 	zns      *senderZns
 	sms      *senderSms
 	registry senderRegistry
+	env      *crypto.Envelope
 	logs     *bytes.Buffer
 }
 
-func newSenderRig(channel string) *senderRig {
+func newSenderRig(t *testing.T, channel string) *senderRig {
 	c := domain.NoticeCampaign{ID: senderCampaign, Channel: channel, Status: domain.NoticeCampaignSending, CreatedBy: noticeActor,
 		RecipientCount: 3}
 	if channel == domain.NoticeChannelZNS {
@@ -220,6 +228,7 @@ func newSenderRig(channel string) *senderRig {
 		accounts: &senderAccounts{},
 		zns:      &senderZns{},
 		sms:      &senderSms{},
+		env:      testEnvelope(t),
 		logs:     &bytes.Buffer{},
 	}
 }
@@ -227,7 +236,7 @@ func newSenderRig(channel string) *senderRig {
 func (r *senderRig) tick(t *testing.T) {
 	t.Helper()
 	s, err := NewNoticeSender(NoticeSenderDeps{DB: store.New(sql.OpenDB(r.f)), Repo: r.repo, Locks: r.locks, Registry: r.registry,
-		Phones: r.phones, OAs: r.oas, Accounts: r.accounts, Zns: r.zns, Sms: r.sms,
+		Phones: r.phones, OAs: r.oas, Accounts: r.accounts, Zns: r.zns, Sms: r.sms, Opener: r.env,
 		Log: slog.New(slog.NewTextHandler(r.logs, nil))})
 	if err != nil {
 		t.Fatal(err)
@@ -254,7 +263,7 @@ func (r *senderRig) assertNoPhoneEscaped(t *testing.T) {
 }
 
 func TestNoticeSenderSmsBatch(t *testing.T) {
-	r := newSenderRig(domain.NoticeChannelSMS)
+	r := newSenderRig(t, domain.NoticeChannelSMS)
 	r.sms.outcomes = map[string]esms.Outcome{senderPhone2: esms.OutcomeUnavailable}
 	r.tick(t)
 
@@ -291,7 +300,7 @@ func TestNoticeSenderSmsBatch(t *testing.T) {
 }
 
 func TestNoticeSenderLastAttemptEndsFailed(t *testing.T) {
-	r := newSenderRig(domain.NoticeChannelSMS)
+	r := newSenderRig(t, domain.NoticeChannelSMS)
 	for i := range r.repo.due {
 		r.repo.due[i].Attempts = domain.MaxNoticeSendAttempts
 	}
@@ -304,7 +313,7 @@ func TestNoticeSenderLastAttemptEndsFailed(t *testing.T) {
 }
 
 func TestNoticeSenderIdentityDownKeepsRowsOwed(t *testing.T) {
-	r := newSenderRig(domain.NoticeChannelSMS)
+	r := newSenderRig(t, domain.NoticeChannelSMS)
 	r.phones.err = identityclient.ErrIdentityUnavailable
 	r.tick(t)
 	if len(r.sms.messages) != 0 {
@@ -318,7 +327,7 @@ func TestNoticeSenderIdentityDownKeepsRowsOwed(t *testing.T) {
 }
 
 func TestNoticeSenderZnsOANeedsReauthRevealsNothing(t *testing.T) {
-	r := newSenderRig(domain.NoticeChannelZNS)
+	r := newSenderRig(t, domain.NoticeChannelZNS)
 	r.oas.tokenErr = ErrZaloOANeedsReauthorization
 	r.tick(t)
 	if len(r.phones.calls) != 0 {
@@ -332,7 +341,7 @@ func TestNoticeSenderZnsOANeedsReauthRevealsNothing(t *testing.T) {
 }
 
 func TestNoticeSenderZnsClasses(t *testing.T) {
-	r := newSenderRig(domain.NoticeChannelZNS)
+	r := newSenderRig(t, domain.NoticeChannelZNS)
 	r.zns.outcomes = map[string]zalooa.Outcome{senderPhone2: zalooa.OutcomeRecipientRejected}
 	r.tick(t)
 	if len(r.zns.sent) != 2 || r.zns.sent[0] != senderPhone1+"|1001|R1|Hop dan" {
@@ -346,7 +355,7 @@ func TestNoticeSenderZnsClasses(t *testing.T) {
 }
 
 func TestNoticeSenderRetiredAccountFailsTheBatch(t *testing.T) {
-	r := newSenderRig(domain.NoticeChannelSMS)
+	r := newSenderRig(t, domain.NoticeChannelSMS)
 	r.accounts.err = ErrSmsAccountNotFound
 	r.tick(t)
 	if len(r.phones.calls) != 0 || len(r.repo.calls) != 3 || !strings.HasSuffix(r.repo.calls[0], domain.NoticeFailSourceRetired) {
@@ -355,13 +364,13 @@ func TestNoticeSenderRetiredAccountFailsTheBatch(t *testing.T) {
 }
 
 func TestNoticeSenderLeavesMergedCommuneAndOtherReplicaAlone(t *testing.T) {
-	r := newSenderRig(domain.NoticeChannelSMS)
+	r := newSenderRig(t, domain.NoticeChannelSMS)
 	r.registry.inactive = true
 	r.tick(t)
 	if r.repo.claimed != 0 {
 		t.Fatal("claimed rows of a merged commune")
 	}
-	r = newSenderRig(domain.NoticeChannelSMS)
+	r = newSenderRig(t, domain.NoticeChannelSMS)
 	r.locks.locked = true
 	r.tick(t)
 	if r.repo.claimed != 0 {

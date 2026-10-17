@@ -614,11 +614,12 @@ func main() {
 	// NOTICE CAMPAIGNS (ADR 0099 #4–#8, block D-5) — five notice.send routes on the SAME staff mux. The
 	// sources are the two use cases above (the commune's OAs, its eSMS accounts); identity answers who an
 	// audience reaches (counts for the preview, refs + MASKED numbers for the send) over the client the edge
-	// already holds — never a full number at this stage.
+	// already holds — never a full number at this stage. Typed / imported numbers (ADR 0099 S6) are sealed by
+	// the COMMUNE envelope (nil without SECRET_ENCRYPTION_KEYS: such a send answers 503 by name).
 	noticeStore := commsstore.NewNoticeCampaignStore(kho)
 	svchttp.RegisterNoticeCampaigns(mux, svchttp.NoticeCampaignDeps{
 		Checker:   staffauth.Checker{},
-		Campaigns: commsapp.NewNoticeCampaigns(kho, noticeStore, dinhDanh, communeZaloOAs, smsAccounts, esmsClient),
+		Campaigns: commsapp.NewNoticeCampaigns(kho, noticeStore, dinhDanh, communeZaloOAs, smsAccounts, esmsClient, envelope),
 		Names:     dinhDanh,
 		Log:       log,
 	})
@@ -628,7 +629,7 @@ func main() {
 	// the provider calls.
 	noticeSender, err := commsapp.NewNoticeSender(commsapp.NoticeSenderDeps{
 		DB: kho, Repo: noticeStore, Locks: crosstenant.NewNoticeSend(db), Registry: nenTang, Phones: dinhDanh,
-		OAs: communeZaloOAs, Accounts: smsAccounts, Zns: zaloOAClient, Sms: esmsClient, Log: log,
+		OAs: communeZaloOAs, Accounts: smsAccounts, Zns: zaloOAClient, Sms: esmsClient, Opener: envelope, Log: log,
 	})
 	if err != nil {
 		log.Error("không dựng được việc nền gửi đợt tin", "service", "comms", "err", err)

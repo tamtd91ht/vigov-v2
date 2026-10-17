@@ -171,16 +171,19 @@ func TestValidMaskedPhone(t *testing.T) {
 
 func TestCampaignOutcomeAndBackoff(t *testing.T) {
 	cases := []struct {
-		total, pending, sent int
-		want                 string
+		total, pending, sent, invalid int
+		want                          string
 	}{
-		{10, 1, 9, NoticeCampaignSending},
-		{10, 0, 10, NoticeCampaignSent},
-		{10, 0, 0, NoticeCampaignFailed},
-		{10, 0, 4, NoticeCampaignPartlySent},
+		{10, 1, 9, 0, NoticeCampaignSending},
+		{10, 0, 10, 0, NoticeCampaignSent},
+		{10, 0, 0, 0, NoticeCampaignFailed},
+		{10, 0, 4, 0, NoticeCampaignPartlySent},
+		// Every valid row sent, but some typed numbers could not be read: not "all sent" (S5).
+		{10, 0, 10, 2, NoticeCampaignPartlySent},
+		{10, 0, 0, 2, NoticeCampaignFailed},
 	}
 	for _, c := range cases {
-		if got := NoticeCampaignOutcome(c.total, c.pending, c.sent); got != c.want {
+		if got := NoticeCampaignOutcome(c.total, c.pending, c.sent, c.invalid); got != c.want {
 			t.Errorf("%+v → %s", c, got)
 		}
 	}

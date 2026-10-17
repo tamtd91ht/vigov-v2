@@ -6,8 +6,9 @@ package store
 // EVERY STATEMENT IS ONE COMMUNE'S: $1 is the commune, from the context or the transaction (rule 1,
 // invariants 4 and 5). Joined tables are constrained to $1 in their ON clause (core/store.QueryJoin).
 //
-// THE FULL PHONE NUMBER IS NEVER A COLUMN HERE. notice_recipient holds the directory ref and the MASKED
-// number (0032's CHECK refuses anything else); nothing in this file ever binds a full number.
+// THE FULL PHONE NUMBER IS NEVER BOUND IN CLEAR HERE. notice_recipient holds the directory ref and the
+// MASKED number (0032's CHECK refuses anything else); a typed / imported row's number and message arrive
+// already SEALED by internal/app (0033, ADR 0099 S6) and every final outcome UPDATE empties them.
 //
 // NO audit.Write HERE: internal/app opens the transaction and writes the entry inside it. NO DELETE: 0032's
 // guards refuse it, and nothing here tries.
@@ -35,7 +36,7 @@ var ErrNoticeRowChanged = errors.New("notice_recipient: row no longer owed")
 // per (campaign, recipient kind) and never a split one.
 const MaxNoticeClaim = 500
 
-// maxRecipientsPerInsert bounds one multi-row INSERT: 3 + 1 000 × 4 bind parameters stays far under
+// maxRecipientsPerInsert bounds one multi-row INSERT: 3 + 1 000 × 7 bind parameters stays far under
 // PostgreSQL's 65 535, and one statement's size stays reasonable.
 const maxRecipientsPerInsert = 1000
 
@@ -59,10 +60,10 @@ type NoticeCampaignView struct {
 // noticeCampaignColumns IS READ BY POSITION in scanNoticeCampaign. Money is read as text: exact decimals,
 // never floats. Prefixed `c.` because the list joins.
 const noticeCampaignColumns = `c.id, c.title, c.channel, COALESCE(c.oa_row_id, ''), COALESCE(c.sms_account_id, ''),
-	c.template_ref, c.template_name, COALESCE(c.template_content, ''), c.params::text, c.audience_kind,
+	COALESCE(c.template_ref, ''), c.template_name, COALESCE(c.template_content, ''), c.params::text, c.audience_kind,
 	c.audience_ids::text, c.recipient_count, c.skipped_count, COALESCE(c.unit_price::text, ''),
 	COALESCE(c.estimated_cost::text, ''), c.status, c.sent_count, c.failed_count, c.created_at, c.created_by,
-	c.finished_at`
+	c.finished_at, COALESCE(c.sms_content_mode, ''), c.invalid_count, COALESCE(c.recipient_mapping::text, '')`
 
 func scanNoticeCampaign(scan func(...any) error, extra ...any) (domain.NoticeCampaign, error) {
 	var (
@@ -70,10 +71,12 @@ func scanNoticeCampaign(scan func(...any) error, extra ...any) (domain.NoticeCam
 		params   string
 		audience string
 		finished sql.NullTime
+		mapping  string
 	)
 	dest := append([]any{&c.ID, &c.Title, &c.Channel, &c.OARowID, &c.SmsAccountID, &c.TemplateRef, &c.TemplateName,
 		&c.TemplateContent, &params, &c.Audience.Kind, &audience, &c.RecipientCount, &c.SkippedCount, &c.UnitPrice,
-		&c.EstimatedCost, &c.Status, &c.SentCount, &c.FailedCount, &c.CreatedAt, &c.CreatedBy, &finished}, extra...)
+		&c.EstimatedCost, &c.Status, &c.SentCount, &c.FailedCount, &c.CreatedAt, &c.CreatedBy, &finished,
+		&c.SmsContentMode, &c.InvalidCount, &mapping}, extra...)
 	if err := scan(dest...); err != nil {
 		return domain.NoticeCampaign{}, err
 	}
@@ -83,14 +86,22 @@ func scanNoticeCampaign(scan func(...any) error, extra ...any) (domain.NoticeCam
 	if err := json.Unmarshal([]byte(audience), &c.Audience.IDs); err != nil {
 		return domain.NoticeCampaign{}, fmt.Errorf("notice_campaign: decode audience_ids: %w", err)
 	}
+	if mapping != "" {
+		c.RecipientMapping = &domain.NoticeRecipientMapping{}
+		if err := json.Unmarshal([]byte(mapping), c.RecipientMapping); err != nil {
+			return domain.NoticeCampaign{}, fmt.Errorf("notice_campaign: decode recipient_mapping: %w", err)
+		}
+	}
 	c.FinishedAt = finished.Time
 	return c, nil
 }
 
 const insertNoticeCampaign = `INSERT INTO notice_campaign (tenant_id, id, title, channel, oa_row_id, sms_account_id,
 		template_ref, template_name, template_content, params, audience_kind, audience_ids, recipient_count,
-		skipped_count, unit_price, estimated_cost, status, created_at, created_by)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::numeric, $16::numeric, 'dang-gui', $17, $18)`
+		skipped_count, unit_price, estimated_cost, status, created_at, created_by, sms_content_mode, invalid_count,
+		recipient_mapping)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::numeric, $16::numeric, 'dang-gui', $17, $18,
+		$19, $20, $21::jsonb)`
 
 // InsertCampaign writes the campaign row ('dang-gui') in the transaction's commune. The recipient rows go
 // in with InsertRecipients in the SAME transaction (ADR 0099 #8).
@@ -111,46 +122,61 @@ func (s *NoticeCampaignStore) InsertCampaign(ctx context.Context, tx *store.Scop
 	if err != nil {
 		return fmt.Errorf("notice_campaign: encode audience_ids: %w", err)
 	}
+	var mapping any // NULL unless tep-nhap (0033 notice_campaign_recipient_mapping_shape)
+	if c.RecipientMapping != nil {
+		b, err := json.Marshal(c.RecipientMapping)
+		if err != nil {
+			return fmt.Errorf("notice_campaign: encode recipient_mapping: %w", err)
+		}
+		mapping = string(b)
+	}
 	if _, err := tx.Exec(ctx, insertNoticeCampaign, string(tx.TenantID()), c.ID, c.Title, c.Channel, nullText(c.OARowID),
-		nullText(c.SmsAccountID), c.TemplateRef, c.TemplateName, nullText(c.TemplateContent), params, c.Audience.Kind,
+		nullText(c.SmsAccountID), nullText(c.TemplateRef), c.TemplateName, nullText(c.TemplateContent), params, c.Audience.Kind,
 		audience, c.RecipientCount, c.SkippedCount, nullText(c.UnitPrice), nullText(c.EstimatedCost), c.CreatedAt.UTC(),
-		c.CreatedBy); err != nil {
+		c.CreatedBy, nullText(c.SmsContentMode), c.InvalidCount, mapping); err != nil {
 		return fmt.Errorf("notice_campaign: insert: %w", err)
 	}
 	return nil
 }
 
 // insertNoticeRecipientsHead is the multi-row INSERT's fixed half. $1 is the commune, $2 the campaign, $3
-// the time — shared by every row; each row adds its four parameters (noticeRecipientValues).
+// the time — shared by every row; each row adds its seven parameters (noticeRecipientValues).
 const insertNoticeRecipientsHead = `INSERT INTO notice_recipient (tenant_id, id, campaign_id, recipient_ref,
-		recipient_kind, phone_masked, created_at, updated_at) VALUES `
+		recipient_kind, phone_masked, status, phone_sealed, payload_sealed, created_at, updated_at) VALUES `
 
-// noticeRecipientValues renders the VALUES list of n rows: ($1, $k, $2, $k+1, $k+2, $k+3, $3, $3), …
+// noticeRecipientValues renders the VALUES list of n rows: ($1, $k, $2, $k+1, …, $k+6, $3, $3), …
 func noticeRecipientValues(n int) string {
 	var b strings.Builder
 	for i := 0; i < n; i++ {
 		if i > 0 {
 			b.WriteString(", ")
 		}
-		k := 4 + i*4
-		b.WriteString("($1, $" + strconv.Itoa(k) + ", $2, $" + strconv.Itoa(k+1) + ", $" + strconv.Itoa(k+2) +
-			", $" + strconv.Itoa(k+3) + ", $3, $3)")
+		k := 4 + i*7
+		b.WriteString("($1, $" + strconv.Itoa(k) + ", $2")
+		for j := 1; j < 7; j++ {
+			b.WriteString(", $" + strconv.Itoa(k+j))
+		}
+		b.WriteString(", $3, $3)")
 	}
 	return b.String()
 }
 
-// InsertRecipients writes every recipient row of one campaign ('cho-gui', no lease) in the transaction's
-// commune, ≤ 1 000 rows per statement. Only the ref and the MASKED number — 0032's CHECK refuses a full
-// one.
+// InsertRecipients writes every recipient row of one campaign in the transaction's commune, ≤ 1 000 rows
+// per statement: 'cho-gui' (no lease) unless the row says 'khong-hop-le' (0033). The ref, the MASKED number
+// and — typed rows only — the SEALED number and message; 0032 / 0033's CHECKs refuse anything else.
 func (s *NoticeCampaignStore) InsertRecipients(ctx context.Context, tx *store.ScopedTx, campaignID string,
 	rs []domain.NoticeRecipient, at time.Time) error {
 
 	for start := 0; start < len(rs); start += maxRecipientsPerInsert {
 		chunk := rs[start:min(start+maxRecipientsPerInsert, len(rs))]
-		args := make([]any, 0, 3+len(chunk)*4)
+		args := make([]any, 0, 3+len(chunk)*7)
 		args = append(args, string(tx.TenantID()), campaignID, at.UTC())
 		for _, r := range chunk {
-			args = append(args, r.ID, r.Ref, r.Kind, r.PhoneMasked)
+			status := r.Status
+			if status == "" {
+				status = domain.NoticeRecipientPending
+			}
+			args = append(args, r.ID, r.Ref, r.Kind, r.PhoneMasked, status, nullBytes(r.PhoneSealed), nullBytes(r.PayloadSealed))
 		}
 		if _, err := tx.Exec(ctx, insertNoticeRecipientsHead+noticeRecipientValues(len(chunk)), args...); err != nil {
 			return fmt.Errorf("notice_recipient: insert: %w", err)
@@ -267,7 +293,7 @@ const claimDueNoticeRecipients = `WITH due AS (
 	UPDATE notice_recipient r SET attempts = r.attempts + 1, lease_until = $4, updated_at = $2
 	FROM due
 	WHERE r.tenant_id = $1 AND r.id = due.id
-	RETURNING r.id, r.campaign_id, r.recipient_ref, r.recipient_kind, r.attempts`
+	RETURNING r.id, r.campaign_id, r.recipient_ref, r.recipient_kind, r.attempts, r.phone_sealed, r.payload_sealed`
 
 // ClaimDue locks up to limit owed rows of the transaction's commune, counts the attempt and leases each
 // until leaseUntil. A pass that dies leaves the lease to run out and the rows are claimed again — at least
@@ -289,7 +315,7 @@ func (s *NoticeCampaignStore) ClaimDue(ctx context.Context, tx *store.ScopedTx, 
 	var out []domain.DueNoticeRecipient
 	for rows.Next() {
 		var d domain.DueNoticeRecipient
-		if err := rows.Scan(&d.ID, &d.CampaignID, &d.Ref, &d.Kind, &d.Attempts); err != nil {
+		if err := rows.Scan(&d.ID, &d.CampaignID, &d.Ref, &d.Kind, &d.Attempts, &d.PhoneSealed, &d.PayloadSealed); err != nil {
 			return nil, fmt.Errorf("notice_recipient: claim scan: %w", err)
 		}
 		out = append(out, d)
@@ -300,15 +326,19 @@ func (s *NoticeCampaignStore) ClaimDue(ctx context.Context, tx *store.ScopedTx, 
 	return out, nil
 }
 
+// EVERY FINAL OUTCOME EMPTIES THE SEALED PAIR IN THE SAME UPDATE (0033 notice_recipient_sealed_exactly_
+// while_owed; ADR 0099 S6) — a no-op on a directory row, which never had them. A retry keeps them.
 const (
 	markNoticeSent = `UPDATE notice_recipient SET status = 'da-gui', provider_message_id = $3, sent_at = $4,
-		lease_until = NULL, failure_class = NULL, updated_at = $4
+		lease_until = NULL, failure_class = NULL, phone_sealed = NULL, payload_sealed = NULL, updated_at = $4
 		WHERE tenant_id = $1 AND id = $2 AND status = 'cho-gui'`
 	retryNotice = `UPDATE notice_recipient SET lease_until = $3, updated_at = $4
 		WHERE tenant_id = $1 AND id = $2 AND status = 'cho-gui'`
-	failNotice = `UPDATE notice_recipient SET status = 'that-bai', failure_class = $3, lease_until = NULL, updated_at = $4
+	failNotice = `UPDATE notice_recipient SET status = 'that-bai', failure_class = $3, error_message = $5,
+		lease_until = NULL, phone_sealed = NULL, payload_sealed = NULL, updated_at = $4
 		WHERE tenant_id = $1 AND id = $2 AND status = 'cho-gui'`
-	skipNotice = `UPDATE notice_recipient SET status = 'bo-qua', failure_class = $3, lease_until = NULL, updated_at = $4
+	skipNotice = `UPDATE notice_recipient SET status = 'bo-qua', failure_class = $3, lease_until = NULL,
+		phone_sealed = NULL, payload_sealed = NULL, updated_at = $4
 		WHERE tenant_id = $1 AND id = $2 AND status = 'cho-gui'`
 )
 
@@ -324,10 +354,11 @@ func (s *NoticeCampaignStore) Retry(ctx context.Context, tx *store.ScopedTx, id 
 		string(tx.TenantID()), id, next.UTC(), at.UTC())
 }
 
-// Fail ends an owed row as 'that-bai' with its class (domain.NoticeFail*).
-func (s *NoticeCampaignStore) Fail(ctx context.Context, tx *store.ScopedTx, id, class string, at time.Time) error {
+// Fail ends an owed row as 'that-bai' with its class (domain.NoticeFail*) and the provider's message
+// ("" = none; the caller passes it through domain.ScrubProviderMessage — 0033 refuses a 7-digit run).
+func (s *NoticeCampaignStore) Fail(ctx context.Context, tx *store.ScopedTx, id, class, errorMessage string, at time.Time) error {
 	return execOne(ctx, tx, failNotice, "notice_recipient: fail", ErrNoticeRowChanged,
-		string(tx.TenantID()), id, class, at.UTC())
+		string(tx.TenantID()), id, class, at.UTC(), nullText(errorMessage))
 }
 
 // Skip ends an owed row as 'bo-qua' with its class — deliberately not sent.
@@ -343,7 +374,7 @@ func (s *NoticeCampaignStore) Skip(ctx context.Context, tx *store.ScopedTx, id, 
 // writing replica's clock says.
 const settleNoticeCampaign = `UPDATE notice_campaign c SET sent_count = s.sent, failed_count = s.failed,
 		status = CASE WHEN s.pending > 0 THEN 'dang-gui'
-		              WHEN s.sent >= c.recipient_count THEN 'da-gui'
+		              WHEN s.sent >= c.recipient_count AND c.invalid_count = 0 THEN 'da-gui'
 		              WHEN s.sent = 0 THEN 'that-bai'
 		              ELSE 'gui-mot-phan' END,
 		finished_at = CASE WHEN s.pending > 0 THEN NULL ELSE GREATEST($3::timestamptz, c.created_at) END
@@ -367,6 +398,49 @@ func (s *NoticeCampaignStore) Settle(ctx context.Context, tx *store.ScopedTx, ca
 		return "", fmt.Errorf("notice_campaign: settle: %w", err)
 	}
 	return status, nil
+}
+
+// noticeRecipientViewColumns IS READ BY POSITION in ListRecipients. Never the sealed pair, never the ref.
+const noticeRecipientViewColumns = `id, phone_masked, status, COALESCE(failure_class, ''), COALESCE(error_message, ''),
+	sent_at, created_at`
+
+// ListRecipients reads one page of one campaign's rows in this commune, by row id, strictly after afterID
+// ("" = first page); limit+1 rows are asked so the caller knows whether a next page exists. 0033
+// notice_recipient_by_campaign serves it.
+func (s *NoticeCampaignStore) ListRecipients(ctx context.Context, campaignID, afterID string, limit int) (
+	[]domain.NoticeRecipientView, error) {
+
+	// Scoped.Query adds `WHERE tenant_id = $1` and binds the context's commune.
+	rows, err := s.db.For(ctx).Query(ctx, noticeRecipientViewColumns, "notice_recipient",
+		"AND campaign_id = $2 AND id > $3 ORDER BY id LIMIT $4", campaignID, afterID, limit+1)
+	if err != nil {
+		return nil, fmt.Errorf("notice_recipient: list: %w", err)
+	}
+	defer rows.Close()
+	out := []domain.NoticeRecipientView{}
+	for rows.Next() {
+		var (
+			v    domain.NoticeRecipientView
+			sent sql.NullTime
+		)
+		if err := rows.Scan(&v.ID, &v.PhoneMasked, &v.Status, &v.FailureClass, &v.ErrorMessage, &sent, &v.CreatedAt); err != nil {
+			return nil, fmt.Errorf("notice_recipient: list scan: %w", err)
+		}
+		v.SentAt = sent.Time
+		out = append(out, v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("notice_recipient: list: %w", err)
+	}
+	return out, nil
+}
+
+// nullBytes — an empty byte slice is SQL NULL (the sealed pair of a directory or invalid row).
+func nullBytes(b []byte) any {
+	if len(b) == 0 {
+		return nil
+	}
+	return b
 }
 
 // ---- sms_template, for the campaign ----------------------------------------------------------------------

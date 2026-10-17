@@ -5631,6 +5631,27 @@
     {
       "service": "comms",
       "method": "GET",
+      "path": "/api/v1/notice-campaigns/{id}/recipients",
+      "operation_id": "comms_get_notice_campaigns_by_id_recipients",
+      "task_id": "38da2d4cd9c0",
+      "summary": "Lịch sử từng số của một đợt tin — số đã che, kết quả (cho-gui · da-gui · that-bai · bo-qua · khong-hop-le), lớp lỗi, thông báo lỗi nhà cung cấp (đã che dãy số), lúc gửi; 100 dòng mỗi trang (con trỏ `cursor`); mã đợt của xã khác trả 404 như mã không có",
+      "screen": "ADR 0099 §Sửa đổi S5 — Gửi tin ZNS / SMS, lịch sử từng số của đợt",
+      "permission_kind": "permission",
+      "permission": "notice.send",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "comms.noticeRecipientListOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/notice_campaigns.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
       "path": "/api/v1/notice-templates",
       "operation_id": "comms_get_notice_templates",
       "task_id": "987064bf2c79",
