@@ -31,8 +31,8 @@ const (
 	AuthorizationTTL = 10 * time.Minute
 )
 
-// CommuneZaloOA is a zalo_commune_oa row as metadata — the live one for the screen, or a retired one as
-// history. Zero times mean NULL.
+// CommuneZaloOA is a zalo_commune_oa row as metadata — one of the commune's live OAs (several at once,
+// ADR 0099 #1), or a retired one as history. Zero times mean NULL.
 type CommuneZaloOA struct {
 	ID     string // ULID, internal
 	OAID   string // Zalo's oa_id — from the callback and from getoa, never typed by a person
@@ -345,10 +345,11 @@ const (
 	ActionDisconnectZaloOA              = "ngat_oa_zalo"
 )
 
-// CommuneZaloOAReplacedReason is retire_reason when the commune connects ANOTHER OA (or the same OA
-// again) over its live one — a fixed sentence (0031 CHECK ≤ 200). "Ngắt OA" carries the staff member's
-// own reason.
-const CommuneZaloOAReplacedReason = "Xã nối OA khác"
+// CommuneZaloOAReauthorizedReason is retire_reason when the commune authorizes an OA that is ALREADY live
+// in it: the old row is retired and a new one inserted (ADR 0098 #11, kept for the same OA by ADR 0099
+// #1). Connecting a DIFFERENT OA retires nothing any more — a commune holds several (ADR 0099 #1). A fixed
+// sentence (0031 CHECK ≤ 200). "Ngắt OA" carries the staff member's own reason.
+const CommuneZaloOAReauthorizedReason = "Xã uỷ quyền lại OA này"
 
 // CommuneZaloOARevokeNotice is said in the reply of every act that retires an OA row (0031 "OWED BY GO",
 // ADR 0098 #11): retiring here revokes nothing at Zalo — the app keeps the OA's grant until the OA admin

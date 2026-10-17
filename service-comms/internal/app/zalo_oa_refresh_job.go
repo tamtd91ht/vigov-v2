@@ -1,9 +1,11 @@
 package app
 
 // THE ZALO OA TOKEN REFRESH JOB (ADR 0098 #6; migration 0031). Zalo's access token lives 25 hours and its
-// refresh token is single-use; nothing may ever send with an expired token. So a job refreshes every
-// commune's OA access token while less than domain.AccessRefreshLead (2 hours) remains, and flags the row
-// "needs re-authorization" when Zalo refuses the refresh token or it aged past 3 months.
+// refresh token is single-use; nothing may ever send with an expired token. So a job refreshes the access
+// token of EVERY live OA of every commune — several per commune since ADR 0099 #1, each with its own token
+// pair — while less than domain.AccessRefreshLead (2 hours) remains, and flags the row "needs
+// re-authorization" when Zalo refuses the refresh token or it aged past 3 months. The cross-commune list
+// names the communes; inside one commune, CommuneZaloOAs.RefreshIfDue walks that commune's due OAs.
 //
 // THE SHAPE IS THE DISPATCHER'S (zalo_dispatcher.go): an in-process ticker, ONE advisory lock per tick so
 // one replica refreshes (two replicas presenting the same single-use refresh token would void each

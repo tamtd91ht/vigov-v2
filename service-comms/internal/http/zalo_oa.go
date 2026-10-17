@@ -1,21 +1,26 @@
 package http
 
-// A COMMUNE'S ZALO OA (ADR 0098 #7, block A; migration 0031) — Cấu hình → Kênh Zalo, "OA Zalo của xã"
-// and "Mẫu tin ZBS":
+// A COMMUNE'S ZALO OAs (ADR 0098 #7, block A; migration 0031; SEVERAL per commune since ADR 0099 #1, #10
+// and migration 0032) — Cấu hình → Kênh Zalo, "OA Zalo của xã" and "Mẫu tin ZBS":
 //
-//	GET    /api/v1/zalo-oas/current                          admin.zalo  the live OA, or has_oa false
-//	DELETE /api/v1/zalo-oas/current                          admin.zalo  "Ngắt OA" — retire, with a reason
-//	POST   /api/v1/zalo-oas/current/authorization-links      admin.zalo  "Kết nối OA" — a one-time Zalo link
-//	POST   /api/v1/zalo-oas/current/check                    admin.zalo  "Kiểm tra" — getoa, result recorded
-//	GET    /api/v1/zalo-oas/current/templates                admin.zalo  the templates loaded from the OA
-//	POST   /api/v1/zalo-oas/current/templates/sync           admin.zalo  "Nạp mẫu từ OA"
-//	PATCH  /api/v1/zalo-oas/current/templates/{id}           admin.zalo  attach / detach a milestone
+//	GET    /api/v1/zalo-oas                          admin.zalo  every live OA of the commune
+//	POST   /api/v1/zalo-oas/authorization-links      admin.zalo  "Kết nối OA" — a one-time Zalo link
+//	DELETE /api/v1/zalo-oas/{id}                     admin.zalo  "Ngắt OA" — retire ONE OA, with a reason
+//	POST   /api/v1/zalo-oas/{id}/check               admin.zalo  "Kiểm tra" — getoa, result recorded
+//	GET    /api/v1/zalo-oas/{id}/templates           admin.zalo  the templates loaded from that OA
+//	POST   /api/v1/zalo-oas/{id}/templates/sync      admin.zalo  "Nạp mẫu từ OA"
+//	PATCH  /api/v1/zalo-oa-templates/{id}            admin.zalo  attach / detach a milestone
+//
+// The names are the owner's (ADR 0099 #10, owns_facts; ubiquitous-language.md "OA Zalo của xã").
+// `zalo-oas/current/*` — one OA per commune — is GONE: a commune holds several OAs at once, so there is no
+// "current" one, and every act names its OA by row id.
 //
 // `admin.zalo` — "Cấu hình kênh Zalo" — the Kênh Zalo tab's key (service-identity migration 0032), the
 // same key as zalo-bots/current and zalo-groups. The commune comes from Host; the actor from the session.
 //
-// THE CONTRACT IS web-admin's (web-admin/src/lib/api/zalo-oa.ts, the UNTIL REGEN block, TASK-A6): field
-// names, error codes and statuses match it one for one.
+// AN {id} THAT IS NOT THIS COMMUNE'S IS 404 not_found — the same sentence for "no such OA / template",
+// "retired" and "another commune's": the scoped read cannot see another commune's row, and the reply must
+// not tell them apart either (rule 1; rule 4 forbidden #2 in spirit).
 //
 // NOTHING SECRET LEAVES HERE. No reply type has a field for a token or a code verifier (ADR 0098 #5). The
 // one sensitive value is the authorization link's `state` — inside the URL the OA admin must open — sent
@@ -45,12 +50,12 @@ import (
 // CommuneZaloOAAdmin is the use case. *app.CommuneZaloOAs satisfies it. Every write opens its own
 // transaction and writes its audit entry inside it (rule 6, invariant 3).
 type CommuneZaloOAAdmin interface {
-	Current(ctx context.Context) (app.CommuneZaloOAView, error)
+	List(ctx context.Context) (app.CommuneZaloOAList, error)
 	StartAuthorization(ctx context.Context, actor audit.Actor) (app.AuthorizationLink, error)
-	Check(ctx context.Context, actor audit.Actor) (app.ZaloOACheckOutput, error)
-	Disconnect(ctx context.Context, reason string, actor audit.Actor) (app.DisconnectZaloOAOutput, error)
-	ListTemplates(ctx context.Context) ([]domain.ZaloOATemplate, error)
-	SyncTemplates(ctx context.Context, actor audit.Actor) (app.TemplateSyncResult, error)
+	Check(ctx context.Context, oaRowID string, actor audit.Actor) (app.ZaloOACheckOutput, error)
+	Disconnect(ctx context.Context, oaRowID, reason string, actor audit.Actor) (app.DisconnectZaloOAOutput, error)
+	ListTemplates(ctx context.Context, oaRowID string) ([]domain.ZaloOATemplate, error)
+	SyncTemplates(ctx context.Context, oaRowID string, actor audit.Actor) (app.TemplateSyncResult, error)
 	SetMilestone(ctx context.Context, templateRowID string, milestone *string, actor audit.Actor) (domain.ZaloOATemplate, error)
 }
 
@@ -81,9 +86,10 @@ type zaloOALastCheckOut struct {
 	Result string    `json:"result"`
 }
 
-// communeZaloOAOut is the live OA as the screen sees it: names, ids, instants, classes. No token field
-// exists on this shape, by contract.
+// communeZaloOAOut is one live OA as the screen sees it: names, ids, instants, classes, and its template
+// counts. `id` is the row id every other route names. No token field exists on this shape, by contract.
 type communeZaloOAOut struct {
+	ID                   string                    `json:"id"`
 	OAID                 string                    `json:"oa_id"`
 	OAName               string                    `json:"oa_name"`
 	AuthorizedAt         time.Time                 `json:"authorized_at"`
@@ -93,16 +99,15 @@ type communeZaloOAOut struct {
 	TokenRefreshedAt     time.Time                 `json:"token_refreshed_at" apidoc:"bi-mat-co-chu-y:KHÔNG phải bí mật — chỉ là THỜI ĐIỂM token được ghi lần cuối (ADR 0098 §Hai cột thời điểm), không mang giá trị token nào; tên do hợp đồng web-admin TASK-A6 đặt"`
 	NeedsReauthorization *zaloOAReauthorizationOut `json:"needs_reauthorization"`
 	LastCheck            *zaloOALastCheckOut       `json:"last_check"`
+	TemplateCount        int                       `json:"template_count"`
+	AttachedCount        int                       `json:"attached_count"`
 }
 
-// communeZaloOACurrentOut is GET zalo-oas/current. `configured`: the platform declared its shared Zalo
-// App (ZALO_OA_* set) — "Kết nối OA" is usable.
-type communeZaloOACurrentOut struct {
-	Configured    bool              `json:"configured"`
-	HasOA         bool              `json:"has_oa"`
-	OA            *communeZaloOAOut `json:"oa"`
-	TemplateCount int               `json:"template_count"`
-	AttachedCount int               `json:"attached_count"`
+// communeZaloOAListOut is GET zalo-oas: every live OA, oldest first; `items` is [] when none.
+// `configured`: the platform declared its shared Zalo App (ZALO_OA_* set) — "Kết nối OA" is usable.
+type communeZaloOAListOut struct {
+	Configured bool               `json:"configured"`
+	Items      []communeZaloOAOut `json:"items"`
 }
 
 // zaloOAAuthorizationLinkOut is POST authorization-links, 201.
@@ -123,8 +128,8 @@ type communeZaloOADisconnectIn struct {
 	Reason string `json:"reason"`
 }
 
-// communeZaloOADisconnectedOut is DELETE, 200. `disconnected` false: no live OA, nothing written, and
-// `revoke_notice` is "".
+// communeZaloOADisconnectedOut is DELETE, 200. `disconnected` is always true on a 200 — an id that is not
+// a live OA of the commune is 404 — and kept so the reply reads on its own.
 type communeZaloOADisconnectedOut struct {
 	Disconnected          bool   `json:"disconnected"`
 	DetachedTemplateCount int    `json:"detached_template_count"`
@@ -139,10 +144,11 @@ type zaloOATemplateParamOut struct {
 	MaxLength int    `json:"max_length"`
 }
 
-// zaloOATemplateOut is one template loaded from the OA. `milestone_set_by` is the attaching officer's
-// business code.
+// zaloOATemplateOut is one template loaded from an OA. `oa_row_id` is the OA it belongs to (the `id` of
+// GET zalo-oas). `milestone_set_by` is the attaching officer's business code.
 type zaloOATemplateOut struct {
 	ID                 string                   `json:"id"`
+	OARowID            string                   `json:"oa_row_id"`
 	TemplateID         string                   `json:"template_id"`
 	TemplateName       string                   `json:"template_name"`
 	ZaloStatus         string                   `json:"zalo_status"`
@@ -172,7 +178,7 @@ type zaloOASyncResultOut struct {
 	SyncedAt time.Time `json:"synced_at"`
 }
 
-// zaloOATemplatePatchIn is the body of PATCH templates/{id}: `milestone` is ALWAYS a key — null detaches.
+// zaloOATemplatePatchIn is the body of PATCH zalo-oa-templates/{id}: `milestone` is ALWAYS a key — null detaches.
 // An absent key is refused (400), never read as "detach".
 type zaloOATemplatePatchIn struct {
 	Milestone *string `json:"milestone"`
@@ -204,7 +210,7 @@ func RegisterZaloCommuneOA(mux *http.ServeMux, d ZaloCommuneOADeps) {
 	case d.Checker == nil:
 		panic("comms/http: thiếu authz.Checker — các tuyến OA Zalo của xã sẽ không kiểm được quyền")
 	case d.OAs == nil:
-		panic("comms/http: thiếu use case OA Zalo của xã — /api/v1/zalo-oas/current sẽ panic khi có người gọi")
+		panic("comms/http: thiếu use case OA Zalo của xã — /api/v1/zalo-oas sẽ panic khi có người gọi")
 	case d.Names == nil:
 		panic("comms/http: thiếu bộ tra tên cán bộ (identity) — authorized_by_name sẽ panic")
 	}
@@ -215,98 +221,108 @@ func RegisterZaloCommuneOA(mux *http.ServeMux, d ZaloCommuneOADeps) {
 
 	// NO idem.* DECLARATION: a GET. No audit entry: the configuration read in its own commune, no secret.
 	//
-	// @summary  OA Zalo của xã — nền tảng đã khai ứng dụng Zalo dùng chung chưa, xã đã nối OA chưa, tên và mã OA, nối lúc nào bởi ai, token hết hạn lúc nào, có cần uỷ quyền lại không, lần kiểm gần nhất, số mẫu đã nạp và đã gắn mốc; không bao giờ trả token
-	// @screen   ADR 0098 #7 — Cấu hình → tab Kênh Zalo, mục "OA Zalo của xã"
-	// @reply    200 communeZaloOACurrentOut
+	// @summary  Các OA Zalo của xã — nền tảng đã khai ứng dụng Zalo dùng chung chưa; mọi OA đang nối (nhiều OA cùng lúc): mã dòng, tên và mã OA, nối lúc nào bởi ai, token hết hạn lúc nào, có cần uỷ quyền lại không, lần kiểm gần nhất, số mẫu đã nạp và đã gắn mốc của từng OA; không bao giờ trả token
+	// @screen   ADR 0099 #1 #10 — Cấu hình → tab Kênh Zalo, mục "OA Zalo của xã"
+	// @reply    200 communeZaloOAListOut
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    500 httpx.Error
-	mux.Handle("GET /api/v1/zalo-oas/current",
+	mux.Handle("GET /api/v1/zalo-oas",
 		authz.RequirePermission(d.Checker, "admin.zalo")(
-			http.HandlerFunc(h.GetCurrent)))
-
-	// DELETE with a body: rule 7 — the retirement carries its reason. idem.KhongCan: a second DELETE finds
-	// no live OA, writes nothing, files nothing.
-	//
-	// @summary  Ngắt OA của xã — xoá mềm dòng OA (giữ token đã niêm làm lịch sử, cần lý do), gỡ mọi mốc đã gắn mẫu trong cùng giao dịch, có ghi vết; câu trả lời nhắc xã thu hồi quyền của ứng dụng trong OA Manager vì ngắt ở đây không thu hồi gì ở Zalo
-	// @screen   ADR 0098 #11 — Cấu hình → tab Kênh Zalo, "Ngắt OA"
-	// @request  communeZaloOADisconnectIn
-	// @reply    200 communeZaloOADisconnectedOut
-	// @reply    400 httpx.Error invalid_request
-	// @reply    401 httpx.Error
-	// @reply    403 httpx.Error
-	// @reply    500 httpx.Error
-	mux.Handle("DELETE /api/v1/zalo-oas/current",
-		authz.RequirePermission(d.Checker, "admin.zalo")(
-			idem.KhongCan("lần thứ hai không còn OA nào đang sống nên không ghi gì và không có vết")(
-				http.HandlerFunc(h.DeleteCurrent))))
+			http.HandlerFunc(h.GetList)))
 
 	// idem.KhongCan: every call is a NEW link with its own state; a repeat leaves two open links, each
-	// valid for its 10 minutes and each single-use — no state is ever handed out twice.
+	// valid for its 10 minutes and each single-use — no state is ever handed out twice. Connecting a
+	// second OA adds it beside the first (ADR 0099 #1); authorizing an OA already connected here renews it.
 	//
 	//	503 zalo_oa_not_configured      the platform has not declared its shared Zalo App (ZALO_OA_*)
 	//	503 encryption_not_configured   the platform cannot seal the code verifier
 	//
-	// @summary  Tạo link uỷ quyền OA — sinh state CSPRNG một lần (chỉ lưu băm) và cặp PKCE (code verifier niêm bằng khoá của xã), trả link Zalo để quản trị viên OA mở và bấm Cho phép; link sống 10 phút, có ghi vết; Cache-Control no-store
-	// @screen   ADR 0098 #4 #7 — Cấu hình → tab Kênh Zalo, "Kết nối OA" / "Uỷ quyền lại"
+	// @summary  Tạo link uỷ quyền OA — sinh state CSPRNG một lần (chỉ lưu băm) và cặp PKCE (code verifier niêm bằng khoá của xã), trả link Zalo để quản trị viên OA mở và bấm Cho phép; OA mới được thêm cạnh các OA đã nối, OA đã nối thì được uỷ quyền lại; link sống 10 phút, có ghi vết; Cache-Control no-store
+	// @screen   ADR 0098 #4 #7, ADR 0099 #1 — Cấu hình → tab Kênh Zalo, "Kết nối OA" / "Uỷ quyền lại"
 	// @reply    201 zaloOAAuthorizationLinkOut
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    503 httpx.Error zalo_oa_not_configured encryption_not_configured
 	// @reply    500 httpx.Error
-	mux.Handle("POST /api/v1/zalo-oas/current/authorization-links",
+	mux.Handle("POST /api/v1/zalo-oas/authorization-links",
 		authz.RequirePermission(d.Checker, "admin.zalo")(
 			idem.KhongCan("mỗi lần gọi là một link mới với state riêng; gửi lại chỉ để thêm một link mở cũng sống 10 phút và chỉ dùng được một lần, không state nào bị trao hai lần")(
 				http.HandlerFunc(h.PostAuthorizationLink))))
 
+	// DELETE with a body: rule 7 — the retirement carries its reason. idem.KhongCan: a second DELETE of
+	// the same id finds no live OA, writes nothing and answers 404.
+	//
+	//	404 not_found   the id is not a live OA of this commune (unknown, retired, or another commune's)
+	//
+	// @summary  Ngắt một OA của xã — xoá mềm dòng OA (giữ token đã niêm làm lịch sử, cần lý do), gỡ mọi mốc đã gắn mẫu của OA ấy trong cùng giao dịch, có ghi vết; các OA khác của xã giữ nguyên; câu trả lời nhắc xã thu hồi quyền của ứng dụng trong OA Manager vì ngắt ở đây không thu hồi gì ở Zalo
+	// @screen   ADR 0098 #11, ADR 0099 #1 — Cấu hình → tab Kênh Zalo, "Ngắt OA"
+	// @request  communeZaloOADisconnectIn
+	// @reply    200 communeZaloOADisconnectedOut
+	// @reply    400 httpx.Error invalid_request
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error not_found
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/zalo-oas/{id}",
+		authz.RequirePermission(d.Checker, "admin.zalo")(
+			idem.KhongCan("lần thứ hai cùng mã OA không còn gặp OA đang sống nên trả 404, không ghi gì và không có vết")(
+				http.HandlerFunc(h.DeleteOA))))
+
 	// idem.KhongCan: a check asks Zalo and records the latest answer; a second check is another check.
 	//
-	//	409 zalo_oa_missing                 the commune has no OA connected
+	//	404 not_found                       the id is not a live OA of this commune
 	//	409 zalo_oa_needs_reauthorization   the refresh token was refused or aged out
 	//
-	// @summary  Kiểm tra OA của xã — gọi getoa bằng token đã lưu (làm mới trước nếu sắp hết hạn), ghi kết quả (lớp lỗi, không bao giờ chữ của Zalo), cập nhật tên OA và ghi vết
-	// @screen   ADR 0098 #7 — Cấu hình → tab Kênh Zalo, "Kiểm tra kết nối"
+	// @summary  Kiểm tra một OA của xã — gọi getoa bằng token đã lưu của OA ấy (làm mới trước nếu sắp hết hạn), ghi kết quả (lớp lỗi, không bao giờ chữ của Zalo), cập nhật tên OA và ghi vết
+	// @screen   ADR 0098 #7, ADR 0099 #1 — Cấu hình → tab Kênh Zalo, "Kiểm tra kết nối"
 	// @reply    200 zaloOACheckResultOut
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
-	// @reply    409 httpx.Error zalo_oa_missing zalo_oa_needs_reauthorization zalo_oa_changed
+	// @reply    404 httpx.Error not_found
+	// @reply    409 httpx.Error zalo_oa_needs_reauthorization zalo_oa_changed
 	// @reply    502 httpx.Error zalo_unavailable
 	// @reply    503 httpx.Error zalo_oa_not_configured encryption_not_configured
 	// @reply    500 httpx.Error
-	mux.Handle("POST /api/v1/zalo-oas/current/check",
+	mux.Handle("POST /api/v1/zalo-oas/{id}/check",
 		authz.RequirePermission(d.Checker, "admin.zalo")(
 			idem.KhongCan("kiểm tra chỉ hỏi Zalo rồi ghi kết quả mới nhất; lần thứ hai là một lần kiểm khác, không đổi gì khác")(
 				http.HandlerFunc(h.PostCheck))))
 
 	// NO idem.* DECLARATION: a GET.
 	//
-	// @summary  Mẫu tin ZBS đã nạp từ OA của xã — mã và tên mẫu, trạng thái và chất lượng Zalo, tham số, có đủ ba tham số bắt buộc không (thiếu gì), mốc đã gắn, gắn lúc nào bởi ai; lần nạp gần nhất
-	// @screen   ADR 0098 #8 #9 — Cấu hình → tab Kênh Zalo, mục "Mẫu tin ZBS"
+	//	404 not_found   the id is not a live OA of this commune
+	//
+	// @summary  Mẫu tin ZBS đã nạp từ một OA của xã — mã và tên mẫu, trạng thái và chất lượng Zalo, tham số, có đủ ba tham số bắt buộc không (thiếu gì), mốc đã gắn, gắn lúc nào bởi ai; lần nạp gần nhất
+	// @screen   ADR 0098 #8 #9, ADR 0099 #1 — Cấu hình → tab Kênh Zalo, mục "Mẫu tin ZBS"
 	// @reply    200 zaloOATemplateListOut
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error not_found
 	// @reply    500 httpx.Error
-	mux.Handle("GET /api/v1/zalo-oas/current/templates",
+	mux.Handle("GET /api/v1/zalo-oas/{id}/templates",
 		authz.RequirePermission(d.Checker, "admin.zalo")(
 			http.HandlerFunc(h.GetTemplates)))
 
 	// idem.KhongCan: a sync rewrites Zalo's columns from Zalo's answer and keeps the commune's milestones;
 	// a second sync is another read of the same OA.
 	//
+	//	404 not_found             the id is not a live OA of this commune
 	//	422 zalo_token_rejected   Zalo refused the OA's token while listing; nothing written
 	//	502 zalo_unavailable      Zalo could not be asked; nothing written
 	//
-	// @summary  Nạp mẫu từ OA — gọi template/all rồi template/info từng mẫu, ghi mọi mẫu trong một giao dịch (mẫu Zalo không còn liệt kê thì đánh DELETE), giữ mốc đã gắn, có ghi vết
-	// @screen   ADR 0098 #8 — Cấu hình → tab Kênh Zalo, "Nạp mẫu từ OA"
+	// @summary  Nạp mẫu từ một OA — gọi template/all rồi template/info từng mẫu, ghi mọi mẫu trong một giao dịch (mẫu Zalo không còn liệt kê thì đánh DELETE), giữ mốc đã gắn, có ghi vết
+	// @screen   ADR 0098 #8, ADR 0099 #1 — Cấu hình → tab Kênh Zalo, "Nạp mẫu từ OA"
 	// @reply    200 zaloOASyncResultOut
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
-	// @reply    409 httpx.Error zalo_oa_missing zalo_oa_needs_reauthorization zalo_oa_changed
+	// @reply    404 httpx.Error not_found
+	// @reply    409 httpx.Error zalo_oa_needs_reauthorization zalo_oa_changed
 	// @reply    422 httpx.Error zalo_token_rejected
 	// @reply    502 httpx.Error zalo_unavailable
 	// @reply    503 httpx.Error zalo_oa_not_configured encryption_not_configured
 	// @reply    500 httpx.Error
-	mux.Handle("POST /api/v1/zalo-oas/current/templates/sync",
+	mux.Handle("POST /api/v1/zalo-oas/{id}/templates/sync",
 		authz.RequirePermission(d.Checker, "admin.zalo")(
 			idem.KhongCan("nạp mẫu ghi lại cột của Zalo theo câu trả lời của Zalo và giữ mốc của xã; lần thứ hai là một lần đọc nữa của cùng OA")(
 				http.HandlerFunc(h.PostSync))))
@@ -315,23 +331,22 @@ func RegisterZaloCommuneOA(mux *http.ServeMux, d ZaloCommuneOADeps) {
 	// and null on a detached template writes nothing.
 	//
 	//	400 invalid_request           no `milestone` key, or a milestone outside ADR 0098 #8
-	//	404 not_found                 no such template in the commune's live OA
-	//	409 milestone_taken           another template already announces that milestone
-	//	409 zalo_oa_missing           the commune has no OA connected
+	//	404 not_found                 no such template of a live OA of this commune
+	//	409 milestone_taken           another template of the commune (any OA) already announces it
 	//	422 template_not_attachable   not ENABLE at Zalo, or a required parameter is missing (named)
 	//
-	// @summary  Gắn hoặc gỡ mốc cho một mẫu ZBS — chỉ mẫu ENABLE có đủ ba tham số ma_tra_cuu, moc_nhan, viec_tiep_theo mới gắn được (thiếu thì nói thiếu gì); một mốc một mẫu, một mẫu một mốc; milestone null là gỡ; có ghi vết
-	// @screen   ADR 0098 #8 #9 — Cấu hình → tab Kênh Zalo, mục "Mẫu tin ZBS"
+	// @summary  Gắn hoặc gỡ mốc cho một mẫu ZBS — chỉ mẫu ENABLE có đủ ba tham số ma_tra_cuu, moc_nhan, viec_tiep_theo mới gắn được (thiếu thì nói thiếu gì); một mốc một mẫu trong cả xã dù xã có nhiều OA, tin báo dân theo mốc đi từ OA của mẫu đã gắn; milestone null là gỡ; có ghi vết
+	// @screen   ADR 0098 #8 #9, ADR 0099 #1 — Cấu hình → tab Kênh Zalo, mục "Mẫu tin ZBS"
 	// @request  zaloOATemplatePatchIn
 	// @reply    200 zaloOATemplateOut
 	// @reply    400 httpx.Error invalid_request
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error not_found
-	// @reply    409 httpx.Error milestone_taken zalo_oa_missing zalo_oa_changed
+	// @reply    409 httpx.Error milestone_taken zalo_oa_changed
 	// @reply    422 httpx.Error template_not_attachable
 	// @reply    500 httpx.Error
-	mux.Handle("PATCH /api/v1/zalo-oas/current/templates/{id}",
+	mux.Handle("PATCH /api/v1/zalo-oa-templates/{id}",
 		authz.RequirePermission(d.Checker, "admin.zalo")(
 			idem.KhongCan("thân nêu trạng thái đích: cùng mốc lần nữa thì không đổi gì và không có vết, gỡ một mẫu chưa gắn cũng không ghi gì")(
 				http.HandlerFunc(h.PatchTemplate))))
@@ -375,9 +390,11 @@ func (h *zaloCommuneOAHandler) staffNames(ctx context.Context, codes []string) m
 	return out
 }
 
-func communeOAToOut(o domain.CommuneZaloOA, byName string) communeZaloOAOut {
-	out := communeZaloOAOut{OAID: o.OAID, OAName: o.OAName, AuthorizedAt: o.AuthorizedAt, AuthorizedBy: o.AuthorizedBy,
-		AuthorizedByName: byName, AccessExpiresAt: o.AccessExpiresAt, TokenRefreshedAt: o.TokenRefreshedAt}
+func communeOAToOut(it app.CommuneZaloOAItem, byName string) communeZaloOAOut {
+	o := it.OA
+	out := communeZaloOAOut{ID: o.ID, OAID: o.OAID, OAName: o.OAName, AuthorizedAt: o.AuthorizedAt, AuthorizedBy: o.AuthorizedBy,
+		AuthorizedByName: byName, AccessExpiresAt: o.AccessExpiresAt, TokenRefreshedAt: o.TokenRefreshedAt,
+		TemplateCount: it.TemplateCount, AttachedCount: it.AttachedCount}
 	if o.NeedsReauthorization() {
 		out.NeedsReauthorization = &zaloOAReauthorizationOut{Since: o.NeedsReauthorizationSince, Reason: o.NeedsReauthorizationReason}
 	}
@@ -388,8 +405,8 @@ func communeOAToOut(o domain.CommuneZaloOA, byName string) communeZaloOAOut {
 }
 
 func templateToOut(t domain.ZaloOATemplate, names map[string]string) zaloOATemplateOut {
-	out := zaloOATemplateOut{ID: t.ID, TemplateID: t.TemplateID, TemplateName: t.TemplateName, ZaloStatus: t.ZaloStatus,
-		ZaloQuality: t.ZaloQuality, ZaloTag: t.ZaloTag, Params: make([]zaloOATemplateParamOut, 0, len(t.Params)),
+	out := zaloOATemplateOut{ID: t.ID, OARowID: t.OARowID, TemplateID: t.TemplateID, TemplateName: t.TemplateName,
+		ZaloStatus: t.ZaloStatus, ZaloQuality: t.ZaloQuality, ZaloTag: t.ZaloTag, Params: make([]zaloOATemplateParamOut, 0, len(t.Params)),
 		ParamsMatch: t.ParamsMatch, MissingParams: domain.MissingTemplateParams(t.Params)}
 	if out.MissingParams == nil {
 		out.MissingParams = []string{}
@@ -404,24 +421,27 @@ func templateToOut(t domain.ZaloOATemplate, names map[string]string) zaloOATempl
 	return out
 }
 
-// GetCurrent — GET /api/v1/zalo-oas/current
-func (h *zaloCommuneOAHandler) GetCurrent(w http.ResponseWriter, r *http.Request) {
-	v, err := h.d.OAs.Current(r.Context())
+// GetList — GET /api/v1/zalo-oas
+func (h *zaloCommuneOAHandler) GetList(w http.ResponseWriter, r *http.Request) {
+	v, err := h.d.OAs.List(r.Context())
 	if err != nil {
 		h.fail(w, r, "đọc", err)
 		return
 	}
-	out := communeZaloOACurrentOut{Configured: v.Configured, HasOA: v.HasOA, TemplateCount: v.TemplateCount,
-		AttachedCount: v.AttachedCount}
-	if v.HasOA {
-		o := communeOAToOut(v.OA, h.staffNames(r.Context(), []string{v.OA.AuthorizedBy})[v.OA.AuthorizedBy])
-		out.OA = &o
+	codes := make([]string, 0, len(v.Items))
+	for _, it := range v.Items {
+		codes = append(codes, it.OA.AuthorizedBy)
+	}
+	names := h.staffNames(r.Context(), codes)
+	out := communeZaloOAListOut{Configured: v.Configured, Items: make([]communeZaloOAOut, 0, len(v.Items))}
+	for _, it := range v.Items {
+		out.Items = append(out.Items, communeOAToOut(it, names[it.OA.AuthorizedBy]))
 	}
 	vietJSON(w, http.StatusOK, out)
 }
 
-// DeleteCurrent — DELETE /api/v1/zalo-oas/current
-func (h *zaloCommuneOAHandler) DeleteCurrent(w http.ResponseWriter, r *http.Request) {
+// DeleteOA — DELETE /api/v1/zalo-oas/{id}
+func (h *zaloCommuneOAHandler) DeleteOA(w http.ResponseWriter, r *http.Request) {
 	var in communeZaloOADisconnectIn
 	if !docThan(w, r, &in) {
 		return
@@ -430,7 +450,7 @@ func (h *zaloCommuneOAHandler) DeleteCurrent(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	res, err := h.d.OAs.Disconnect(r.Context(), in.Reason, actor)
+	res, err := h.d.OAs.Disconnect(r.Context(), r.PathValue("id"), in.Reason, actor)
 	if err != nil {
 		h.fail(w, r, "ngắt OA", err)
 		return
@@ -439,7 +459,7 @@ func (h *zaloCommuneOAHandler) DeleteCurrent(w http.ResponseWriter, r *http.Requ
 		DetachedTemplateCount: res.DetachedTemplateCount, RevokeNotice: res.RevokeNotice})
 }
 
-// PostAuthorizationLink — POST /api/v1/zalo-oas/current/authorization-links
+// PostAuthorizationLink — POST /api/v1/zalo-oas/authorization-links
 func (h *zaloCommuneOAHandler) PostAuthorizationLink(w http.ResponseWriter, r *http.Request) {
 	actor, ok := h.actor(w, r)
 	if !ok {
@@ -455,13 +475,13 @@ func (h *zaloCommuneOAHandler) PostAuthorizationLink(w http.ResponseWriter, r *h
 	vietJSON(w, http.StatusCreated, zaloOAAuthorizationLinkOut{URL: link.URL, ExpiresAt: link.ExpiresAt})
 }
 
-// PostCheck — POST /api/v1/zalo-oas/current/check
+// PostCheck — POST /api/v1/zalo-oas/{id}/check
 func (h *zaloCommuneOAHandler) PostCheck(w http.ResponseWriter, r *http.Request) {
 	actor, ok := h.actor(w, r)
 	if !ok {
 		return
 	}
-	res, err := h.d.OAs.Check(r.Context(), actor)
+	res, err := h.d.OAs.Check(r.Context(), r.PathValue("id"), actor)
 	if err != nil {
 		h.fail(w, r, "kiểm tra", err)
 		return
@@ -469,9 +489,9 @@ func (h *zaloCommuneOAHandler) PostCheck(w http.ResponseWriter, r *http.Request)
 	vietJSON(w, http.StatusOK, zaloOACheckResultOut{Result: res.Outcome, CheckedAt: res.CheckedAt, OAName: res.OAName})
 }
 
-// GetTemplates — GET /api/v1/zalo-oas/current/templates
+// GetTemplates — GET /api/v1/zalo-oas/{id}/templates
 func (h *zaloCommuneOAHandler) GetTemplates(w http.ResponseWriter, r *http.Request) {
-	list, err := h.d.OAs.ListTemplates(r.Context())
+	list, err := h.d.OAs.ListTemplates(r.Context(), r.PathValue("id"))
 	if err != nil {
 		h.fail(w, r, "đọc mẫu", err)
 		return
@@ -495,13 +515,13 @@ func (h *zaloCommuneOAHandler) GetTemplates(w http.ResponseWriter, r *http.Reque
 	vietJSON(w, http.StatusOK, out)
 }
 
-// PostSync — POST /api/v1/zalo-oas/current/templates/sync
+// PostSync — POST /api/v1/zalo-oas/{id}/templates/sync
 func (h *zaloCommuneOAHandler) PostSync(w http.ResponseWriter, r *http.Request) {
 	actor, ok := h.actor(w, r)
 	if !ok {
 		return
 	}
-	res, err := h.d.OAs.SyncTemplates(r.Context(), actor)
+	res, err := h.d.OAs.SyncTemplates(r.Context(), r.PathValue("id"), actor)
 	if err != nil {
 		h.fail(w, r, "nạp mẫu", err)
 		return
@@ -510,7 +530,7 @@ func (h *zaloCommuneOAHandler) PostSync(w http.ResponseWriter, r *http.Request) 
 		Changed: len(res.ChangedTemplateIDs), SyncedAt: res.SyncedAt})
 }
 
-// PatchTemplate — PATCH /api/v1/zalo-oas/current/templates/{id}
+// PatchTemplate — PATCH /api/v1/zalo-oa-templates/{id}
 func (h *zaloCommuneOAHandler) PatchTemplate(w http.ResponseWriter, r *http.Request) {
 	var in zaloOATemplatePatchIn
 	if !docThan(w, r, &in) {
@@ -552,7 +572,8 @@ func (h *zaloCommuneOAHandler) fail(w http.ResponseWriter, r *http.Request, op s
 			"Nền tảng chưa cấu hình khoá mã hoá bí mật (SECRET_ENCRYPTION_KEYS), nên chưa lưu hay dùng được uỷ quyền OA "+
 				"của xã. Chưa có gì được ghi. Hãy báo đơn vị vận hành hệ thống.", "")
 	case errors.Is(err, app.ErrCommuneZaloOAMissing):
-		httpx.WriteError(w, http.StatusConflict, "zalo_oa_missing", "Xã chưa nối OA Zalo.", "")
+		// One sentence for an unknown id, a retired OA and another commune's OA (ADR 0099 #1; rule 1).
+		httpx.WriteError(w, http.StatusNotFound, "not_found", "Không tìm thấy OA này trong các OA đang nối của xã.", "")
 	case errors.Is(err, app.ErrZaloOANeedsReauthorization):
 		httpx.WriteError(w, http.StatusConflict, "zalo_oa_needs_reauthorization",
 			"Zalo không còn nhận uỷ quyền OA của xã. Hãy bấm “Uỷ quyền lại”.", "")
@@ -563,7 +584,7 @@ func (h *zaloCommuneOAHandler) fail(w http.ResponseWriter, r *http.Request, op s
 		httpx.WriteError(w, http.StatusConflict, "milestone_taken",
 			"Mốc này đã được gắn cho một mẫu khác. Hãy gỡ mốc ở mẫu kia trước.", "")
 	case errors.Is(err, app.ErrZaloOATemplateMissing):
-		httpx.WriteError(w, http.StatusNotFound, "not_found", "Không tìm thấy mẫu này trong OA đang nối của xã.", "")
+		httpx.WriteError(w, http.StatusNotFound, "not_found", "Không tìm thấy mẫu này trong các OA đang nối của xã.", "")
 	case errors.As(err, &missing):
 		// The parameter NAMES of a template — not personal data — named so the commune knows what to fix.
 		httpx.WriteError(w, http.StatusUnprocessableEntity, "template_not_attachable",

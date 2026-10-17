@@ -189,7 +189,7 @@ func TestRevokeNoticeNamesOAManager(t *testing.T) {
 	if !strings.Contains(CommuneZaloOARevokeNotice, "OA Manager") || !strings.Contains(CommuneZaloOARevokeNotice, "thu hồi") {
 		t.Fatalf("notice = %q", CommuneZaloOARevokeNotice)
 	}
-	if len([]rune(CommuneZaloOAReplacedReason)) > 200 {
-		t.Fatal("replaced reason exceeds 0031's CHECK")
+	if len([]rune(CommuneZaloOAReauthorizedReason)) > 200 {
+		t.Fatal("re-authorized reason exceeds 0031's CHECK")
 	}
 }

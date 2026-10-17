@@ -168,6 +168,7 @@ func (g oaRegistry) XaTrongNguCanh(ctx context.Context) (tenant.Tenant, bool, er
 // ---- the rig -----------------------------------------------------------------------------------------------
 
 type fakeOARow struct {
+	tenant                                tenant.ID // "" = xaA
 	id, oaID, name                        string
 	accessExp, refreshIssued, refreshedAt time.Time
 	reauthSince                           driver.Value
@@ -198,6 +199,14 @@ type fakeTplRow struct {
 	params                 []byte
 	match                  bool
 	milestone              driver.Value
+	oaRow                  string // "" = oaRowID
+}
+
+func (t fakeTplRow) row() string {
+	if t.oaRow == "" {
+		return oaRowID
+	}
+	return t.oaRow
 }
 
 func (t fakeTplRow) values() []driver.Value {
@@ -205,7 +214,7 @@ func (t fakeTplRow) values() []driver.Value {
 	if t.milestone != nil {
 		setAt, setBy = oaClock.Add(-time.Hour), "CB-00099"
 	}
-	return []driver.Value{t.id, oaRowID, t.templateID, "Mẫu " + t.templateID, t.status, "HIGH", "TRANSACTION", t.params,
+	return []driver.Value{t.id, t.row(), t.templateID, "Mẫu " + t.templateID, t.status, "HIGH", "TRANSACTION", t.params,
 		t.match, t.milestone, setAt, setBy, oaClock.Add(-time.Hour)}
 }
 
@@ -218,7 +227,8 @@ type oaRig struct {
 	resolver *fakeStateResolver
 	uc       *CommuneZaloOAs
 	ctx      context.Context
-	oa       *fakeOARow
+	oa       *fakeOARow   // the first OA withOA gave the commune
+	oas      []*fakeOARow // every live OA row the fake answers, filtered by commune, id and oa_id
 	auth     *fakeAuthRow
 	tpls     []fakeTplRow
 	logs     *bytes.Buffer
@@ -239,10 +249,25 @@ func newOARig(t *testing.T) *oaRig {
 			if sealed {
 				cols = append(cols, "access_token_sealed", "refresh_token_sealed")
 			}
-			if r.oa == nil {
-				return cols, nil, nil
+			// The scope the database applies: $1 is the commune; `id = $2` / `oa_id = $2` narrow it.
+			var rows [][]driver.Value
+			for _, o := range r.oas {
+				owner := o.tenant
+				if owner == "" {
+					owner = xaA
+				}
+				if args[0] != string(owner) {
+					continue
+				}
+				if strings.Contains(q, "AND id = $2") && args[1] != o.id {
+					continue
+				}
+				if strings.Contains(q, "AND oa_id = $2") && args[1] != o.oaID {
+					continue
+				}
+				rows = append(rows, o.values(sealed))
 			}
-			return cols, [][]driver.Value{r.oa.values(sealed)}, nil
+			return cols, rows, nil
 		case strings.Contains(q, "UPDATE zalo_oa_authorization SET used_at") && strings.Contains(q, "RETURNING id"):
 			return []string{"id"}, [][]driver.Value{{"01JOAAUTHEXPIRED0000000001"}}, nil
 		case strings.Contains(q, "FROM zalo_oa_authorization"):
@@ -260,10 +285,35 @@ func newOARig(t *testing.T) *oaRig {
 				}
 			}
 			return []string{"id"}, rows, nil
+		case strings.Contains(q, "FROM zalo_oa_template") && strings.Contains(q, "GROUP BY oa_row_id"):
+			counts := map[string][2]int64{}
+			var order []string
+			for _, tp := range r.tpls {
+				c, ok := counts[tp.row()]
+				if !ok {
+					order = append(order, tp.row())
+				}
+				c[0]++
+				if tp.milestone != nil {
+					c[1]++
+				}
+				counts[tp.row()] = c
+			}
+			var rows [][]driver.Value
+			for _, id := range order {
+				rows = append(rows, []driver.Value{id, counts[id][0], counts[id][1]})
+			}
+			return []string{"oa_row_id", "count", "count"}, rows, nil
 		case strings.Contains(q, "FROM zalo_oa_template"):
 			var rows [][]driver.Value
 			for _, tp := range r.tpls {
 				if strings.Contains(q, "AND id = $2") && len(args) > 1 && args[1] != tp.id {
+					continue
+				}
+				if strings.Contains(q, "AND oa_row_id = $2") && args[1] != tp.row() {
+					continue
+				}
+				if strings.Contains(q, "AND template_id = $3") && args[2] != tp.templateID {
 					continue
 				}
 				rows = append(rows, tp.values())
@@ -298,9 +348,20 @@ func (r *oaRig) seal(t *testing.T, plain string, aad []byte) []byte {
 // withOA gives the commune a live OA whose access token expires accessIn from the clock.
 func (r *oaRig) withOA(t *testing.T, accessIn time.Duration) {
 	t.Helper()
-	r.oa = &fakeOARow{id: oaRowID, oaID: oaZaloID, name: "UBND Xã A", accessExp: oaClock.Add(accessIn),
+	r.oa = r.addOA(t, oaRowID, oaZaloID, accessIn)
+}
+
+// addOA gives the commune one more live OA (ADR 0099 #1: several at once).
+func (r *oaRig) addOA(t *testing.T, rowID, zaloID string, accessIn time.Duration) *fakeOARow {
+	t.Helper()
+	o := &fakeOARow{id: rowID, oaID: zaloID, name: "OA " + zaloID, accessExp: oaClock.Add(accessIn),
 		refreshIssued: oaClock.Add(-23 * time.Hour), refreshedAt: oaClock.Add(-23 * time.Hour),
-		access: r.seal(t, oaAccess, communeOAAccessAAD(r.ctx, oaRowID)), refresh: r.seal(t, oaRefresh, communeOARefreshAAD(r.ctx, oaRowID))}
+		access: r.seal(t, oaAccess, communeOAAccessAAD(r.ctx, rowID)), refresh: r.seal(t, oaRefresh, communeOARefreshAAD(r.ctx, rowID))}
+	if zaloID == oaZaloID {
+		o.name = "UBND Xã A"
+	}
+	r.oas = append(r.oas, o)
+	return o
 }
 
 func (r *oaRig) withOpenAuthorization(t *testing.T) {
@@ -465,7 +526,9 @@ func TestCallbackConnectsTheOAInTheCommuneFoundFromState(t *testing.T) {
 	r.noSecretAnywhere(t)
 }
 
-func TestCallbackReplacingTheLiveOARetiresAndDetachesFirst(t *testing.T) {
+// ADR 0098 #11, kept for the SAME OA by ADR 0099 #1: authorizing an OA already live in this commune
+// retires its row (milestones detached) and inserts a new one, in one transaction.
+func TestCallbackReauthorizingTheSameOARetiresAndDetachesFirst(t *testing.T) {
 	r := newOARig(t)
 	r.withOpenAuthorization(t)
 	r.withOA(t, 10*time.Hour)
@@ -474,16 +537,19 @@ func TestCallbackReplacingTheLiveOARetiresAndDetachesFirst(t *testing.T) {
 	if _, err := r.uc.CompleteAuthorization(context.Background(), r.callbackInput()); err != nil {
 		t.Fatal(err)
 	}
-	ret := r.f.with("UPDATE zalo_commune_oa SET retired_at")
-	if len(ret) != 1 || ret[0].args[1] != oaRowID || ret[0].args[4] != domain.CommuneZaloOAReplacedReason {
+	if q := r.f.with("AND oa_id = $2"); len(q) != 1 || q[0].args[1] != oaZaloID {
+		t.Fatalf("the callback did not look this OA up by Zalo's oa_id: %v", q)
+	}
+	ret := r.f.with("SET retired_at")
+	if len(ret) != 1 || ret[0].args[1] != oaRowID || ret[0].args[4] != domain.CommuneZaloOAReauthorizedReason {
 		t.Fatalf("retire = %v", ret)
 	}
-	if len(r.f.with("UPDATE zalo_oa_template SET milestone = NULL")) != 1 {
+	if len(r.f.with("SET milestone = NULL")) != 1 {
 		t.Fatal("the retired OA's milestones were not detached")
 	}
-	iR, iI := indexOfStmt(r.f, "UPDATE zalo_commune_oa SET retired_at"), indexOfStmt(r.f, "INSERT INTO zalo_commune_oa")
+	iR, iI := indexOfStmt(r.f, "SET retired_at"), indexOfStmt(r.f, "INSERT INTO zalo_commune_oa")
 	if iR < 0 || iR > iI {
-		t.Fatalf("retire at %d, insert at %d — 0031's one-live index needs retire first", iR, iI)
+		t.Fatalf("retire at %d, insert at %d — 0031's one-live-per-OA floor needs retire first", iR, iI)
 	}
 	if got := strings.Join(entryActions(r.f), ","); got != domain.ActionDisconnectZaloOA+","+domain.ActionConnectZaloOA {
 		t.Fatalf("entries = %s", got)
@@ -491,6 +557,37 @@ func TestCallbackReplacingTheLiveOARetiresAndDetachesFirst(t *testing.T) {
 	if r.f.begun != 1 {
 		t.Fatalf("%d transactions, want one", r.f.begun)
 	}
+}
+
+// ADR 0099 #1: a commune holds several OAs. Connecting a DIFFERENT OA retires nothing and detaches no
+// milestone of the OA already there — one insert, one entry.
+func TestCallbackSecondOAIsAddedBesideTheFirst(t *testing.T) {
+	r := newOARig(t)
+	r.withOpenAuthorization(t)
+	r.withOA(t, 10*time.Hour)
+	r.tpls = []fakeTplRow{{id: "01JTPL1", templateID: "1001", status: "ENABLE", params: []byte(goodParams), match: true,
+		milestone: domain.MilestoneReceived}}
+	const second = "111222333444"
+	r.zalo.getoa = zalooa.OAInfo{OAID: second, Name: "OA thứ hai"}
+	in := r.callbackInput()
+	in.OAID = second
+	res, err := r.uc.CompleteAuthorization(context.Background(), in)
+	if err != nil || res.Outcome != domain.AuthorizationSucceeded || res.OA.OAID != second {
+		t.Fatalf("res %+v err %v", res, err)
+	}
+	if len(r.f.with("SET retired_at")) != 0 || len(r.f.with("SET milestone = NULL")) != 0 {
+		t.Fatal("connecting a second OA retired or detached the first")
+	}
+	if ins := r.f.with("INSERT INTO zalo_commune_oa"); len(ins) != 1 || ins[0].args[2] != second {
+		t.Fatalf("insert = %v", ins)
+	}
+	if got := strings.Join(entryActions(r.f), ","); got != domain.ActionConnectZaloOA {
+		t.Fatalf("entries = %s", got)
+	}
+	if r.f.begun != 1 || r.f.commits != 1 {
+		t.Fatalf("tx %d/%d", r.f.begun, r.f.commits)
+	}
+	r.noSecretAnywhere(t)
 }
 
 func TestCallbackUnknownOrMalformedStateIsOneAnswerAndWritesNothing(t *testing.T) {
@@ -748,14 +845,46 @@ func TestRefreshOutageWritesNothingAndReportsTheClass(t *testing.T) {
 	}
 }
 
+// Several OAs: the job refreshes every DUE one, leaves the fresh and the flagged ones alone, and one OA
+// failing does not stop the next.
+func TestRefreshIfDueWalksEveryDueOAOfTheCommune(t *testing.T) {
+	r := newOARig(t)
+	r.withOA(t, time.Hour)                                       // due
+	r.addOA(t, "01JOAROW000000000000000002", "222", 5*time.Hour) // fresh
+	flagged := r.addOA(t, "01JOAROW000000000000000003", "333", time.Hour)
+	flagged.reauthSince, flagged.reauthReason = oaClock.Add(-time.Hour), domain.ReauthorizationRefreshTokenRejected
+	r.addOA(t, "01JOAROW000000000000000004", "444", 30*time.Minute) // due
+	refreshed, err := r.uc.RefreshIfDue(r.ctx)
+	if err != nil || !refreshed {
+		t.Fatalf("refreshed %v err %v", refreshed, err)
+	}
+	var ids []string
+	for _, s := range r.f.with("SET access_token_sealed") {
+		ids = append(ids, s.args[1].(string))
+	}
+	if strings.Join(ids, ",") != oaRowID+",01JOAROW000000000000000004" || r.zalo.calls["refresh"] != 2 {
+		t.Fatalf("resealed %v, Zalo refresh calls %d", ids, r.zalo.calls["refresh"])
+	}
+
+	r2 := newOARig(t)
+	r2.withOA(t, time.Hour)
+	r2.addOA(t, "01JOAROW000000000000000002", "222", time.Hour)
+	r2.zalo.refresh = zalooa.OutcomeUnavailable
+	_, err = r2.uc.RefreshIfDue(r2.ctx)
+	var c *ZaloOACallError
+	if !errors.As(err, &c) || r2.zalo.calls["refresh"] != 2 {
+		t.Fatalf("err %v calls %d — the second OA was not tried after the first failed", err, r2.zalo.calls["refresh"])
+	}
+}
+
 func TestFlaggedOARefusesCheckAndSync(t *testing.T) {
 	r := newOARig(t)
 	r.withOA(t, 5*time.Hour)
 	r.oa.reauthSince, r.oa.reauthReason = oaClock.Add(-time.Hour), domain.ReauthorizationRefreshTokenRejected
-	if _, err := r.uc.Check(r.ctx, staffActor); !errors.Is(err, ErrZaloOANeedsReauthorization) {
+	if _, err := r.uc.Check(r.ctx, oaRowID, staffActor); !errors.Is(err, ErrZaloOANeedsReauthorization) {
 		t.Fatalf("check: %v", err)
 	}
-	if _, err := r.uc.SyncTemplates(r.ctx, staffActor); !errors.Is(err, ErrZaloOANeedsReauthorization) {
+	if _, err := r.uc.SyncTemplates(r.ctx, oaRowID, staffActor); !errors.Is(err, ErrZaloOANeedsReauthorization) {
 		t.Fatalf("sync: %v", err)
 	}
 	if len(r.zalo.calls) != 0 || r.f.begun != 0 {
@@ -783,15 +912,16 @@ func TestExpireOpenAuthorizationsAuditsAsTheSystem(t *testing.T) {
 func TestCheckRecordsTheClassAndTheName(t *testing.T) {
 	r := newOARig(t)
 	r.withOA(t, 5*time.Hour)
+	r.addOA(t, "01JOAROW000000000000000002", "222", 5*time.Hour)
 	r.zalo.getoa.Name = "UBND Xã A mới"
-	out, err := r.uc.Check(r.ctx, staffActor)
+	out, err := r.uc.Check(r.ctx, oaRowID, staffActor)
 	if err != nil || out.Outcome != domain.ZaloCallOK || out.OAName != "UBND Xã A mới" {
 		t.Fatalf("out %+v err %v", out, err)
 	}
 	if rc := r.f.with("SET last_check_at"); len(rc) != 1 || rc[0].args[3] != domain.ZaloCallOK {
 		t.Fatalf("check = %v", rc)
 	}
-	if nm := r.f.with("SET oa_name"); len(nm) != 1 || nm[0].args[2] != "UBND Xã A mới" {
+	if nm := r.f.with("SET oa_name"); len(nm) != 1 || nm[0].args[1] != oaRowID || nm[0].args[2] != "UBND Xã A mới" {
 		t.Fatalf("name = %v", nm)
 	}
 	if e, _ := oaEntry(t, r.f, domain.ActionCheckZaloOA); e.args[1] != "CB-00123" {
@@ -802,38 +932,69 @@ func TestCheckRecordsTheClassAndTheName(t *testing.T) {
 	}
 }
 
-func TestCheckWithNoOA(t *testing.T) {
+// An unknown id, a retired OA and ANOTHER COMMUNE's OA are one answer, and nothing reaches Zalo.
+func TestActsOnAnIDThatIsNotALiveOAOfTheCommune(t *testing.T) {
 	r := newOARig(t)
-	if _, err := r.uc.Check(r.ctx, staffActor); !errors.Is(err, ErrCommuneZaloOAMissing) {
-		t.Fatalf("err = %v", err)
+	r.withOA(t, 5*time.Hour)
+	other := r.addOA(t, "01JOAROWXAB000000000000001", "999", 5*time.Hour)
+	other.tenant = xaB
+	for _, id := range []string{"01JNOSUCHOA000000000000001", other.id} {
+		if _, err := r.uc.Check(r.ctx, id, staffActor); !errors.Is(err, ErrCommuneZaloOAMissing) {
+			t.Fatalf("check %s: %v", id, err)
+		}
+		if _, err := r.uc.SyncTemplates(r.ctx, id, staffActor); !errors.Is(err, ErrCommuneZaloOAMissing) {
+			t.Fatalf("sync %s: %v", id, err)
+		}
+		if _, err := r.uc.ListTemplates(r.ctx, id); !errors.Is(err, ErrCommuneZaloOAMissing) {
+			t.Fatalf("templates %s: %v", id, err)
+		}
+		if _, err := r.uc.Disconnect(r.ctx, id, "lý do", staffActor); !errors.Is(err, ErrCommuneZaloOAMissing) {
+			t.Fatalf("disconnect %s: %v", id, err)
+		}
+		if _, _, err := r.uc.OpenAccessToken(r.ctx, id); !errors.Is(err, ErrCommuneZaloOAMissing) {
+			t.Fatalf("open %s: %v", id, err)
+		}
+	}
+	if len(r.zalo.calls) != 0 || r.f.commits != 0 || len(r.f.with("SET retired_at")) != 0 {
+		t.Fatalf("calls %v commits %d", r.zalo.calls, r.f.commits)
+	}
+	// Commune B, asking in ITS context, reaches its own OA and not A's.
+	ctxB := tenant.Into(context.Background(), xaB)
+	if _, err := r.uc.ListTemplates(ctxB, oaRowID); !errors.Is(err, ErrCommuneZaloOAMissing) {
+		t.Fatalf("B read A's OA: %v", err)
+	}
+	if _, err := r.uc.ListTemplates(ctxB, other.id); err != nil {
+		t.Fatalf("B's own OA: %v", err)
 	}
 }
 
 func TestDisconnectRetiresDetachesAndSaysToRevokeAtZalo(t *testing.T) {
 	r := newOARig(t)
 	r.withOA(t, 5*time.Hour)
+	r.addOA(t, "01JOAROW000000000000000002", "222", 5*time.Hour)
 	r.tpls = []fakeTplRow{{id: "01JTPL1", templateID: "1001", status: "ENABLE", params: []byte(goodParams), match: true,
 		milestone: domain.MilestoneClosed}, {id: "01JTPL2", templateID: "1002", status: "ENABLE", params: []byte(goodParams)}}
-	out, err := r.uc.Disconnect(r.ctx, "  Xã đổi OA  ", staffActor)
+	out, err := r.uc.Disconnect(r.ctx, oaRowID, "  Xã đổi OA  ", staffActor)
 	if err != nil || !out.Retired || out.DetachedTemplateCount != 1 || out.RevokeNotice != domain.CommuneZaloOARevokeNotice {
 		t.Fatalf("out %+v err %v", out, err)
 	}
+	// Only the named OA: the commune's other OA is untouched (ADR 0099 #1).
 	ret := r.f.with("SET retired_at")
-	if len(ret) != 1 || ret[0].args[3] != "CB-00123" || ret[0].args[4] != "Xã đổi OA" {
+	if len(ret) != 1 || ret[0].args[1] != oaRowID || ret[0].args[3] != "CB-00123" || ret[0].args[4] != "Xã đổi OA" {
 		t.Fatalf("retire = %v", ret)
 	}
-	if len(r.f.with("SET milestone = NULL")) != 1 || len(r.f.with("DELETE")) != 0 {
-		t.Fatal("milestones not detached, or a DELETE was issued")
+	if det := r.f.with("SET milestone = NULL"); len(det) != 1 || det[0].args[1] != oaRowID || len(r.f.with("DELETE")) != 0 {
+		t.Fatal("milestones not detached for that OA, or a DELETE was issued")
 	}
 	if r.f.begun != 1 || r.f.commits != 1 {
 		t.Fatalf("tx %d/%d", r.f.begun, r.f.commits)
 	}
-	// Idempotent: no live OA = nothing written, no notice.
+	// No live OA with that id = 404 at the edge, nothing written.
 	r2 := newOARig(t)
-	if out, err := r2.uc.Disconnect(r2.ctx, "lý do", staffActor); err != nil || out.Retired || out.RevokeNotice != "" {
-		t.Fatalf("no OA: %+v %v", out, err)
+	if _, err := r2.uc.Disconnect(r2.ctx, oaRowID, "lý do", staffActor); !errors.Is(err, ErrCommuneZaloOAMissing) || r2.f.commits != 0 {
+		t.Fatalf("no OA: %v, %d commits", err, r2.f.commits)
 	}
-	if _, err := r2.uc.Disconnect(r2.ctx, "  ", staffActor); !errors.Is(err, domain.ErrCommuneZaloOARetireReason) {
+	if _, err := r2.uc.Disconnect(r2.ctx, oaRowID, "  ", staffActor); !errors.Is(err, domain.ErrCommuneZaloOARetireReason) {
 		t.Fatalf("empty reason: %v", err)
 	}
 }
@@ -853,7 +1014,7 @@ func TestSyncTemplatesUpsertsJudgesParamsAndMarksVanishedDeleted(t *testing.T) {
 	r.zalo.infos["1002"] = zalooa.TemplateDetail{ID: "1002", Name: "Thiếu", Status: "ENABLE", Params: full[:2]}
 	r.zalo.infoOutcome["1003"] = zalooa.OutcomeMalformedResponse
 
-	out, err := r.uc.SyncTemplates(r.ctx, staffActor)
+	out, err := r.uc.SyncTemplates(r.ctx, oaRowID, staffActor)
 	if err != nil {
 		t.Fatalf("sync: %v", err)
 	}
@@ -888,7 +1049,7 @@ func TestSyncTemplatesOutageWritesNothing(t *testing.T) {
 	r.withOA(t, 5*time.Hour)
 	r.zalo.pages = [][]zalooa.TemplateSummary{{{ID: "1001"}}}
 	r.zalo.infoOutcome["1001"] = zalooa.OutcomeRateLimited
-	_, err := r.uc.SyncTemplates(r.ctx, staffActor)
+	_, err := r.uc.SyncTemplates(r.ctx, oaRowID, staffActor)
 	var c *ZaloOACallError
 	if !errors.As(err, &c) || c.Class != domain.ZaloCallRateLimited || r.f.begun != 0 {
 		t.Fatalf("err %v tx %d", err, r.f.begun)
@@ -985,28 +1146,124 @@ func TestSetMilestoneRules(t *testing.T) {
 			}
 		}
 	})
-	t.Run("template of another OA row", func(t *testing.T) {
+	t.Run("template of a retired OA", func(t *testing.T) {
 		r := newOARig(t)
 		r.withOA(t, 5*time.Hour)
-		r.oa.id = "01JOTHERROW"
+		r.oa.id = "01JOTHERROW" // the template's OA row (oaRowID) is no longer live
 		r.tpls = []fakeTplRow{{id: "01JTPL1", templateID: "1001", status: "ENABLE", params: []byte(goodParams), match: true}}
 		if _, err := r.uc.SetMilestone(r.ctx, "01JTPL1", &m, staffActor); !errors.Is(err, ErrZaloOATemplateMissing) {
 			t.Fatalf("err = %v", err)
 		}
 	})
+	t.Run("unknown template", func(t *testing.T) {
+		r := newOARig(t)
+		r.withOA(t, 5*time.Hour)
+		if _, err := r.uc.SetMilestone(r.ctx, "01JNOSUCHTPL", &m, staffActor); !errors.Is(err, ErrZaloOATemplateMissing) || r.f.begun != 0 {
+			t.Fatalf("err = %v, tx %d", err, r.f.begun)
+		}
+	})
+	// The template of the commune's SECOND OA takes a milestone: the lock is on ITS OA row, read from the
+	// template, and the OA row is locked before the template (the order "Ngắt OA" takes).
+	t.Run("template of the second OA", func(t *testing.T) {
+		r := newOARig(t)
+		r.withOA(t, 5*time.Hour)
+		r.addOA(t, "01JOAROW000000000000000002", "222", 5*time.Hour)
+		r.tpls = []fakeTplRow{{id: "01JTPL2", templateID: "2001", status: "ENABLE", params: []byte(goodParams), match: true,
+			oaRow: "01JOAROW000000000000000002"}}
+		out, err := r.uc.SetMilestone(r.ctx, "01JTPL2", &m, staffActor)
+		if err != nil || out.Milestone != m || out.OARowID != "01JOAROW000000000000000002" {
+			t.Fatalf("out %+v err %v", out, err)
+		}
+		lk := r.f.with("FOR UPDATE")
+		if len(lk) != 2 || !strings.Contains(lk[0].sql, "zalo_commune_oa") || lk[0].args[1] != "01JOAROW000000000000000002" ||
+			!strings.Contains(lk[1].sql, "zalo_oa_template") {
+			t.Fatalf("locks = %v — the OA row must be locked before the template", lk)
+		}
+	})
 }
 
-func TestCurrentCountsTemplatesAndReportsConfiguration(t *testing.T) {
+func TestListReturnsEveryLiveOAWithItsCounts(t *testing.T) {
 	r := newOARig(t)
-	v, err := r.uc.Current(r.ctx)
-	if err != nil || v.HasOA || !v.Configured {
+	v, err := r.uc.List(r.ctx)
+	if err != nil || len(v.Items) != 0 || !v.Configured {
 		t.Fatalf("no OA: %+v %v", v, err)
 	}
 	r.withOA(t, 5*time.Hour)
+	r.addOA(t, "01JOAROW000000000000000002", "222", 5*time.Hour)
+	other := r.addOA(t, "01JOAROWXAB000000000000001", "999", 5*time.Hour)
+	other.tenant = xaB
 	r.tpls = []fakeTplRow{{id: "a", templateID: "1", status: "ENABLE", params: []byte(goodParams), milestone: domain.MilestoneClosed},
-		{id: "b", templateID: "2", status: "ENABLE", params: []byte(goodParams)}}
-	v, err = r.uc.Current(r.ctx)
-	if err != nil || !v.HasOA || v.TemplateCount != 2 || v.AttachedCount != 1 || v.OA.OAID != oaZaloID {
-		t.Fatalf("view = %+v %v", v, err)
+		{id: "b", templateID: "2", status: "ENABLE", params: []byte(goodParams)},
+		{id: "c", templateID: "3", status: "ENABLE", params: []byte(goodParams), oaRow: "01JOAROW000000000000000002"}}
+	v, err = r.uc.List(r.ctx)
+	if err != nil || len(v.Items) != 2 {
+		t.Fatalf("list = %+v %v — another commune's OA listed, or one missing", v, err)
+	}
+	a, b := v.Items[0], v.Items[1]
+	if a.OA.ID != oaRowID || a.TemplateCount != 2 || a.AttachedCount != 1 ||
+		b.OA.OAID != "222" || b.TemplateCount != 1 || b.AttachedCount != 0 {
+		t.Fatalf("items = %+v", v.Items)
+	}
+	if len(r.f.with("GROUP BY oa_row_id")) != 1 {
+		t.Fatal("the counts were not read in one grouped query")
+	}
+}
+
+// ---- the sender's reads (D-5) -----------------------------------------------------------------------------
+
+func TestOpenAccessTokenOpensOrRefreshesAsTheSystem(t *testing.T) {
+	r := newOARig(t)
+	r.withOA(t, 5*time.Hour)
+	tok, oaID, err := r.uc.OpenAccessToken(r.ctx, oaRowID)
+	if err != nil || string(tok.Lo()) != oaAccess || oaID != oaZaloID || r.zalo.calls["refresh"] != 0 {
+		t.Fatalf("fresh: oa %q err %v calls %v", oaID, err, r.zalo.calls)
+	}
+	clear(tok)
+
+	r2 := newOARig(t)
+	r2.withOA(t, time.Hour)
+	tok, _, err = r2.uc.OpenAccessToken(r2.ctx, oaRowID)
+	if err != nil || string(tok.Lo()) != oaAccess+"-2" || r2.zalo.calls["refresh"] != 1 {
+		t.Fatalf("due: err %v calls %v", err, r2.zalo.calls)
+	}
+	if e, _ := oaEntry(t, r2.f, domain.ActionRefreshZaloOAToken); e.args[1] != "system" {
+		t.Fatalf("refresh actor = %v", e.args[1])
+	}
+	r2.noSecretAnywhere(t)
+
+	r3 := newOARig(t)
+	r3.withOA(t, 5*time.Hour)
+	r3.oa.reauthSince, r3.oa.reauthReason = oaClock.Add(-time.Hour), domain.ReauthorizationRefreshTokenRejected
+	if tok, _, err := r3.uc.OpenAccessToken(r3.ctx, oaRowID); !errors.Is(err, ErrZaloOANeedsReauthorization) || tok != nil {
+		t.Fatalf("flagged: %v", err)
+	}
+}
+
+func TestTemplateForSendNeedsALiveOAAndAnEnabledTemplate(t *testing.T) {
+	r := newOARig(t)
+	r.withOA(t, 5*time.Hour)
+	r.tpls = []fakeTplRow{
+		{id: "01JTPL1", templateID: "1001", status: "ENABLE", params: []byte(`[{"name":"ten_dot"}]`)},
+		{id: "01JTPL2", templateID: "1002", status: "DISABLE", params: []byte(goodParams), match: true},
+	}
+	got, err := r.uc.TemplateForSend(r.ctx, oaRowID, "1001")
+	if err != nil || got.ID != "01JTPL1" || len(got.Params) != 1 || got.Params[0].Name != "ten_dot" {
+		t.Fatalf("got %+v err %v — a campaign template needs no milestone parameters", got, err)
+	}
+	if _, err := r.uc.TemplateForSend(r.ctx, oaRowID, "1002"); !errors.Is(err, ErrZaloOATemplateNotSendable) {
+		t.Fatalf("disabled: %v", err)
+	}
+	if _, err := r.uc.TemplateForSend(r.ctx, oaRowID, "9999"); !errors.Is(err, ErrZaloOATemplateMissing) {
+		t.Fatalf("unknown: %v", err)
+	}
+	if _, err := r.uc.TemplateForSend(r.ctx, "01JNOSUCHOA000000000000001", "1001"); !errors.Is(err, ErrCommuneZaloOAMissing) {
+		t.Fatalf("unknown OA: %v", err)
+	}
+	r.oa.reauthSince, r.oa.reauthReason = oaClock.Add(-time.Hour), domain.ReauthorizationRefreshTokenRejected
+	if _, err := r.uc.TemplateForSend(r.ctx, oaRowID, "1001"); !errors.Is(err, ErrZaloOANeedsReauthorization) {
+		t.Fatalf("flagged: %v", err)
+	}
+	if len(r.zalo.calls) != 0 || r.f.begun != 0 {
+		t.Fatal("a read called Zalo or opened a transaction")
 	}
 }

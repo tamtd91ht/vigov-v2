@@ -48,10 +48,17 @@ func TestPgCommuneOAOneLivePerOAAcrossCommunesAndResealGuard(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("insert: %v", err)
 	}
-	got, found, err := oas.Live(ctx1)
+	got, found, err := oas.LiveByID(ctx1, id1)
 	if err != nil || !found || got.OAID != "579745863508352884" || got.AuthorizedBy != "CB-00123" ||
 		!got.TokenRefreshedAt.Equal(oaAt) || got.LastCheckResult != domain.ZaloCallOK || got.NeedsReauthorization() {
 		t.Fatalf("live = %+v %v %v", got, found, err)
+	}
+	// Commune 2 asking for commune 1's row id: not found — the scope is the context's commune.
+	if _, found, err := oas.LiveByID(ctx2, id1); err != nil || found {
+		t.Fatalf("commune 2 read commune 1's OA by id: %v %v", found, err)
+	}
+	if _, found, err := oas.SealedByID(ctx2, id1); err != nil || found {
+		t.Fatalf("commune 2 read commune 1's sealed OA by id: %v %v", found, err)
 	}
 	// The same OA in ANOTHER commune: one generic error, nothing about where (0031 one_live_per_oa).
 	err = run(ctx2, c2, func(tx *pkgstore.ScopedTx) error {
@@ -60,15 +67,36 @@ func TestPgCommuneOAOneLivePerOAAcrossCommunesAndResealGuard(t *testing.T) {
 	if !errors.Is(err, ErrZaloOATaken) {
 		t.Fatalf("second commune, same OA: %v", err)
 	}
-	if _, found, _ := oas.Live(ctx2); found {
-		t.Fatal("commune 2 sees an OA")
+	if list, err := oas.ListLive(ctx2); err != nil || len(list) != 0 {
+		t.Fatalf("commune 2 sees %v (%v)", list, err)
 	}
-	// A second live row in the SAME commune is a caller fault, not "taken".
-	err = run(ctx1, c1, func(tx *pkgstore.ScopedTx) error {
+	// A second, DIFFERENT OA in the SAME commune is simply another live row (0032 dropped
+	// one_live_per_commune; ADR 0099 #1). ListLive returns both, oldest first.
+	if err := run(ctx1, c1, func(tx *pkgstore.ScopedTx) error {
 		return oas.InsertLive(ctx1, tx, liveOA("01JOAPG0000000000000000003", "111"), fakeSealed, fakeSealed)
-	})
-	if err == nil || errors.Is(err, ErrZaloOATaken) {
-		t.Fatalf("second live row in one commune: %v", err)
+	}); err != nil {
+		t.Fatalf("second OA in one commune: %v", err)
+	}
+	if list, err := oas.ListLive(ctx1); err != nil || len(list) != 2 || list[0].ID != id1 || list[1].OAID != "111" {
+		t.Fatalf("list = %+v %v", list, err)
+	}
+	// The callback's lookup by Zalo's oa_id, in this commune only.
+	if err := run(ctx1, c1, func(tx *pkgstore.ScopedTx) error {
+		s, found, err := oas.LockLiveByZaloOAID(ctx1, tx, "111")
+		if err != nil || !found || s.OA.ID != "01JOAPG0000000000000000003" {
+			t.Fatalf("lock by oa_id = %+v %v %v", s.OA, found, err)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(ctx2, c2, func(tx *pkgstore.ScopedTx) error {
+		if _, found, err := oas.LockLiveByZaloOAID(ctx2, tx, "111"); err != nil || found {
+			t.Fatalf("commune 2 locked commune 1's OA by oa_id: %v %v", found, err)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 	// Reseal guarded on the token_refreshed_at the caller read.
 	later := oaAt.Add(23 * time.Hour)
@@ -83,7 +111,7 @@ func TestPgCommuneOAOneLivePerOAAcrossCommunesAndResealGuard(t *testing.T) {
 	}); !errors.Is(err, ErrZaloRowChanged) {
 		t.Fatalf("stale reseal: %v", err)
 	}
-	s, found, err := oas.Sealed(ctx1)
+	s, found, err := oas.SealedByID(ctx1, id1)
 	if err != nil || !found || !bytes.Equal(s.AccessTokenSealed, newSealed) || !s.OA.TokenRefreshedAt.Equal(later) ||
 		!s.OA.RefreshIssuedAt.Equal(later) {
 		t.Fatalf("after reseal: %+v %v", s.OA, err)
@@ -104,8 +132,11 @@ func TestPgCommuneOAOneLivePerOAAcrossCommunesAndResealGuard(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("retire: %v", err)
 	}
-	if _, found, _ := oas.Live(ctx1); found {
+	if _, found, _ := oas.LiveByID(ctx1, id1); found {
 		t.Fatal("a retired OA is still live")
+	}
+	if list, _ := oas.ListLive(ctx1); len(list) != 1 || list[0].ID == id1 {
+		t.Fatalf("a retired OA is still listed: %+v", list)
 	}
 	if err := run(ctx1, c1, func(tx *pkgstore.ScopedTx) error {
 		return oas.RecordCheck(ctx1, tx, id1, domain.ZaloCallOK, later)
@@ -220,6 +251,12 @@ func TestPgTemplatesOnePerMilestoneAndDetachOnRetire(t *testing.T) {
 	if err != nil || len(list) != 2 || len(list[1].Params) != 3 || list[1].Params[0].MaxLength != 30 || !list[1].ParamsMatch {
 		t.Fatalf("list = %+v %v", list, err)
 	}
+	if got, found, err := tpls.GetByZaloTemplateID(ctx, oaRow, "1002"); err != nil || !found || got.ID != t2.ID {
+		t.Fatalf("by Zalo template id = %+v %v %v", got, found, err)
+	}
+	if _, found, err := tpls.GetByZaloTemplateID(ctx, "01JOAPGOTHERROW00000000001", "1002"); err != nil || found {
+		t.Fatalf("a template read under another OA row: %v %v", found, err)
+	}
 	// Attach one; a second template on the same milestone is refused (one_per_milestone).
 	m := domain.MilestoneReceived
 	if err := run(func(tx *pkgstore.ScopedTx) error {
@@ -245,8 +282,11 @@ func TestPgTemplatesOnePerMilestoneAndDetachOnRetire(t *testing.T) {
 		t.Fatalf("after re-sync: %+v %v %v", got, found, err)
 	}
 	if att, found, err := tpls.AttachedForMilestone(ctx, m); err != nil || !found || att.Template.ID != t1.ID || att.OA.ID != oaRow ||
-		att.OA.OAID != "987" || !att.OA.RetiredAt.IsZero() {
+		att.Template.OARowID != oaRow || att.OA.OAID != "987" || !att.OA.RetiredAt.IsZero() {
 		t.Fatalf("attached = %+v %v %v", att, found, err)
+	}
+	if c, err := tpls.CountsByOA(ctx); err != nil || c[oaRow] != (TemplateCounts{Templates: 2, Attached: 1}) {
+		t.Fatalf("counts = %+v %v", c, err)
 	}
 	// Another commune sees nothing attached.
 	if _, found, _ := tpls.AttachedForMilestone(ctxXa(tenant.ID("01JOTHERCOMMUNE0000000000X")), m); found {
@@ -255,7 +295,7 @@ func TestPgTemplatesOnePerMilestoneAndDetachOnRetire(t *testing.T) {
 	// Retire + detach all in one transaction; the milestone is free for the next OA's template.
 	var detached []string
 	if err := run(func(tx *pkgstore.ScopedTx) error {
-		if err := oas.Retire(ctx, tx, oaRow, "CB-00123", domain.CommuneZaloOAReplacedReason, oaAt.Add(2*time.Hour)); err != nil {
+		if err := oas.Retire(ctx, tx, oaRow, "CB-00123", domain.CommuneZaloOAReauthorizedReason, oaAt.Add(2*time.Hour)); err != nil {
 			return err
 		}
 		detached, err = tpls.DetachAllOfOA(ctx, tx, oaRow, oaAt.Add(2*time.Hour))

@@ -15,6 +15,10 @@ package app
 //  4. the template is ENABLE at Zalo
 //  5. the template declares the three parameters by name (params_match)
 //
+// SEVERAL OAs PER COMMUNE (ADR 0099 #1) CHANGE NOTHING HERE: a milestone is still ONE template in the
+// whole commune (zalo_oa_template_one_per_milestone), and conditions 2 and 3 are checked on THAT
+// template's own OA row — the OA the notice goes out through. No "default OA" exists or is needed.
+//
 // An expired ACCESS token is NOT a refusal here: it is the sender's to refresh before sending (block B;
 // 0031 question 4 "refresh first, never send with it"). This answers which template, not whether a send
 // can happen this second.

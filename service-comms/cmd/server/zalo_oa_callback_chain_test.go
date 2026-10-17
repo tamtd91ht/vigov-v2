@@ -37,7 +37,7 @@ func TestZaloOACallbackServedOnlyOnItsHost(t *testing.T) {
 		// A commune's host: the path goes to the staff side, which has no such route.
 		{"xa-a.example.gov.vn", svchttp.ZaloOAAuthorizationsPath, "rest"},
 		// The callback host serves no staff route: rest, where TenantMiddleware 404s a platform host.
-		{testOACallbackHost, "/api/v1/zalo-oas/current", "rest"},
+		{testOACallbackHost, "/api/v1/zalo-oas", "rest"},
 		{testOACallbackHost, svchttp.ZaloOAAuthorizationsPath + "/x", "rest"},
 	}
 	for _, c := range cases {
@@ -72,7 +72,7 @@ func TestZaloOACallbackSharesHostWithBotWebhook(t *testing.T) {
 		{http.MethodPost, testWebhookHost, svchttp.ZaloBotUpdatesPath, "shared-bot"},
 		{http.MethodPost, "xa-a.example.gov.vn", svchttp.ZaloBotUpdatesPath, "commune-bot"},
 		{http.MethodGet, "xa-a.example.gov.vn", svchttp.ZaloOAAuthorizationsPath, "staff"},
-		{http.MethodGet, testWebhookHost, "/api/v1/zalo-oas/current", "staff"},
+		{http.MethodGet, testWebhookHost, "/api/v1/zalo-oas", "staff"},
 	}
 	for _, c := range cases {
 		who = ""

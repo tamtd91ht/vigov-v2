@@ -69,8 +69,9 @@ const communesWithOAToRefresh = `SELECT DISTINCT tenant_id FROM zalo_commune_oa
 	WHERE retired_at IS NULL AND needs_reauthorization_since IS NULL AND access_expires_at < $1
 	ORDER BY tenant_id`
 
-// CommunesWithOAToRefresh lists the communes whose live OA's access token expires before `before`.
-// Identifiers only.
+// CommunesWithOAToRefresh lists the communes holding at least one live OA whose access token expires
+// before `before` — DISTINCT, so a commune with several due OAs (ADR 0099 #1) is listed once and walks its
+// own OAs in its own context. Identifiers only.
 func (z *ZaloOA) CommunesWithOAToRefresh(ctx context.Context, before time.Time) ([]tenant.ID, error) {
 	// @cross-tenant: ADR 0098 #6 / ADR 0058 §2b — the refresh job lists the communes whose OA access
 	// token is about to expire (tenant identifiers only, no business row), then refreshes each one IN

@@ -10,8 +10,12 @@ package store
 // the callback's lookup by state hash — lives in crosstenant/zalo_oa.go, not here.
 //
 // THE SEALED COLUMNS (access token, refresh token, code verifier) are read only by the methods that
-// exist to hand them to the use case (Sealed / LockLive / OpenByID / LockOpenByID) and are never put in
-// an error string. Live() and the template reads — what the screen reads — cannot select them.
+// exist to hand them to the use case (SealedByID / LockLiveByID / LockLiveByZaloOAID / OpenByID /
+// LockOpenByID) and are never put in an error string. ListLive / LiveByID and the template reads — what
+// the screen reads — cannot select them.
+//
+// SEVERAL LIVE OAs PER COMMUNE (ADR 0099 #1, migration 0032): every read of an OA is BY ROW ID (or by
+// Zalo's oa_id for the callback); there is no "the commune's live OA" read.
 //
 // NO audit.Write HERE: internal/app opens the transaction and writes the entry inside it.
 
@@ -80,10 +84,38 @@ func scanCommuneOA(scan func(...any) error, extra ...any) (domain.CommuneZaloOA,
 	return o, nil
 }
 
-// Live reads the commune's live OA — metadata only. found=false: no OA connected.
-func (s *ZaloCommuneOAStore) Live(ctx context.Context) (domain.CommuneZaloOA, bool, error) {
+// ListLive reads EVERY live OA of the commune — metadata only, oldest first (0032's
+// zalo_commune_oa_live_by_commune). ADR 0099 #1: a commune holds several OAs at once, so there is no
+// "the live OA" any more; every other read below is BY ROW ID. Reading "the first live row" here would
+// answer an arbitrary OA the day a commune has two — the screen describing one, the sender using another
+// (0032 header, READ PATHS THAT CHANGE MEANING).
+func (s *ZaloCommuneOAStore) ListLive(ctx context.Context) ([]domain.CommuneZaloOA, error) {
 	// Scoped.Query adds `WHERE tenant_id = $1` and binds the context's commune.
-	rows, err := s.db.For(ctx).Query(ctx, communeOAColumns, "zalo_commune_oa", "AND retired_at IS NULL")
+	rows, err := s.db.For(ctx).Query(ctx, communeOAColumns, "zalo_commune_oa",
+		"AND retired_at IS NULL ORDER BY created_at, id")
+	if err != nil {
+		return nil, fmt.Errorf("zalo_commune_oa: list: %w", err)
+	}
+	defer rows.Close()
+	var out []domain.CommuneZaloOA
+	for rows.Next() {
+		o, err := scanCommuneOA(rows.Scan)
+		if err != nil {
+			return nil, fmt.Errorf("zalo_commune_oa: scan: %w", err)
+		}
+		out = append(out, o)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("zalo_commune_oa: list: %w", err)
+	}
+	return out, nil
+}
+
+// LiveByID reads one live OA of this commune — metadata only. found=false: no such row HERE, or it is
+// retired. Another commune's id is not found: the scope is the context's commune.
+func (s *ZaloCommuneOAStore) LiveByID(ctx context.Context, id string) (domain.CommuneZaloOA, bool, error) {
+	// Scoped.Query adds `WHERE tenant_id = $1` and binds the context's commune.
+	rows, err := s.db.For(ctx).Query(ctx, communeOAColumns, "zalo_commune_oa", "AND id = $2 AND retired_at IS NULL", id)
 	if err != nil {
 		return domain.CommuneZaloOA{}, false, fmt.Errorf("zalo_commune_oa: read: %w", err)
 	}
@@ -98,26 +130,41 @@ func (s *ZaloCommuneOAStore) Live(ctx context.Context) (domain.CommuneZaloOA, bo
 	return o, true, rows.Err()
 }
 
-// Sealed reads the live OA WITH its sealed bytes, outside any transaction — for a Zalo call. found=false:
-// no live OA.
-func (s *ZaloCommuneOAStore) Sealed(ctx context.Context) (CommuneOASecrets, bool, error) {
+// SealedByID reads one live OA WITH its sealed bytes, outside any transaction — for a Zalo call.
+// found=false: no such live row in this commune.
+func (s *ZaloCommuneOAStore) SealedByID(ctx context.Context, id string) (CommuneOASecrets, bool, error) {
 	// Scoped.Query adds `WHERE tenant_id = $1` and binds the context's commune.
 	rows, err := s.db.For(ctx).Query(ctx, communeOAColumns+communeOASealedColumns, "zalo_commune_oa",
-		"AND retired_at IS NULL")
+		"AND id = $2 AND retired_at IS NULL", id)
 	if err != nil {
 		return CommuneOASecrets{}, false, fmt.Errorf("zalo_commune_oa: read sealed: %w", err)
 	}
 	return firstSealedOA(rows)
 }
 
-// LockLive reads the live OA with its sealed bytes and holds it until the transaction ends — every write
-// below is read-decide-write. found=false: no live OA.
-func (s *ZaloCommuneOAStore) LockLive(ctx context.Context, tx *store.ScopedTx) (CommuneOASecrets, bool, error) {
+// LockLiveByID reads one live OA with its sealed bytes and holds it until the transaction ends — every
+// write below is read-decide-write. found=false: no such live row in this commune.
+func (s *ZaloCommuneOAStore) LockLiveByID(ctx context.Context, tx *store.ScopedTx, id string) (CommuneOASecrets, bool, error) {
 	// ScopedTx.Query adds `WHERE tenant_id = $1` and binds the transaction's commune.
 	rows, err := tx.Query(ctx, communeOAColumns+communeOASealedColumns, "zalo_commune_oa",
-		"AND retired_at IS NULL FOR UPDATE")
+		"AND id = $2 AND retired_at IS NULL FOR UPDATE", id)
 	if err != nil {
 		return CommuneOASecrets{}, false, fmt.Errorf("zalo_commune_oa: lock: %w", err)
+	}
+	return firstSealedOA(rows)
+}
+
+// LockLiveByZaloOAID locks the live row of THIS commune carrying Zalo's oa_id — the callback's question
+// "is this very OA already connected here?" (ADR 0099 #1 keeps ADR 0098 #11 for the SAME OA: a
+// re-authorization retires the old row and inserts a new one). At most one row: 0031's
+// zalo_commune_oa_one_live_per_oa is platform-wide. found=false: not live here (it may be live in another
+// commune — that is the insert's 23505, never a read of the other commune).
+func (s *ZaloCommuneOAStore) LockLiveByZaloOAID(ctx context.Context, tx *store.ScopedTx, oaID string) (CommuneOASecrets, bool, error) {
+	// ScopedTx.Query adds `WHERE tenant_id = $1` and binds the transaction's commune.
+	rows, err := tx.Query(ctx, communeOAColumns+communeOASealedColumns, "zalo_commune_oa",
+		"AND oa_id = $2 AND retired_at IS NULL FOR UPDATE", oaID)
+	if err != nil {
+		return CommuneOASecrets{}, false, fmt.Errorf("zalo_commune_oa: lock by oa_id: %w", err)
 	}
 	return firstSealedOA(rows)
 }
@@ -144,9 +191,10 @@ const insertCommuneOA = `INSERT INTO zalo_commune_oa (tenant_id, id, oa_id, oa_n
 	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9, $10, $11, $12, $9, $9)`
 
 // InsertLive connects an OA: a new live row in the transaction's commune. ErrZaloOATaken when the OA is
-// live in another commune (0031's one_live_per_oa index, 23505 naming it). Any OTHER 23505 — the
-// one-live-per-commune index — is a caller fault (the live row was not retired first) and is returned as
-// is. The transaction is then aborted; the caller rolls it back.
+// live elsewhere (0031's one_live_per_oa index, 23505 naming it) — the caller retired this commune's own
+// live row of the same OA first (LockLiveByZaloOAID), so what is left is another commune. 0032 dropped the
+// one-live-per-commune index (ADR 0099 #1): a second, different OA is simply another row. The transaction
+// is then aborted; the caller rolls it back.
 func (s *ZaloCommuneOAStore) InsertLive(ctx context.Context, tx *store.ScopedTx, o domain.CommuneZaloOA,
 	accessSealed, refreshSealed []byte) error {
 
@@ -481,6 +529,50 @@ func (s *ZaloOATemplateStore) Get(ctx context.Context, id string) (domain.ZaloOA
 	return firstTemplate(rows)
 }
 
+// GetByZaloTemplateID reads the template Zalo calls templateID under one OA row of this commune — the
+// sender's read (ADR 0099 #8: a campaign names the OA and Zalo's template id). 0031's unique key
+// (tenant_id, oa_row_id, template_id) makes it at most one row. found=false: not loaded from that OA here.
+func (s *ZaloOATemplateStore) GetByZaloTemplateID(ctx context.Context, oaRowID, templateID string) (domain.ZaloOATemplate, bool, error) {
+	// Scoped.Query adds `WHERE tenant_id = $1` and binds the context's commune.
+	rows, err := s.db.For(ctx).Query(ctx, templateColumns, "zalo_oa_template", "AND oa_row_id = $2 AND template_id = $3",
+		oaRowID, templateID)
+	if err != nil {
+		return domain.ZaloOATemplate{}, false, fmt.Errorf("zalo_oa_template: read by template id: %w", err)
+	}
+	return firstTemplate(rows)
+}
+
+// TemplateCounts is how many templates were loaded from one OA row, and how many carry a milestone.
+type TemplateCounts struct {
+	Templates int
+	Attached  int
+}
+
+// CountsByOA counts this commune's templates per OA row in ONE read — the OA list shows the counts of
+// every live OA (ADR 0099 #1), and a read per OA would grow with the list. Retired OAs' rows are counted
+// too; the caller keeps the ones it lists.
+func (s *ZaloOATemplateStore) CountsByOA(ctx context.Context) (map[string]TemplateCounts, error) {
+	// Scoped.Query adds `WHERE tenant_id = $1` and binds the context's commune.
+	rows, err := s.db.For(ctx).Query(ctx, "oa_row_id, count(*), count(milestone)", "zalo_oa_template", "GROUP BY oa_row_id")
+	if err != nil {
+		return nil, fmt.Errorf("zalo_oa_template: count: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]TemplateCounts{}
+	for rows.Next() {
+		var id string
+		var c TemplateCounts
+		if err := rows.Scan(&id, &c.Templates, &c.Attached); err != nil {
+			return nil, fmt.Errorf("zalo_oa_template: count: scan: %w", err)
+		}
+		out[id] = c
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("zalo_oa_template: count: %w", err)
+	}
+	return out, nil
+}
+
 // LockByID is Get inside the transaction, held until it ends.
 func (s *ZaloOATemplateStore) LockByID(ctx context.Context, tx *store.ScopedTx, id string) (domain.ZaloOATemplate, bool, error) {
 	// ScopedTx.Query adds `WHERE tenant_id = $1` and binds the transaction's commune.
@@ -592,7 +684,9 @@ func (s *ZaloOATemplateStore) DetachAllOfOA(ctx context.Context, tx *store.Scope
 }
 
 // AttachedTemplate is MauTinXa's read: the template attached to a milestone AND the OA row it belongs to,
-// so the resolver can refuse on the OA's state as well as the template's (0031 question 4).
+// so the resolver can refuse on the OA's state as well as the template's (0031 question 4). With several
+// OAs per commune (ADR 0099 #1) the OA row is also WHICH OA sends the milestone's notice: Template.OARowID
+// = OA.ID. The milestone stays ONE template per commune (zalo_oa_template_one_per_milestone kept).
 type AttachedTemplate struct {
 	Template domain.ZaloOATemplate
 	OA       domain.CommuneZaloOA
