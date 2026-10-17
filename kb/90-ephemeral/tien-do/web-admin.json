@@ -1680,7 +1680,7 @@
     },
     {
       "id": "thuoc-tinh-dong-danh-ba-web-17-10",
-      "menu": "nguoi-dan",
+      "menu": "danh-ba-nguoi-dan",
       "viec": "Cấu hình → Thuộc tính danh bạ (admin.citizen_field, kéo-thả thứ tự) + ô động/email/cột/bộ lọc ở /nguoi-dan (ADR 0101)",
       "trang_thai": "dang_lam",
       "no_confirm": [],
