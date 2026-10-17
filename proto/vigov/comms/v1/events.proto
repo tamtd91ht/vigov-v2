@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package vigov.comms.v1;
+
+// comms — EVENT payloads: the facts `comms` publishes to whoever listens. `comms.proto` holds the RPC
+// surface; this file the other half of the contract (same split, same reasons as
+// proto/vigov/petitions/v1/events.proto — read its header before adding a second event here).
+//
+// The wrapper is `vigov.events.v1.Envelope` (Go: `core/events.Envelope`): `id`, `name`, `tenant_id`,
+// `occurred_at`. `tenant_id` lives in the envelope and nowhere else (rule 1, forbidden #2).
+
+// ZaloOAEventReceived is the payload of the event named:
+//
+//     comms.zalo_oa_event_received.v1
+//
+// PAST TENSE, VERSIONED (rule 2, invariant 4): Zalo posted an event of a commune's OA to the platform's
+// webhook, comms verified its signature (X-ZEvent-Signature, the shared app's webhook OA Secret Key) and
+// found the commune holding that OA live. Owner decision 17/10/2026 (TASK W-1).
+//
+// THE PAYLOAD IS NOT THE PROTOJSON OF THIS MESSAGE — the one deliberate exception to the petitions
+// convention. `Envelope.payload` carries ZALO'S OWN REQUEST BODY, BYTE FOR BYTE, unparsed and unchanged:
+// comms is a relay, not a translator, and a re-encoding would drop fields Zalo adds later and break any
+// re-verification of the signature downstream. Its shape is Zalo's (developers.zalo.me, OA webhook
+// events: `app_id`, `event_name`, `timestamp`, `sender`, `recipient`, `message`, …), versioned by Zalo,
+// not by this file. This message therefore declares NO fields: the contract here is the name, the
+// envelope and the transport.
+//
+// TRANSPORT (core/events/kafka): topic = this name; message key = the commune's tenant_id; value = the
+// envelope JSON. Published synchronously — Zalo is answered 200 only after the broker acknowledged.
+//
+// PERSONAL DATA — READ BEFORE CONSUMING. Unlike every other event in this repository, this payload DOES
+// carry citizens' personal data (Zalo user ids, message text, attachments, shared phone numbers): the
+// owner accepted it on 17/10/2026, and the topic's retention is operations' decision (Decree 13/2023).
+// A consumer must not log the payload (rule 3) and must not copy it anywhere it does not need it.
+//
+// AT LEAST ONCE: Zalo redelivers what it saw fail, and each delivery gets a NEW envelope id. Deduplicate
+// on the payload's own identifiers (`message.msg_id`, `event_name` + `timestamp`), never on the envelope
+// id alone.
+message ZaloOAEventReceived {}

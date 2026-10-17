@@ -257,6 +257,22 @@ var envHints = map[string]envHint{
 		place: inDeploymentEnv,
 		shape: "bot.api.vigov.vn",
 	},
+	"ZALO_OA_WEBHOOK_SECRET": {
+		meaning: "\"OA Secret Key\" ở mục Webhook của Zalo App dùng chung — Zalo ký mọi sự kiện OA gửi tới https://<ZALO_OA_CALLBACK_HOST>/api/v1/zalo-oa-events bằng khoá này (header X-ZEvent-Signature). " +
+			"Thiếu thì comms không kiểm được chữ ký, không chuyển được sự kiện OA nào lên Kafka. Ai giữ khoá giả được sự kiện của OA mọi xã.",
+		source: "developers.zalo.me > ứng dụng của ViHAT > Webhook > \"OA Secret Key\" (người giữ tài khoản developer của ViHAT cấp). " +
+			"KHÁC ZALO_OA_APP_SECRET. Đặt xong khai Webhook URL https://<ZALO_OA_CALLBACK_HOST>/api/v1/zalo-oa-events ở cùng trang. Không dán vào chat, tài liệu hay manifest.",
+		place: inSecret,
+		shape: "<OA Secret Key ở mục Webhook của ứng dụng — không bao giờ ghi giá trị ở đâu khác>",
+	},
+	"KAFKA_EVENT_ADDRESS": {
+		meaning: "Danh sách broker của Kafka chở sự kiện nghiệp vụ (ADR 0010) — comms chuyển mọi sự kiện webhook OA Zalo lên đây. " +
+			"Thiếu thì webhook OA trả 503 cho mọi sự kiện, Zalo gửi lại tới khi hết lượt.",
+		source: "Người vận hành Kafka: host:port của các broker (thường cổng 9092; NetworkPolicy `allow-egress` hiện chỉ mở 9092). " +
+			"Có tài khoản thì đặt thêm KAFKA_EVENT_USERNAME/PASSWORD (Secret) và KAFKA_EVENT_SASL_MECHANISM (ConfigMap) — khi ấy kết nối là SASL qua TLS; không có thì kết nối không mã hoá (chủ dự án chấp nhận 17/10/2026).",
+		place: inConfigMap,
+		shape: "<broker 1>:9092,<broker 2>:9092 — đủ mọi broker, cách nhau dấu phẩy, không tiền tố giao thức",
+	},
 	"RABBITMQ_DSN": {
 		meaning: "Kết nối RabbitMQ cho tác vụ nền có hẹn giờ (ADR 0010) — không dùng cho sự kiện giữa các dịch vụ.",
 		source:  "Người vận hành RabbitMQ cấp user, mật khẩu và vhost.",

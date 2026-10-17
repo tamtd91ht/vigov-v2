@@ -200,6 +200,19 @@ func (c Config) ZaloOACallbackHost() string {
 	return c.zaloOACallbackHost
 }
 
+// ZaloOAWebhookSecret is ZALO_OA_WEBHOOK_SECRET — the shared app's webhook "OA Secret Key" every OA
+// event is signed with (X-ZEvent-Signature). nil only in dev (required in staging/prod). Never printed.
+func (c Config) ZaloOAWebhookSecret() secret.Secret {
+	c.require("ZaloOAWebhookSecret", ZaloOA)
+	return c.zaloOAWebhookSecret
+}
+
+// KafkaEventBroker is the business-event broker (kafka_event.go): Configured() false only in dev.
+func (c Config) KafkaEventBroker() KafkaEventBroker {
+	c.require("KafkaEventBroker", KafkaEvent)
+	return c.kafkaEvent
+}
+
 // BasemapURL is BASEMAP_URL, validated (https, no credentials, no query) and ending in "/" — the
 // storage prefix the public basemap route reads from. "" means not configured, in every environment.
 func (c Config) BasemapURL() string {
@@ -288,6 +301,8 @@ type configView struct {
 	ZaloOAAppID                    string
 	ZaloOAAppSecret                secret.Secret // redacts itself on every rendering path (core/secret)
 	ZaloOACallbackHost             string
+	ZaloOAWebhookSecret            secret.Secret
+	KafkaEventBroker               KafkaEventBroker // the credentials inside are secret.Secret
 	BasemapURL                     string
 	MiniAppProfileCode             secret.Secret
 	RabbitMQDSN                    secret.DSN
@@ -337,6 +352,8 @@ func (c Config) view() configView {
 		ZaloOAAppID:                    c.zaloOAAppID,
 		ZaloOAAppSecret:                c.zaloOAAppSecret,
 		ZaloOACallbackHost:             c.zaloOACallbackHost,
+		ZaloOAWebhookSecret:            c.zaloOAWebhookSecret,
+		KafkaEventBroker:               c.kafkaEvent,
 		BasemapURL:                     c.basemapURL,
 		MiniAppProfileCode:             c.miniAppProfileCode,
 		RabbitMQDSN:                    c.rabbitMQDSN,

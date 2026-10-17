@@ -107,7 +107,14 @@ const (
 	// service-comms only, required in staging/prod. A SEPARATE GROUP FROM ZaloBotWebhook: the bot and
 	// the OA app are two Zalo products with two secrets and two lifecycles, and a deployment that runs
 	// one without the other must not be forced to set the other's variables. See zalo_oa.go. APPENDED.
+	// Since 17/10/2026 also ZALO_OA_WEBHOOK_SECRET — the same app's webhook "OA Secret Key", which
+	// verifies every OA event Zalo posts to comms (TASK W-1).
 	ZaloOA
+	// KafkaEvent: KAFKA_EVENT_ADDRESS, KAFKA_EVENT_USERNAME, KAFKA_EVENT_PASSWORD,
+	// KAFKA_EVENT_SASL_MECHANISM — the Kafka carrying business events (ADR 0010). First declared by
+	// service-comms (owner, 17/10/2026). Only the ADDRESS is required in staging/prod; credentials are
+	// optional by the owner's decision (kafka_event.go). APPENDED.
+	KafkaEvent
 
 	groupEnd // not a group: the bound Uses checks against
 )
@@ -138,6 +145,7 @@ var groupNames = map[Group]string{
 	Basemap:             "Basemap",
 	MiniAppProfile:      "MiniAppProfile",
 	ZaloOA:              "ZaloOA",
+	KafkaEvent:          "KafkaEvent",
 }
 
 // String is the identifier a main writes (`config.Redis`), so a message names what to add.

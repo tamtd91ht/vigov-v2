@@ -49,6 +49,32 @@ func TestZaloOACallbackServedOnlyOnItsHost(t *testing.T) {
 	}
 }
 
+// The OA webhook (owner, 17/10/2026) rides the callback chain on the callback host ONLY: a commune's host
+// never reaches it — there it falls to the staff side, which has no such route.
+func TestZaloOAEventsServedOnlyOnTheCallbackHost(t *testing.T) {
+	rest, callback, who := oaMarkers()
+	h := withZaloOACallback(rest, callback, testOACallbackHost)
+	cases := []struct{ host, path, want string }{
+		{testOACallbackHost, svchttp.ZaloOAEventsPath, "callback"},
+		{"xa-a.example.gov.vn", svchttp.ZaloOAEventsPath, "rest"},
+		{testOACallbackHost, svchttp.ZaloOAEventsPath + "/x", "rest"},
+	}
+	for _, c := range cases {
+		*who = ""
+		r := httptest.NewRequest(http.MethodPost, "https://"+c.host+c.path, nil)
+		r.Host = c.host
+		h.ServeHTTP(httptest.NewRecorder(), r)
+		if *who != c.want {
+			t.Errorf("POST %s%s → %q, want %q", c.host, c.path, *who, c.want)
+		}
+	}
+	*who = ""
+	getHost(withZaloOACallback(rest, callback, ""), testOACallbackHost, svchttp.ZaloOAEventsPath)
+	if *who != "rest" {
+		t.Errorf("with no ZALO_OA_CALLBACK_HOST the OA webhook was served (%q)", *who)
+	}
+}
+
 func TestZaloOACallbackAbsentWithoutHost(t *testing.T) {
 	rest, callback, who := oaMarkers()
 	h := withZaloOACallback(rest, callback, "")

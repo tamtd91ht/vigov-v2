@@ -27,6 +27,8 @@ var allGroupVars = []string{
 	"RABBITMQ_DSN", "RABBITMQ_EXCHANGE", "ELASTICSEARCH_ADDRS", "ELASTICSEARCH_API_KEY",
 	"ELASTICSEARCH_INDEX_PREFIX", "DANGEROUS_AUTH_BYPASS", "BASEMAP_URL",
 	"MINI_APP_PROFILE_CODE", "ZALO_OA_APP_ID", "ZALO_OA_APP_SECRET", "ZALO_OA_CALLBACK_HOST",
+	"ZALO_OA_WEBHOOK_SECRET", "KAFKA_EVENT_ADDRESS", "KAFKA_EVENT_USERNAME", "KAFKA_EVENT_PASSWORD",
+	"KAFKA_EVENT_SASL_MECHANISM",
 }
 
 func clean(t *testing.T, env string, set map[string]string) {
@@ -75,8 +77,12 @@ var prodRequired = map[Group][]string{
 	Basemap: nil,
 	// MINI_APP_PROFILE_CODE is never required: empty is the prod link (mini_app_profile.go).
 	MiniAppProfile: nil,
-	// Owner, 16/10/2026 (ADR 0098 #2): "bắt buộc ở staging/prod" — all three, there is no half an app.
-	ZaloOA: {"ZALO_OA_APP_ID", "ZALO_OA_APP_SECRET", "ZALO_OA_CALLBACK_HOST"},
+	// Owner, 16/10/2026 (ADR 0098 #2): "bắt buộc ở staging/prod" — all of them, there is no half an app.
+	// The webhook secret joined the group on 17/10/2026 (TASK W-1), and with it the requirement.
+	ZaloOA: {"ZALO_OA_APP_ID", "ZALO_OA_APP_SECRET", "ZALO_OA_CALLBACK_HOST", "ZALO_OA_WEBHOOK_SECRET"},
+	// Owner, 17/10/2026: the address is used ⇒ required (ADR 0057); the credentials are optional by
+	// decision — their absence is the plaintext mode, so requiring them would contradict it.
+	KafkaEvent: {"KAFKA_EVENT_ADDRESS"},
 }
 
 func TestEveryGroupHasAProdDecision(t *testing.T) {

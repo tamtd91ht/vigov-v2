@@ -139,6 +139,12 @@ spec:
             # _PUBLIC_MEDIA_BASE_URL · MALWARE_SCANNER_ADDRESS. `configUses` khai ObjectStore,
             # PublicMedia, MalwareScan, nên ở staging/prod thiếu một key là pod TỪ CHỐI KHỞI ĐỘNG và gọi
             # tên key (ADR 0057). Đường ra 9000/3310: NetworkPolicy `allow-comms-egress-storage`.
+            # ⚠ TỪ 17/10/2026 (webhook sự kiện OA Zalo → Kafka, TASK W-1): Secret này PHẢI có thêm
+            # ZALO_OA_WEBHOOK_SECRET ("OA Secret Key" mục Webhook của app Zalo dùng chung), và
+            # `common-config` PHẢI có KAFKA_EVENT_ADDRESS. `configUses` khai ZaloOA + KafkaEvent, nên ở
+            # prod thiếu một trong hai là pod TỪ CHỐI KHỞI ĐỘNG (ADR 0057). KAFKA_EVENT_USERNAME /
+            # _PASSWORD (Secret này) + KAFKA_EVENT_SASL_MECHANISM (common-config) là TUỲ CHỌN: vắng cả
+            # ba = kết nối Kafka không mã hoá (chủ dự án chấp nhận). Đường ra 9092: `allow-egress`.
             - secretRef: { name: comms-secrets }
 
           # /healthz nằm NGOÀI chuỗi phân giải xã, có chủ ý (`main.go:420`): nó trả lời "tiến

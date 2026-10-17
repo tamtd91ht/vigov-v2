@@ -1236,6 +1236,10 @@ export type comms_zaloOACheckResultOut = {
   "oa_name"?: string;
 };
 
+export type comms_zaloOAEventAck = {
+  "ok": boolean;
+};
+
 export type comms_zaloOALastCheckOut = {
   "at": string;
   "result": string;
@@ -14043,6 +14047,27 @@ export type comms_get_zalo_oa_authorizations = {
     429: httpx_Error;
     500: void;
     503: void;
+  };
+  errorCodes: {
+    429: "rate_limited";
+  };
+};
+
+/** POST /api/v1/zalo-oa-events — Webhook sự kiện OA Zalo — Zalo gửi mọi sự kiện của OA các xã đã uỷ quyền cho app dùng chung; kiểm chữ ký X-ZEvent-Signature (so thời gian hằng) và app_id, tìm xã đang giữ OA ấy, rồi chuyển NGUYÊN thân sự kiện lên Kafka (comms.zalo_oa_event_received.v1, khoá = xã); OA không thuộc xã nào thì trả 200 và không chuyển gì */
+export type comms_post_zalo_oa_events = {
+  duongDan: "/api/v1/zalo-oa-events";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_zaloOAEventAck;
+    403: httpx_Error;
+    413: httpx_Error;
+    429: httpx_Error;
+    503: httpx_Error;
   };
   errorCodes: {
     429: "rate_limited";

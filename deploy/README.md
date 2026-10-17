@@ -1127,6 +1127,22 @@ Bảng đầy đủ: `deploy/cau-hinh/README.md`.
    thật: app mới có phải chờ Zalo duyệt không; màn Cho phép có hiện tên doanh nghiệp sở hữu ngoài tên app
    không; mã lỗi token và tên trường JSON của ZBS có khớp tài liệu không.
 
+### 14.6 Webhook sự kiện OA → Kafka (chủ dự án chốt 17/10/2026)
+
+comms nhận mọi sự kiện của OA các xã ở `https://<ZALO_OA_CALLBACK_HOST>/api/v1/zalo-oa-events`, kiểm chữ ký
+`X-ZEvent-Signature`, tìm xã đang giữ OA ấy, rồi chuyển **nguyên** thân sự kiện lên Kafka, topic
+`comms.zalo_oa_event_received.v1`, khoá = mã xã. OA không thuộc xã nào thì trả 200 và không chuyển gì.
+
+| # | Việc | Ở đâu |
+|---|---|---|
+| 1 | Tạo topic `comms.zalo_oa_event_received.v1` (số partition, thời gian giữ: người vận hành chọn — topic chứa dữ liệu cá nhân của người dân, Nghị định 13). comms **không** tự tạo topic; thiếu topic thì mọi sự kiện trả 503 | Kafka |
+| 2 | Đặt `KAFKA_EVENT_ADDRESS` (ConfigMap `common-config`); có tài khoản thì thêm `KAFKA_EVENT_USERNAME` / `_PASSWORD` (Secret `comms-secrets`) + `KAFKA_EVENT_SASL_MECHANISM` (ConfigMap) | Rancher |
+| 3 | developers.zalo.me > app dùng chung > **Webhook**: khai URL ở trên, chép "OA Secret Key" vào `ZALO_OA_WEBHOOK_SECRET` (Secret `comms-secrets`), bật các sự kiện cần nhận | developers.zalo.me · Rancher |
+| 4 | `kubectl -n <namespace> rollout restart deploy/vigov-service-comms` | — |
+
+Ở **prod** thiếu `ZALO_OA_WEBHOOK_SECRET` hoặc `KAFKA_EVENT_ADDRESS` là comms **không khởi động** — đặt trước khi
+merge `dev` vào `main`. Bảng biến: `deploy/cau-hinh/README.md`.
+
 | Quay về với `oa=` | Nghĩa | Làm gì |
 |---|---|---|
 | `da-noi` | Nối xong | — |

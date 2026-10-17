@@ -11,6 +11,8 @@ package crosstenant
 //     commune's context through core/store.
 //  2. CommunesWithOAToRefresh / CommunesWithOpenAuthorizations — tenant identifiers only.
 //  3. The refresh job's scheduler lock, so ONE replica refreshes.
+//  4. TenantByLiveOAID — live oa_id → commune, for the OA webhook (owner, 17/10/2026). Identifier only,
+//     and only for an event whose signature already verified.
 //
 // WHAT THIS ADDS TO THE PACKAGE'S RULE ("never a read returning business rows of more than one commune"):
 // 1 RESOLVES ONE commune from an unguessable key (32 CSPRNG bytes, hashed) that Zalo's redirect
@@ -61,6 +63,37 @@ func (z *ZaloOA) OpenAuthorizationByStateHash(ctx context.Context, hash []byte) 
 		return "", "", false, nil
 	}
 	return t, id, true, nil
+}
+
+// tenantByLiveOAID uses 0031's zalo_commune_oa_one_live_per_oa: at most ONE live row per oa_id across the
+// platform, so the answer is one commune or none.
+const tenantByLiveOAID = `SELECT tenant_id FROM zalo_commune_oa WHERE oa_id = $1 AND retired_at IS NULL`
+
+// TenantByLiveOAID returns the commune holding oaID LIVE. found=false: no live row — unknown, retired or
+// never connected alike, one answer.
+//
+// NEW USE OF THE INDEX (owner decision 17/10/2026, TASK W-1): migration 0031's comment on
+// zalo_commune_oa_one_live_per_oa says nothing reads oa_id → tenant_id through it. That was true of the
+// authorization callback; the OA WEBHOOK has no other key — Zalo posts every OA's events to one URL, and
+// the event names its OA, never a commune. The commune is resolved from a SIGNED event (the handler
+// verifies X-ZEvent-Signature before this runs), and only its identifier is returned.
+func (z *ZaloOA) TenantByLiveOAID(ctx context.Context, oaID string) (tenant.ID, bool, error) {
+	var tid string
+	// @cross-tenant: owner decision 17/10/2026 (TASK W-1) — the Zalo OA webhook arrives on the platform host
+	// with no commune in it; the commune is the one holding the event's OA live (0031
+	// zalo_commune_oa_one_live_per_oa, platform-wide unique). Identifier only, after the signature check.
+	err := z.db.QueryRowContext(ctx, tenantByLiveOAID, oaID).Scan(&tid)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("crosstenant: find the commune of a live OA: %w", err)
+	}
+	t := tenant.ID(tid)
+	if !t.Valid() {
+		return "", false, nil
+	}
+	return t, true, nil
 }
 
 // communesWithOAToRefresh — live OA rows not flagged for re-authorization whose access token expires

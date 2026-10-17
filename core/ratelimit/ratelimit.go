@@ -134,6 +134,17 @@ const (
 	ZaloOACallbackWindow = time.Minute
 )
 
+// The Zalo OA webhook threshold — DECIDED BY THE OWNER (17/10/2026, TASK W-1): 600 per minute per client
+// network on service-comms' public POST /api/v1/zalo-oa-events, the bot webhook's figure. Every legitimate
+// event arrives from Zalo's own servers — a handful of networks carrying every commune's OA traffic — so a
+// figure sized for one person would throttle Zalo itself, while the bound still caps how fast one network
+// can probe the signature (counted BEFORE the body is read). Changing either number is a rule 13 stop
+// condition.
+const (
+	ZaloOAWebhookLimit  = 600
+	ZaloOAWebhookWindow = time.Minute
+)
+
 // The public Mini App ID lookup threshold (service-platform GET /api/v1/mini-app-ids; owner chose
 // option A on 06/10/2026: the deploy script reads App IDs from the platform registry). PROVISIONAL, NOT
 // AN OWNER FIGURE: the owner approved the unauthenticated route and named no number. 30 per minute per
@@ -266,6 +277,14 @@ var ZaloBotPairing = Policy{name: "zalo-bot-pairing", limit: ZaloBotPairingLimit
 // on guessing one.
 var ZaloOACallback = Policy{name: "zalo-oa-callback", limit: ZaloOACallbackLimit,
 	window: ZaloOACallbackWindow, event: "zalo_oa_callback.rate_limited"}
+
+// ZaloOAWebhook is the policy of service-comms' public POST /api/v1/zalo-oa-events (owner, 17/10/2026), on
+// the platform's callback host. Keys from WebhookIPKey: the host carries no commune. Its OWN name and event,
+// so OA event traffic never spends the bot webhook's or the authorization callback's budget and a refusal
+// is told apart in the security log. FAILS CLOSED, the default: the route is unauthenticated until the
+// signature is checked, and nobody decided that a Redis outage may lift the bound.
+var ZaloOAWebhook = Policy{name: "zalo-oa-webhook", limit: ZaloOAWebhookLimit,
+	window: ZaloOAWebhookWindow, event: "zalo_oa_webhook.rate_limited"}
 
 // MiniAppIDLookup is the policy of service-platform's public GET /api/v1/mini-app-ids. Keys from
 // PlatformIPKey. FAILS CLOSED, the default: nobody decided that a Redis outage may lift the bound on an

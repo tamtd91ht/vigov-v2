@@ -618,6 +618,10 @@
       "kind": "func",
       "at": "service-identity/internal/app/operator_enrollment.go:152"
     },
+    "app.Configured": {
+      "kind": "func",
+      "at": "service-comms/internal/app/zalo_oa_events.go:112"
+    },
     "app.ContentAudio": {
       "kind": "type",
       "at": "service-comms/internal/app/content_audio.go:151"
@@ -2242,6 +2246,10 @@
       "kind": "func",
       "at": "service-comms/internal/app/zalo_links.go:98"
     },
+    "app.NewZaloOAEvents": {
+      "kind": "func",
+      "at": "service-comms/internal/app/zalo_oa_events.go:103"
+    },
     "app.NewZaloOARefreshJob": {
       "kind": "func",
       "at": "service-comms/internal/app/zalo_oa_refresh_job.go:69"
@@ -2745,6 +2753,10 @@
     "app.Reassign": {
       "kind": "func",
       "at": "service-petitions/internal/app/task_assignment.go:85"
+    },
+    "app.Receive": {
+      "kind": "func",
+      "at": "service-comms/internal/app/zalo_oa_events.go:117"
     },
     "app.Record": {
       "kind": "func",
@@ -4106,6 +4118,26 @@
       "kind": "type",
       "at": "service-comms/internal/app/zalo_commune_oa.go:94"
     },
+    "app.ZaloOAEventOutcome": {
+      "kind": "type",
+      "at": "service-comms/internal/app/zalo_oa_events.go:62"
+    },
+    "app.ZaloOAEventResult": {
+      "kind": "type",
+      "at": "service-comms/internal/app/zalo_oa_events.go:75"
+    },
+    "app.ZaloOAEventTenantResolver": {
+      "kind": "type",
+      "at": "service-comms/internal/app/zalo_oa_events.go:82"
+    },
+    "app.ZaloOAEvents": {
+      "kind": "type",
+      "at": "service-comms/internal/app/zalo_oa_events.go:93"
+    },
+    "app.ZaloOAEventsConfig": {
+      "kind": "type",
+      "at": "service-comms/internal/app/zalo_oa_events.go:87"
+    },
     "app.ZaloOARefreshJob": {
       "kind": "type",
       "at": "service-comms/internal/app/zalo_oa_refresh_job.go:61"
@@ -4312,15 +4344,15 @@
     },
     "config.BasemapURL": {
       "kind": "func",
-      "at": "core/config/accessors.go:205"
+      "at": "core/config/accessors.go:218"
     },
     "config.CanhBao": {
       "kind": "func",
-      "at": "core/config/config.go:943"
+      "at": "core/config/config.go:979"
     },
     "config.CauPhienBat": {
       "kind": "func",
-      "at": "core/config/config.go:1146"
+      "at": "core/config/config.go:1188"
     },
     "config.CheckBucketPrefix": {
       "kind": "func",
@@ -4356,7 +4388,7 @@
     },
     "config.Config": {
       "kind": "type",
-      "at": "core/config/config.go:114"
+      "at": "core/config/config.go:118"
     },
     "config.Configured": {
       "kind": "func",
@@ -4368,23 +4400,23 @@
     },
     "config.ElasticsearchAPIKey": {
       "kind": "func",
-      "at": "core/config/accessors.go:236"
+      "at": "core/config/accessors.go:249"
     },
     "config.ElasticsearchAddrs": {
       "kind": "func",
-      "at": "core/config/accessors.go:230"
+      "at": "core/config/accessors.go:243"
     },
     "config.ElasticsearchIndexPrefix": {
       "kind": "func",
-      "at": "core/config/accessors.go:242"
+      "at": "core/config/accessors.go:255"
     },
     "config.Error": {
       "kind": "func",
-      "at": "core/config/uses.go:248"
+      "at": "core/config/uses.go:256"
     },
     "config.Format": {
       "kind": "func",
-      "at": "core/config/accessors.go:351"
+      "at": "core/config/accessors.go:368"
     },
     "config.GRPCCallerKey": {
       "kind": "func",
@@ -4400,7 +4432,7 @@
     },
     "config.Groups": {
       "kind": "func",
-      "at": "core/config/uses.go:182"
+      "at": "core/config/uses.go:190"
     },
     "config.IdentityAdminSeedPassword": {
       "kind": "func",
@@ -4414,13 +4446,17 @@
       "kind": "func",
       "at": "core/config/accessors.go:164"
     },
+    "config.KafkaEventBroker": {
+      "kind": "type",
+      "at": "core/config/kafka_event.go:50"
+    },
     "config.Khoa": {
       "kind": "type",
-      "at": "core/config/config.go:591"
+      "at": "core/config/config.go:605"
     },
     "config.KhoaKyBytes": {
       "kind": "func",
-      "at": "core/config/config.go:1137"
+      "at": "core/config/config.go:1179"
     },
     "config.ListenAddr": {
       "kind": "func",
@@ -4428,11 +4464,11 @@
     },
     "config.Load": {
       "kind": "func",
-      "at": "core/config/config.go:612"
+      "at": "core/config/config.go:626"
     },
     "config.LogValue": {
       "kind": "func",
-      "at": "core/config/accessors.go:356"
+      "at": "core/config/accessors.go:373"
     },
     "config.MalwareScanner": {
       "kind": "type",
@@ -4440,11 +4476,11 @@
     },
     "config.MarshalJSON": {
       "kind": "func",
-      "at": "core/config/accessors.go:359"
+      "at": "core/config/accessors.go:376"
     },
     "config.MiniAppProfileCode": {
       "kind": "func",
-      "at": "core/config/accessors.go:212"
+      "at": "core/config/accessors.go:225"
     },
     "config.Missing": {
       "kind": "func",
@@ -4504,15 +4540,15 @@
     },
     "config.RabbitMQDSN": {
       "kind": "func",
-      "at": "core/config/accessors.go:218"
+      "at": "core/config/accessors.go:231"
     },
     "config.RabbitMQExchange": {
       "kind": "func",
-      "at": "core/config/accessors.go:224"
+      "at": "core/config/accessors.go:237"
     },
     "config.Redacted": {
       "kind": "func",
-      "at": "core/config/config.go:1009"
+      "at": "core/config/config.go:1051"
     },
     "config.RedisDSN": {
       "kind": "func",
@@ -4536,7 +4572,7 @@
     },
     "config.String": {
       "kind": "func",
-      "at": "core/config/uses.go:144"
+      "at": "core/config/uses.go:152"
     },
     "config.TenantCacheTTL": {
       "kind": "func",
@@ -4548,11 +4584,15 @@
     },
     "config.Usage": {
       "kind": "type",
-      "at": "core/config/uses.go:153"
+      "at": "core/config/uses.go:161"
     },
     "config.Uses": {
       "kind": "func",
-      "at": "core/config/uses.go:159"
+      "at": "core/config/uses.go:167"
+    },
+    "config.UsesSASL": {
+      "kind": "func",
+      "at": "core/config/kafka_event.go:65"
     },
     "config.ZaloBotWebhookHost": {
       "kind": "func",
@@ -4569,6 +4609,10 @@
     "config.ZaloOACallbackHost": {
       "kind": "func",
       "at": "core/config/accessors.go:198"
+    },
+    "config.ZaloOAWebhookSecret": {
+      "kind": "func",
+      "at": "core/config/accessors.go:205"
     },
     "crosstenant.ActiveStaffCountStore": {
       "kind": "type",
@@ -4616,11 +4660,11 @@
     },
     "crosstenant.CommunesWithOAToRefresh": {
       "kind": "func",
-      "at": "service-comms/internal/store/crosstenant/zalo_oa.go:75"
+      "at": "service-comms/internal/store/crosstenant/zalo_oa.go:108"
     },
     "crosstenant.CommunesWithOpenAuthorizations": {
       "kind": "func",
-      "at": "service-comms/internal/store/crosstenant/zalo_oa.go:90"
+      "at": "service-comms/internal/store/crosstenant/zalo_oa.go:123"
     },
     "crosstenant.CommunesWithPendingStaffNotices": {
       "kind": "func",
@@ -4708,7 +4752,7 @@
     },
     "crosstenant.NewZaloOA": {
       "kind": "func",
-      "at": "service-comms/internal/store/crosstenant/zalo_oa.go:37"
+      "at": "service-comms/internal/store/crosstenant/zalo_oa.go:39"
     },
     "crosstenant.NhoXaCuaGiaoDich": {
       "kind": "func",
@@ -4724,7 +4768,7 @@
     },
     "crosstenant.OpenAuthorizationByStateHash": {
       "kind": "func",
-      "at": "service-comms/internal/store/crosstenant/zalo_oa.go:46"
+      "at": "service-comms/internal/store/crosstenant/zalo_oa.go:48"
     },
     "crosstenant.OpenGroupPairingCodesByHash": {
       "kind": "func",
@@ -4762,6 +4806,10 @@
       "kind": "type",
       "at": "service-identity/internal/store/crosstenant/tai_khoan_zalo.go:28"
     },
+    "crosstenant.TenantByLiveOAID": {
+      "kind": "func",
+      "at": "service-comms/internal/store/crosstenant/zalo_oa.go:80"
+    },
     "crosstenant.TheoMa": {
       "kind": "func",
       "at": "service-identity/internal/store/crosstenant/ghep_phien.go:123"
@@ -4792,7 +4840,7 @@
     },
     "crosstenant.TryLockRefreshScheduler": {
       "kind": "func",
-      "at": "service-comms/internal/store/crosstenant/zalo_oa.go:130"
+      "at": "service-comms/internal/store/crosstenant/zalo_oa.go:163"
     },
     "crosstenant.TryLockScheduler": {
       "kind": "func",
@@ -4812,11 +4860,11 @@
     },
     "crosstenant.ZaloOA": {
       "kind": "type",
-      "at": "service-comms/internal/store/crosstenant/zalo_oa.go:34"
+      "at": "service-comms/internal/store/crosstenant/zalo_oa.go:36"
     },
     "crosstenant.ZaloOARefreshLockKey": {
       "kind": "func",
-      "at": "service-comms/internal/store/crosstenant/zalo_oa.go:122"
+      "at": "service-comms/internal/store/crosstenant/zalo_oa.go:155"
     },
     "crypto.CurrentKEKID": {
       "kind": "func",
@@ -7410,6 +7458,10 @@
       "kind": "func",
       "at": "service-identity/internal/domain/operator.go:267"
     },
+    "domain.LoggableZaloOAEventName": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/zalo_oa_event.go:146"
+    },
     "domain.LoiBienBanConNhiemVu": {
       "kind": "func",
       "at": "service-petitions/internal/domain/bien_ban_hop_ghi.go:187"
@@ -8325,6 +8377,10 @@
     "domain.ParseZaloGroupCommand": {
       "kind": "func",
       "at": "service-comms/internal/domain/zalo_link.go:120"
+    },
+    "domain.ParseZaloOAEvent": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/zalo_oa_event.go:57"
     },
     "domain.ParsedBudgetWorkbook": {
       "kind": "type",
@@ -9790,6 +9846,10 @@
       "kind": "func",
       "at": "service-comms/internal/domain/map_asset.go:108"
     },
+    "domain.VerifyZaloOAEventSignature": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/zalo_oa_event.go:121"
+    },
     "domain.ViecTiepTheo": {
       "kind": "func",
       "at": "service-petitions/internal/domain/xu_ly_phan_anh.go:234"
@@ -9933,6 +9993,10 @@
     "domain.ZaloOAAuthorization": {
       "kind": "type",
       "at": "service-comms/internal/domain/zalo_commune_oa.go:138"
+    },
+    "domain.ZaloOAEvent": {
+      "kind": "type",
+      "at": "service-comms/internal/domain/zalo_oa_event.go:31"
     },
     "domain.ZaloOATemplate": {
       "kind": "type",
@@ -12298,6 +12362,10 @@
       "kind": "func",
       "at": "service-comms/internal/http/zalo_bot_updates.go:150"
     },
+    "http.ReceiveZaloOAEvent": {
+      "kind": "func",
+      "at": "service-comms/internal/http/zalo_oa_events.go:116"
+    },
     "http.RecordCitizenLetterResult": {
       "kind": "func",
       "at": "service-documents/internal/http/citizen_letter.go:623"
@@ -12397,6 +12465,10 @@
     "http.RegisterZaloOAAuthorizations": {
       "kind": "func",
       "at": "service-comms/internal/http/zalo_oa_authorizations.go:86"
+    },
+    "http.RegisterZaloOAEvents": {
+      "kind": "func",
+      "at": "service-comms/internal/http/zalo_oa_events.go:73"
     },
     "http.RemoveCitizenContact": {
       "kind": "func",
@@ -13166,6 +13238,14 @@
       "kind": "type",
       "at": "service-comms/internal/http/zalo_oa_authorizations.go:71"
     },
+    "http.ZaloOAEventDeps": {
+      "kind": "type",
+      "at": "service-comms/internal/http/zalo_oa_events.go:58"
+    },
+    "http.ZaloOAEventReceiver": {
+      "kind": "type",
+      "at": "service-comms/internal/http/zalo_oa_events.go:53"
+    },
     "httpx.Acquire": {
       "kind": "func",
       "at": "core/httpx/upload.go:119"
@@ -13661,6 +13741,22 @@
     "imaging.RenderPNGSquare": {
       "kind": "func",
       "at": "core/imaging/imaging.go:320"
+    },
+    "kafka.Close": {
+      "kind": "func",
+      "at": "core/events/kafka/kafka.go:148"
+    },
+    "kafka.New": {
+      "kind": "func",
+      "at": "core/events/kafka/kafka.go:62"
+    },
+    "kafka.Publish": {
+      "kind": "func",
+      "at": "core/events/kafka/kafka.go:134"
+    },
+    "kafka.Publisher": {
+      "kind": "type",
+      "at": "core/events/kafka/kafka.go:53"
     },
     "mail.Account": {
       "kind": "type",
@@ -14840,19 +14936,19 @@
     },
     "ratelimit.AccountlessLookupKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:306"
+      "at": "core/ratelimit/ratelimit.go:325"
     },
     "ratelimit.ActorKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:399"
+      "at": "core/ratelimit/ratelimit.go:418"
     },
     "ratelimit.Allow": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:555"
+      "at": "core/ratelimit/ratelimit.go:574"
     },
     "ratelimit.CitizenKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:373"
+      "at": "core/ratelimit/ratelimit.go:392"
     },
     "ratelimit.Close": {
       "kind": "func",
@@ -14860,11 +14956,11 @@
     },
     "ratelimit.Counter": {
       "kind": "type",
-      "at": "core/ratelimit/ratelimit.go:506"
+      "at": "core/ratelimit/ratelimit.go:525"
     },
     "ratelimit.FailsOpen": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:198"
+      "at": "core/ratelimit/ratelimit.go:209"
     },
     "ratelimit.Gate": {
       "kind": "func",
@@ -14880,11 +14976,11 @@
     },
     "ratelimit.Key": {
       "kind": "type",
-      "at": "core/ratelimit/ratelimit.go:318"
+      "at": "core/ratelimit/ratelimit.go:337"
     },
     "ratelimit.Limiter": {
       "kind": "type",
-      "at": "core/ratelimit/ratelimit.go:513"
+      "at": "core/ratelimit/ratelimit.go:532"
     },
     "ratelimit.Middleware": {
       "kind": "func",
@@ -14892,7 +14988,7 @@
     },
     "ratelimit.New": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:528"
+      "at": "core/ratelimit/ratelimit.go:547"
     },
     "ratelimit.NewRedisCounter": {
       "kind": "func",
@@ -14904,7 +15000,7 @@
     },
     "ratelimit.OperatorIPKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:429"
+      "at": "core/ratelimit/ratelimit.go:448"
     },
     "ratelimit.Outcome": {
       "kind": "type",
@@ -14912,15 +15008,15 @@
     },
     "ratelimit.PlatformIPKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:445"
+      "at": "core/ratelimit/ratelimit.go:464"
     },
     "ratelimit.Policy": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:542"
+      "at": "core/ratelimit/ratelimit.go:561"
     },
     "ratelimit.PublicHostIPKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:349"
+      "at": "core/ratelimit/ratelimit.go:368"
     },
     "ratelimit.RedisCounter": {
       "kind": "type",
@@ -14928,15 +15024,15 @@
     },
     "ratelimit.WebhookIPKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:437"
+      "at": "core/ratelimit/ratelimit.go:456"
     },
     "ratelimit.ZaloChatKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:455"
+      "at": "core/ratelimit/ratelimit.go:474"
     },
     "ratelimit.ZaloCommuneChatKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:477"
+      "at": "core/ratelimit/ratelimit.go:496"
     },
     "richtext.Block": {
       "kind": "type",

@@ -25,6 +25,8 @@ import (
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/config"
 	"github.com/vihat/vigov/core/crypto"
+	"github.com/vihat/vigov/core/events"
+	"github.com/vihat/vigov/core/events/kafka"
 	commsv1 "github.com/vihat/vigov/core/gen/vigov/comms/v1"
 	"github.com/vihat/vigov/core/grpcx"
 	"github.com/vihat/vigov/core/httpx"
@@ -71,6 +73,9 @@ import (
 // the one group here that stays OPTIONAL in prod (core/config/basemap.go). Since 2026-10-16 it holds the
 // platform's ONE Zalo App every commune authorises its OA to (ADR 0098 #2, #3): ZaloOA is that app's id,
 // secret and callback host — declared here only, so only comms refuses to start in prod without them.
+// Since 2026-10-17 it forwards every Zalo OA webhook event to Kafka (owner, TASK W-1): ZaloOA gained the
+// webhook secret, and KafkaEvent is the event broker — its address required in prod, its credentials
+// optional by the owner's decision (core/config/kafka_event.go).
 var configUses = config.Uses(
 	config.HTTPServer,
 	config.GRPCServer,
@@ -85,6 +90,7 @@ var configUses = config.Uses(
 	config.MalwareScan,
 	config.ZaloBotWebhook,
 	config.ZaloOA,
+	config.KafkaEvent,
 	config.Basemap,
 )
 
@@ -452,6 +458,30 @@ func main() {
 		os.Exit(1)
 	}
 
+	// THE EVENT BROKER (ADR 0010; owner 17/10/2026). Built only when KAFKA_EVENT_ADDRESS is set — staging
+	// and prod refuse to start without it. In dev without it the publisher stays nil and the OA webhook
+	// answers 503 to every event: refused at use, never a silent drop. kafka.New dials nothing, so a broker
+	// that is down makes publishes fail (503 to Zalo, which retries) rather than stopping comms.
+	var eventPublisher events.Publisher
+	if broker := cfg.KafkaEventBroker(); broker.Configured() {
+		p, err := kafka.New("vigov-comms", broker)
+		if err != nil {
+			log.Error("không dựng được client Kafka sự kiện", "service", "comms", "err", err)
+			os.Exit(1)
+		}
+		eventPublisher = p
+	} else {
+		log.Warn("CẢNH BÁO CẤU HÌNH", "chi_tiet",
+			"KAFKA_EVENT_ADDRESS trống — webhook sự kiện OA Zalo trả 503 cho mọi sự kiện (chỉ dev)")
+	}
+	// The OA webhook's limit — the OWNER's figure (17/10/2026): 600 per minute per client network. Fails
+	// closed: without Redis the webhook answers 503.
+	zaloOAWebhookLimiter, err := ratelimit.New(rateCounter, ratelimit.ZaloOAWebhook)
+	if err != nil {
+		log.Error("không dựng được bộ giới hạn tần suất webhook OA Zalo", "service", "comms", "err", err)
+		os.Exit(1)
+	}
+
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
 		Checker:       staffauth.Checker{},
@@ -636,6 +666,14 @@ func main() {
 		Authorizations: communeZaloOAs,
 		Limiter:        zaloOACallbackLimiter,
 		Log:            log,
+	})
+	// The OA WEBHOOK (owner, 17/10/2026) on the SAME chain: no session, no commune Host. The commune is the
+	// one holding the event's OA live (zaloOACross), resolved only after the signature verified.
+	svchttp.RegisterZaloOAEvents(muxZaloOA, svchttp.ZaloOAEventDeps{
+		Events: commsapp.NewZaloOAEvents(zaloOACross, eventPublisher,
+			commsapp.ZaloOAEventsConfig{AppID: cfg.ZaloOAAppID(), WebhookSecret: cfg.ZaloOAWebhookSecret()}),
+		Limiter: zaloOAWebhookLimiter,
+		Log:     log,
 	})
 
 	// THE PUBLIC SURFACE (owner decision 2026-09-27) — its own mux, its own Deps, its own chain. `nenTang`
@@ -1171,10 +1209,11 @@ func zaloOACallbackChain(muxZaloOA http.Handler) http.Handler {
 	return h
 }
 
-// withZaloOACallback puts the OA callback in front of everything else — for ONE host and ONE path:
+// withZaloOACallback puts the OA callback chain in front of everything else — for ONE host and TWO paths:
 //
 //	<ZALO_OA_CALLBACK_HOST>/api/v1/zalo-oa-authorizations   the callback chain (no commune). A HOST
 //	                                                        PATTERN: ServeMux prefers it over "/"
+//	<ZALO_OA_CALLBACK_HOST>/api/v1/zalo-oa-events           the OA webhook, same chain (owner, 17/10/2026)
 //	anything else, any host                                 rest (the bot webhook split, then the staff,
 //	                                                        public and citizen chains)
 //
@@ -1190,6 +1229,7 @@ func withZaloOACallback(rest, callback http.Handler, host string) http.Handler {
 	}
 	m := http.NewServeMux()
 	m.Handle(host+svchttp.ZaloOAAuthorizationsPath, callback)
+	m.Handle(host+svchttp.ZaloOAEventsPath, callback)
 	m.Handle("/", rest)
 	return m
 }

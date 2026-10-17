@@ -5,6 +5,23 @@
   "_warnings": [],
   "events": [
     {
+      "name": "comms.zalo_oa_event_received.v1",
+      "owner_service": "comms",
+      "version": "v1",
+      "schema": "proto/vigov/comms/v1/events.proto#ZaloOAEventReceived",
+      "publishers": [
+        {
+          "service": "comms",
+          "at": "service-comms/internal/app/zalo_oa_events.go:150"
+        }
+      ],
+      "consumers": [],
+      "unclassified_mentions": [],
+      "state": [
+        "CHƯA CÓ BÊN NHẬN trong mã Go: chưa dịch vụ nào đăng ký nghe. Đổi lược đồ hôm nay chưa làm vỡ ai; ngày có bên nhận đầu tiên thì đổi tại chỗ là hết đường và phải phát `.v2` song song (luật 2 bất biến 4)."
+      ]
+    },
+    {
       "name": "petitions.merge_changed.v1",
       "owner_service": "petitions",
       "version": "v1",

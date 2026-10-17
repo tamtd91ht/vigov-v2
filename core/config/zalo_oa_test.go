@@ -21,6 +21,8 @@ func zaloOAEnvGia(host string) map[string]string {
 		"ZALO_OA_APP_ID":        zaloOAAppIDGia,
 		"ZALO_OA_APP_SECRET":    zaloOAAppSecretGia,
 		"ZALO_OA_CALLBACK_HOST": host,
+		// Not a real key either.
+		"ZALO_OA_WEBHOOK_SECRET": "oa-webhook-GIA-KHONG-PHAI-KHOA-THAT",
 	}
 }
 
@@ -34,8 +36,8 @@ func TestZaloOARequiredInProdWithItsHint(t *testing.T) {
 			t.Fatalf("%s: want ErrThieuBienMoiTruong, got %v", env, err)
 		}
 		for _, want := range []string{
-			"ZALO_OA_APP_ID", "ZALO_OA_APP_SECRET", "ZALO_OA_CALLBACK_HOST",
-			"zalo-oa-authorizations", "developers.zalo.me", "ADR 0098",
+			"ZALO_OA_APP_ID", "ZALO_OA_APP_SECRET", "ZALO_OA_CALLBACK_HOST", "ZALO_OA_WEBHOOK_SECRET",
+			"zalo-oa-authorizations", "zalo-oa-events", "developers.zalo.me", "ADR 0098",
 			"common-config", "comms-secrets", "vigov-service-comms",
 		} {
 			if !strings.Contains(err.Error(), want) {

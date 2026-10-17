@@ -41302,6 +41302,76 @@
         }
       }
     },
+    "/api/v1/zalo-oa-events": {
+      "post": {
+        "summary": "Webhook sự kiện OA Zalo — Zalo gửi mọi sự kiện của OA các xã đã uỷ quyền cho app dùng chung; kiểm chữ ký X-ZEvent-Signature (so thời gian hằng) và app_id, tìm xã đang giữ OA ấy, rồi chuyển NGUYÊN thân sự kiện lên Kafka (comms.zalo_oa_event_received.v1, khoá = xã); OA không thuộc xã nào thì trả 200 và không chuyển gì",
+        "operationId": "comms_post_zalo_oa_events",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "Chủ dự án chốt 17/10/2026 — TASK W-1 (ADR 0098: app Zalo dùng chung)",
+        "x-vigov-permission": {
+          "kind": "public",
+          "reason": "Zalo gọi webhook khi có sự kiện ở OA của một xã, không có phiên và không có Host của xã: xác thực bằng chữ ký X-ZEvent-Signature (sha256 của app_id + thân + timestamp + OA Secret Key của app dùng chung) so thời gian hằng cùng app_id của nền tảng, sai trả 403 và không chuyển gì; xã lấy từ OA đang hoạt động trong sự kiện, không từ Host; giới hạn 600 lượt/phút mỗi mạng máy gọi trước khi đọc thân"
+        },
+        "x-vigov-task": "cc2829b0a359",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.zaloOAEventAck"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "rate_limited"
+            ]
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/zalo-oa-templates/{id}": {
       "parameters": [
         {
@@ -46791,6 +46861,18 @@
         "required": [
           "checked_at",
           "result"
+        ],
+        "additionalProperties": false
+      },
+      "comms.zaloOAEventAck": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
         ],
         "additionalProperties": false
       },

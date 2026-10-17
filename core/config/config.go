@@ -70,6 +70,10 @@
 //	ZALO_OA_APP_ID                        ConfigMap  ZaloOA                 refused in staging/prod; dev: "Kết nối OA" refused by name
 //	ZALO_OA_APP_SECRET                    Secret     ZaloOA                 as above
 //	ZALO_OA_CALLBACK_HOST                 Deploy env ZaloOA                 as above
+//	ZALO_OA_WEBHOOK_SECRET                Secret     ZaloOA                 as above; dev: the OA webhook answers 503
+//	KAFKA_EVENT_ADDRESS                   ConfigMap  KafkaEvent             refused in staging/prod; dev: publishing routes answer 503
+//	KAFKA_EVENT_USERNAME / _PASSWORD      Secret     KafkaEvent             optional (owner 17/10/2026): absent = plaintext, no auth
+//	KAFKA_EVENT_SASL_MECHANISM            ConfigMap  KafkaEvent             required only WITH the credentials
 //	RABBITMQ_DSN, RABBITMQ_EXCHANGE       Secret/CM  RabbitMQ              refused in staging/prod once declared
 //	ELASTICSEARCH_ADDRS / _API_KEY / _INDEX_PREFIX   Elasticsearch          refused in staging/prod once declared
 //
@@ -556,6 +560,16 @@ type Config struct {
 	zaloOAAppSecret    secret.Secret
 	zaloOACallbackHost string
 
+	// ZaloOAWebhookSecret is the "OA Secret Key" of the Webhook section of that same shared app (ADR 0098;
+	// owner 17/10/2026, TASK W-1). Zalo signs every OA event it posts with it (X-ZEvent-Signature); comms
+	// verifies before publishing anything. Group ZaloOA — so, like the rest of the group, required in
+	// staging/prod (ADR 0057). k8s SECRET (`comms-secrets`), secret.Secret: whoever holds it can forge an
+	// event for every commune's OA.
+	zaloOAWebhookSecret secret.Secret
+
+	// kafkaEvent is the business-event broker (kafka_event.go). Group KafkaEvent.
+	kafkaEvent KafkaEventBroker
+
 	// BasemapURL is the self-hosted basemap's storage prefix (BASEMAP_URL, basemap.go), validated and
 	// ending in "/"; "" = not configured. Group Basemap, comms only.
 	basemapURL string
@@ -740,6 +754,19 @@ func Load(serviceName string, uses Usage) (Config, error) {
 	zaloOAAppIDRaw := r.read("ZALO_OA_APP_ID", os.Getenv("ZALO_OA_APP_ID"), requiredInProd, ZaloOA)
 	zaloOAAppSecretRaw := r.read("ZALO_OA_APP_SECRET", os.Getenv("ZALO_OA_APP_SECRET"), requiredInProd, ZaloOA)
 	zaloOACallbackHostRaw := r.read("ZALO_OA_CALLBACK_HOST", os.Getenv("ZALO_OA_CALLBACK_HOST"), requiredInProd, ZaloOA)
+	// Required in prod with the rest of the group (ADR 0057; owner 17/10/2026): without it no OA event can
+	// be verified, so the webhook would refuse every event Zalo sends. In dev, empty = the webhook answers 503.
+	zaloOAWebhookSecretRaw := r.read("ZALO_OA_WEBHOOK_SECRET", os.Getenv("ZALO_OA_WEBHOOK_SECRET"), requiredInProd, ZaloOA)
+
+	// ---- KafkaEvent (ADR 0010; owner 17/10/2026) ------------------------------------------------
+	// The ADDRESS is required in prod once declared (ADR 0057): a declared publisher with no broker would
+	// answer 503 to every event. In dev, empty = publishing routes answer 503 at use, never a silent drop.
+	kafkaAddrRaw := r.read("KAFKA_EVENT_ADDRESS", os.Getenv("KAFKA_EVENT_ADDRESS"), requiredInProd, KafkaEvent)
+	// Optional IN EVERY ENVIRONMENT — the owner's decision: absent credentials ARE the plaintext mode for
+	// an in-cluster broker without auth. Both or neither; a mechanism only with them (kafka_event.go).
+	kafkaUserRaw := r.read("KAFKA_EVENT_USERNAME", os.Getenv("KAFKA_EVENT_USERNAME"), optional, KafkaEvent)
+	kafkaPassRaw := r.read("KAFKA_EVENT_PASSWORD", os.Getenv("KAFKA_EVENT_PASSWORD"), optional, KafkaEvent)
+	kafkaMechRaw := r.read("KAFKA_EVENT_SASL_MECHANISM", os.Getenv("KAFKA_EVENT_SASL_MECHANISM"), optional, KafkaEvent)
 
 	// ---- Basemap (ADR 0072 M1; comms only) --------------------------------------------------
 	// Optional IN EVERY ENVIRONMENT, prod included: operations sets it only after the signed
@@ -851,6 +878,13 @@ func Load(serviceName string, uses Usage) (Config, error) {
 		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
 	}
 
+	// Malformed is fatal, by variable name and never with a credential: a half-configured broker would
+	// connect in plaintext while the operator believes it authenticates.
+	kafkaEvent, err := parseKafkaEvent(kafkaAddrRaw, kafkaUserRaw, kafkaPassRaw, kafkaMechRaw)
+	if err != nil {
+		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
+	}
+
 	// Malformed is fatal, never repaired (the OPERATOR_HOST rule) — even though empty is allowed.
 	basemapURL, err := parseBasemapURL(basemapRaw)
 	if err != nil {
@@ -909,6 +943,8 @@ func Load(serviceName string, uses Usage) (Config, error) {
 		zaloOAAppID:                zaloOAAppID,
 		zaloOAAppSecret:            parseZaloOAAppSecret(zaloOAAppSecretRaw),
 		zaloOACallbackHost:         zaloOACallbackHost,
+		zaloOAWebhookSecret:        parseZaloOAAppSecret(zaloOAWebhookSecretRaw),
+		kafkaEvent:                 kafkaEvent,
 		basemapURL:                 basemapURL,
 		miniAppProfileCode:         miniAppProfileCode,
 
@@ -977,6 +1013,12 @@ func (c Config) CanhBao() []string {
 			ra = append(ra, "OBJECT_STORAGE_* đã cấu hình nhưng MALWARE_SCANNER_ADDRESS trống — "+
 				"mọi lần tải tệp lên sẽ bị từ chối vì không quét được mã độc")
 		}
+	}
+	// The owner accepted a plaintext broker (17/10/2026), so it is not refused — but an unencrypted,
+	// unauthenticated channel carrying citizens' Zalo events is said at every startup, never silently.
+	if c.uses.has(KafkaEvent) && c.kafkaEvent.Configured() && !c.kafkaEvent.UsesSASL() {
+		ra = append(ra, "KAFKA_EVENT_USERNAME/PASSWORD trống — kết nối Kafka sự kiện KHÔNG mã hoá, KHÔNG xác thực "+
+			"(chủ dự án chấp nhận cho broker trong cụm, 17/10/2026)")
 	}
 	if c.uses.has(OperatorRealm) {
 		ra = append(ra, c.operatorWarnings()...)
