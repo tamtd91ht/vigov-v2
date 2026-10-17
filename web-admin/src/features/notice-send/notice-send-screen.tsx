@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Send } from "lucide-react";
+import { Loader2, RefreshCw, Send } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -14,6 +14,7 @@ import { Segmented } from "@/components/ui/segmented";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tab, TabList } from "@/components/ui/tabs";
 import { Tooltip } from "@/components/ui/tooltip";
+import { syncResultText } from "@/features/cau-hinh/zalo-oa-form";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import { CongQuyen } from "@/features/quyen/cong-quyen";
 import { countCitizenContacts, listCitizenContactTags, NO_CITIZEN_CONTACT_FILTER, type CitizenContactTag } from "@/lib/api/citizen-contacts";
@@ -45,6 +46,7 @@ import {
   type SmsNoticeTemplate,
 } from "@/lib/api/notice-campaigns";
 import type { identity_boPhanRa, identity_canBoChonNguoiRa } from "@/lib/api/schema.gen";
+import { syncZaloOATemplates } from "@/lib/api/zalo-oa";
 import { cn } from "@/lib/cn";
 import { CITIZEN_READ_PERMISSION, NOTICE_SEND_PERMISSION, quyetDinhTheoKhoa, ZALO_CHANNEL_PERMISSION } from "@/lib/quyen";
 
@@ -69,7 +71,6 @@ import {
   CHANNEL_PICK_LABEL,
   CHANNEL_WIRE,
   countStaff,
-  groupByOA,
   groupChipLabel,
   HISTORY_COLUMNS,
   HISTORY_EMPTY,
@@ -94,6 +95,7 @@ import {
   NO_SEND_PERMISSION,
   NO_TEMPLATES,
   NOTICE_SEND_TITLE,
+  OA_GROUP_EMPTY,
   OA_REAUTH_REASON,
   OA_REAUTH_TAG,
   OPEN_CAMPAIGN_HINT,
@@ -115,6 +117,7 @@ import {
   PREVIEW_STALE,
   PREVIEW_TITLE,
   queuedToast,
+  reconcilePicked,
   RECIPIENT_COLUMNS,
   recipientSource,
   recipientStatusLabel,
@@ -139,6 +142,8 @@ import {
   smsSubline,
   statusLabel,
   statusTone,
+  SYNC_FORBIDDEN,
+  SYNC_TEMPLATES_BUTTON,
   TAB_COMPOSE,
   tagChipLabel,
   templateKey,
@@ -146,13 +151,14 @@ import {
   templateSourceId,
   ZALO_CONFIG_HREF,
   ZNS_CONTENT,
+  znsGroups,
   znsSubline,
   type AudienceKind,
   type Channel,
   type ParamSource,
   type PickedTemplate,
 } from "./notice-send-form";
-import { OAStatusCard, useCommuneOA } from "./oa-status-card";
+import { OAStatusCard, sendingOAs, useCommuneOA } from "./oa-status-card";
 import {
   buildMapping,
   buildRows,
@@ -321,6 +327,15 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
   const [moreRefused, setMoreRefused] = useState<string | null>(null);
 
   const oa = useCommuneOA(canManageZalo);
+  /** OA row ids whose "Nạp mẫu từ OA" is in flight — busy is per button, not per screen. */
+  const [syncingOAs, setSyncingOAs] = useState<ReadonlySet<string>>(new Set());
+  /** Linked OAs an `admin.zalo` account may sync; empty for anyone else (the route would 403). */
+  const syncableOAs = canManageZalo && oa !== null && oa.ok ? sendingOAs(oa.duLieu) : [];
+  /** The pick as it is NOW — a sync answers later, and the officer may have picked another card meanwhile. */
+  const pickedNow = useRef<PickedTemplate | null>(null);
+  useEffect(() => {
+    pickedNow.current = picked;
+  }, [picked]);
 
   // Every template of every OA and SMS account: ONE call, readable with notice.send (ADR 0099 #4).
   useEffect(() => {
@@ -613,6 +628,49 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
     void runPreview(p, {});
   }
 
+  /**
+   * "Nạp mẫu từ OA" from step 2 (D-8): the same POST as Cấu hình → Kênh Zalo, then notice-templates read
+   * again so the new templates appear. The picked template survives if it is still listed; otherwise the
+   * pick and everything derived from it go, so nothing is previewed or sent against a template that is gone.
+   */
+  async function syncOA(oaId: string) {
+    const mark = (on: boolean) =>
+      setSyncingOAs((cur) => {
+        const next = new Set(cur);
+        if (on) next.add(oaId);
+        else next.delete(oaId);
+        return next;
+      });
+    mark(true);
+    const r = await syncZaloOATemplates(oaId);
+    if (!r.ok) {
+      mark(false);
+      toast.error(r.code === "forbidden" ? SYNC_FORBIDDEN : r.thongBao);
+      return;
+    }
+    toast.success(syncResultText(r.duLieu));
+    const fresh = await listNoticeTemplates();
+    mark(false);
+    if (!fresh.ok) {
+      // The sync itself succeeded; the list on screen stays as it was rather than turning into an error.
+      toast.error(fresh.thongBao);
+      return;
+    }
+    setTemplates(fresh);
+    const current = pickedNow.current;
+    if (current === null) return;
+    const still = reconcilePicked(current, fresh.duLieu);
+    if (still !== null) {
+      setPicked(still);
+      return;
+    }
+    setPicked(null);
+    setParams({});
+    setParamColumns({});
+    setAttributeChoice({});
+    clearPreview();
+  }
+
   function defaultTitle(): string {
     if (picked !== null && !smsFree) return templateName(picked);
     return smsComposition === null ? "" : importTitle(smsComposition, sourceKind === "typed" ? "typed" : "file");
@@ -844,6 +902,9 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
                   templates={templates}
                   picked={picked}
                   smsAccountId={smsAccountId}
+                  syncableOAs={syncableOAs}
+                  syncingOAs={syncingOAs}
+                  onSyncOA={(id) => void syncOA(id)}
                   onSmsAccount={(id) => {
                     setSmsAccountId(id);
                     if (picked?.channel === "sms") {
@@ -1124,6 +1185,9 @@ function TemplateList({
   templates,
   picked,
   smsAccountId,
+  syncableOAs,
+  syncingOAs,
+  onSyncOA,
   onSmsAccount,
   onPick,
 }: {
@@ -1131,6 +1195,10 @@ function TemplateList({
   templates: KetQua<NoticeTemplates> | null;
   picked: PickedTemplate | null;
   smsAccountId: string;
+  /** Linked OAs the session may sync (`admin.zalo`); empty = no "Nạp mẫu từ OA" anywhere. */
+  syncableOAs: readonly { id: string; oa_name: string }[];
+  syncingOAs: ReadonlySet<string>;
+  onSyncOA: (oaId: string) => void;
   onSmsAccount: (id: string) => void;
   onPick: (p: PickedTemplate) => void;
 }) {
@@ -1153,14 +1221,53 @@ function TemplateList({
   );
 
   if (channel === "zns") {
-    const groups = groupByOA(templates.duLieu.zns);
+    const groups = znsGroups(templates.duLieu.zns, syncableOAs);
     if (groups.length === 0) return empty(ZALO_CONFIG_HREF, OPEN_ZALO_CONFIG);
     const several = groups.length >= 2;
+    // No template at all, yet an OA this session may sync: the empty sentence and its link stay, with the
+    // OA's button under them.
+    const none = templates.duLieu.zns.length === 0;
     return (
       <div className="flex flex-col gap-4">
-        {groups.map((g) => (
+        {none && empty(ZALO_CONFIG_HREF, OPEN_ZALO_CONFIG)}
+        {groups.map((g) => {
+          // Shown only to a session holding admin.zalo (`syncableOAs` is empty otherwise) and never for an OA
+          // waiting for re-authorisation — its cards already say so, and the sync would be refused.
+          const canSync = syncableOAs.some((o) => o.id === g.oaId) && !g.items.some((t) => t.oa_needs_reauthorization);
+          const busy = syncingOAs.has(g.oaId);
+          return (
           <div key={g.oaId} className="flex flex-col gap-2" data-oa-group={g.oaId}>
-            {several && <p className="text-navy m-0 text-[12.5px] font-semibold">{g.oaName}</p>}
+            {(several || canSync) && (
+              <div className="flex flex-wrap items-center gap-2">
+                {several && <p className="text-navy m-0 min-w-0 flex-1 text-[12.5px] font-semibold break-words">{g.oaName}</p>}
+                {canSync && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className={several ? undefined : "ml-auto"}
+                    data-sync-oa={g.oaId}
+                    disabled={busy}
+                    aria-busy={busy}
+                    icon={
+                      busy ? (
+                        <Loader2 aria-hidden="true" focusable="false" className="animate-spin" />
+                      ) : (
+                        <RefreshCw aria-hidden="true" focusable="false" />
+                      )
+                    }
+                    onClick={() => onSyncOA(g.oaId)}
+                  >
+                    {SYNC_TEMPLATES_BUTTON}
+                  </Button>
+                )}
+              </div>
+            )}
+            {g.items.length === 0 && !none && (
+              <p className={MUTED} data-oa-group-empty="">
+                {OA_GROUP_EMPTY}
+              </p>
+            )}
             {g.items.map((t) => {
               const p: PickedTemplate = { channel: "zns", t };
               const usable = !t.oa_needs_reauthorization;
@@ -1180,7 +1287,8 @@ function TemplateList({
               );
             })}
           </div>
-        ))}
+          );
+        })}
       </div>
     );
   }

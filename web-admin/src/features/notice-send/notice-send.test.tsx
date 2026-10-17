@@ -26,10 +26,12 @@ import {
   OA_NOT_LINKED,
   OA_REAUTH_REASON,
   OA_REAUTH_TAG,
+  PICK_TEMPLATE_FIRST,
   PREVIEW_EMPTY,
   PREVIEW_STALE,
   recipientSource,
   SEND_NOTE,
+  SYNC_FORBIDDEN,
   ZNS_CONTENT,
 } from "./notice-send-form";
 import { NoticeSendScreen } from "./notice-send-screen";
@@ -168,6 +170,8 @@ const CITIZEN_ATTRS = [
 const defaultAttributes = (audience: string): Response =>
   json({ items: audience === "can-bo" ? [{ code: "full_name", label: "Họ và tên" }] : CITIZEN_ATTRS });
 let attributesReply: (audience: string) => Response = defaultAttributes;
+const SYNC_RESULT = { loaded: 3, enabled: 2, matching: 1 };
+let syncReply: (oaId: string) => Response | Promise<Response> = () => json(SYNC_RESULT);
 
 function serve() {
   vi.stubGlobal(
@@ -202,6 +206,8 @@ function serve() {
         return json({ url: "https://oauth.zaloapp.com/v4/oa/permission?state=SECRET-STATE", expires_at: "2026-10-17T01:10:00Z" }, 201);
       }
       if (url === "/api/v1/notice-templates") return json(templatesAnswer);
+      const sync = /^\/api\/v1\/zalo-oas\/([^/]+)\/templates\/sync$/.exec(url);
+      if (sync && init?.method === "POST") return syncReply(sync[1]!);
       const attrs = /^\/api\/v1\/notice-attributes\?audience=(.*)$/.exec(url);
       if (attrs) return attributesReply(attrs[1]!);
       if (url === "/api/v1/notice-campaign-previews") return previewReply(JSON.parse(String(init?.body)) as PreviewBody);
@@ -230,6 +236,7 @@ beforeEach(() => {
   campaignById = {};
   recipientPages = {};
   attributesReply = defaultAttributes;
+  syncReply = () => json(SYNC_RESULT);
   serve();
 });
 
@@ -1210,5 +1217,173 @@ describe("attributeMappingBody / allowedAttributeChoice (pure)", () => {
     expect(attributeMappingBody(["a", "b", "c"], choice, "staff_unit")).toEqual({ b: "full_name" });
     expect(allowedAttributeChoice(choice, "staff_all")).toEqual({ b: "full_name", c: "" });
     expect(allowedAttributeChoice(choice, "citizen_tag")).toEqual(choice);
+  });
+});
+
+// ---- "Nạp mẫu từ OA" in step 2 (TASK D-8) ------------------------------------------------------------
+
+describe("Nạp mẫu từ OA — step 2, per OA, admin.zalo only", () => {
+  const ZNS_NEW = zns("01JOA1", "UBND xã Tân Phú", "zt-9", "Mời họp dân", ["ngay"]);
+  const ZNS_OA2 = zns("01JOA2", "Đoàn thanh niên xã Tân Phú", "zt-2", "Thông báo đoàn", ["ngay"]);
+  const syncButton = (el: HTMLElement, oaId: string) => el.querySelector<HTMLButtonElement>(`[data-sync-oa="${oaId}"]`);
+  const syncPosts = () => calls.filter((c) => /\/templates\/sync$/.test(c.url) && c.init?.method === "POST");
+  const templateReads = () => calls.filter((c) => c.url === "/api/v1/notice-templates");
+  async function press(b: HTMLButtonElement | null) {
+    expect(b).not.toBeNull();
+    await act(async () => b!.click());
+    await settle();
+    await settle();
+  }
+  async function openStep(el: HTMLElement, n: number) {
+    await act(async () => step(el, n).querySelector("button")!.click());
+    await settle();
+  }
+
+  it("ALLOWED — admin.zalo: one outline button on the single OA's list header", async () => {
+    const el = await mount(session(ALL));
+    await toTemplateStep(el);
+    const b = syncButton(el, "01JOA1");
+    expect(b?.textContent).toBe("Nạp mẫu từ OA");
+    expect(step(el, 2).querySelectorAll("[data-sync-oa]")).toHaveLength(1);
+  });
+
+  it("DENIED — no admin.zalo: no button anywhere, no zalo-oas route called", async () => {
+    const el = await mount(session(["notice.send", "citizen.read"]));
+    await toTemplateStep(el);
+    expect(el.querySelector("[data-sync-oa]")).toBeNull();
+    expect(calls.some((c) => c.url.includes("zalo-oas"))).toBe(false);
+  });
+
+  it("click: POST sync for that OA, the reused counts toast, notice-templates read again and the new template drawn", async () => {
+    const el = await mount(session(ALL));
+    await toTemplateStep(el);
+    expect(templateReads()).toHaveLength(1);
+    syncReply = () => {
+      templatesAnswer = { zns: [ZNS_ONE, ZNS_NEW], sms: [SMS_A] };
+      return json(SYNC_RESULT);
+    };
+    await press(syncButton(el, "01JOA1"));
+    expect(syncPosts().map((c) => c.url)).toEqual(["/api/v1/zalo-oas/01JOA1/templates/sync"]);
+    expect(toast.success).toHaveBeenCalledWith("Đã nạp 3 mẫu, 2 đang bật, 1 khớp tham số.");
+    expect(templateReads()).toHaveLength(2);
+    const syncAt = calls.findIndex((c) => c.url.endsWith("/templates/sync"));
+    expect(calls.findLastIndex((c) => c.url === "/api/v1/notice-templates")).toBeGreaterThan(syncAt);
+    expect(el.querySelector('[data-template-id="zns:01JOA1:zt-9"]')).not.toBeNull();
+  });
+
+  it("busy on that button only while the sync is in flight", async () => {
+    oaAnswer = { configured: true, items: [OA_ROW, OA_ROW_2] };
+    templatesAnswer = { zns: [ZNS_ONE, ZNS_OA2], sms: [] };
+    let release: (r: Response) => void = () => {};
+    syncReply = () => new Promise<Response>((res) => (release = res));
+    const el = await mount(session(ALL));
+    await toTemplateStep(el);
+    await press(syncButton(el, "01JOA1"));
+    expect(syncButton(el, "01JOA1")!.disabled).toBe(true);
+    expect(syncButton(el, "01JOA1")!.getAttribute("aria-busy")).toBe("true");
+    expect(syncButton(el, "01JOA2")!.disabled).toBe(false);
+    await act(async () => release(json(SYNC_RESULT)));
+    await settle();
+    await settle();
+    expect(syncButton(el, "01JOA1")!.disabled).toBe(false);
+    expect(syncButton(el, "01JOA1")!.getAttribute("aria-busy")).toBe("false");
+  });
+
+  it("the picked template still listed: kept, its typed parameter too", async () => {
+    const el = await mount(session(ALL));
+    await toTemplateStep(el);
+    await pickTemplate(el);
+    await type(el, "notice-param-0", "20/10");
+    await openStep(el, 2);
+    syncReply = () => {
+      templatesAnswer = { zns: [ZNS_ONE, ZNS_NEW], sms: [SMS_A] };
+      return json(SYNC_RESULT);
+    };
+    await press(syncButton(el, "01JOA1"));
+    expect(el.querySelector(`[data-template-id="${ZNS_KEY}"]`)!.getAttribute("aria-pressed")).toBe("true");
+    await openStep(el, 3);
+    expect(el.querySelector<HTMLInputElement>("#notice-param-0")!.value).toBe("20/10");
+  });
+
+  it("the picked template gone after the sync: the pick, its parameters and the preview cleared", async () => {
+    const el = await mount(session(ALL));
+    await toTemplateStep(el);
+    await pickTemplate(el);
+    await type(el, "notice-param-0", "20/10");
+    await openStep(el, 2);
+    syncReply = () => {
+      templatesAnswer = { zns: [ZNS_NEW], sms: [SMS_A] };
+      return json(SYNC_RESULT);
+    };
+    await press(syncButton(el, "01JOA1"));
+    expect(el.querySelector(`[data-template-id="${ZNS_KEY}"]`)).toBeNull();
+    expect(el.querySelector('[aria-pressed="true"][data-template-id]')).toBeNull();
+    expect(aside(el).textContent).toContain(PREVIEW_EMPTY);
+    await openStep(el, 3);
+    expect(step(el, 3).textContent).toContain(PICK_TEMPLATE_FIRST);
+    expect(el.querySelector("#notice-param-0")).toBeNull();
+  });
+
+  it("a refusal: the server's sentence toasted, the list not read again", async () => {
+    syncReply = () => json({ code: "zalo_oa_needs_reauthorization", message: "OA cần được uỷ quyền lại.", trace_id: "" }, 409);
+    const el = await mount(session(ALL));
+    await toTemplateStep(el);
+    await press(syncButton(el, "01JOA1"));
+    expect(toast.error).toHaveBeenCalledWith("OA cần được uỷ quyền lại.");
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(templateReads()).toHaveLength(1);
+    expect(syncButton(el, "01JOA1")!.disabled).toBe(false);
+  });
+
+  it("403 forbidden: the screen's own sentence naming the missing right", async () => {
+    syncReply = () => json({ code: "forbidden", message: "Tài khoản của bạn không có quyền thực hiện thao tác này.", trace_id: "" }, 403);
+    const el = await mount(session(ALL));
+    await toTemplateStep(el);
+    await press(syncButton(el, "01JOA1"));
+    expect(toast.error).toHaveBeenCalledWith(SYNC_FORBIDDEN);
+    expect(SYNC_FORBIDDEN).toBe("Bạn không có quyền nạp mẫu (cần quyền Cấu hình kênh Zalo)");
+  });
+
+  it("several OAs: each group's button posts for its own OA", async () => {
+    oaAnswer = { configured: true, items: [OA_ROW, OA_ROW_2] };
+    templatesAnswer = { zns: [ZNS_ONE, ZNS_OA2], sms: [] };
+    const el = await mount(session(ALL));
+    await toTemplateStep(el);
+    const group2 = el.querySelector<HTMLElement>('[data-oa-group="01JOA2"]')!;
+    expect(group2.textContent).toContain("Đoàn thanh niên xã Tân Phú");
+    await press(group2.querySelector<HTMLButtonElement>("[data-sync-oa]"));
+    await press(el.querySelector<HTMLElement>('[data-oa-group="01JOA1"]')!.querySelector<HTMLButtonElement>("[data-sync-oa]"));
+    expect(syncPosts().map((c) => c.url)).toEqual(["/api/v1/zalo-oas/01JOA2/templates/sync", "/api/v1/zalo-oas/01JOA1/templates/sync"]);
+  });
+
+  it("an OA needing re-authorisation: no button on its group; the other OA keeps its own", async () => {
+    oaAnswer = { configured: true, items: [OA_ROW, { ...OA_ROW_2, needs_reauthorization: REAUTH }] };
+    templatesAnswer = { zns: [ZNS_ONE, ZNS_REAUTH], sms: [] };
+    const el = await mount(session(ALL));
+    await toTemplateStep(el);
+    expect(syncButton(el, "01JOA2")).toBeNull();
+    expect(syncButton(el, "01JOA1")).not.toBeNull();
+  });
+
+  it("a linked OA with no template yet: the empty sentence and link stay, its button under them", async () => {
+    templatesAnswer = { zns: [], sms: [] };
+    const el = await mount(session(ALL));
+    await toTemplateStep(el);
+    expect(step(el, 2).textContent).toContain(NO_TEMPLATES);
+    expect(step(el, 2).querySelector("a")?.getAttribute("href")).toBe("/cau-hinh?tab=kenh-zalo");
+    syncReply = () => {
+      templatesAnswer = { zns: [ZNS_ONE], sms: [] };
+      return json(SYNC_RESULT);
+    };
+    await press(syncButton(el, "01JOA1"));
+    expect(el.querySelector(`[data-template-id="${ZNS_KEY}"]`)).not.toBeNull();
+    expect(step(el, 2).textContent).not.toContain(NO_TEMPLATES);
+  });
+
+  it("SMS channel: no sync button", async () => {
+    const el = await mount(session(ALL));
+    await toTemplateStep(el);
+    await click(el, "Tin nhắn SMS");
+    expect(el.querySelector("[data-sync-oa]")).toBeNull();
   });
 });

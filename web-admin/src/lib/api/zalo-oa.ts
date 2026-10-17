@@ -178,12 +178,18 @@ export function listZaloOATemplates(
   return docJSON<comms_zaloOATemplateList>(withId(OA_TEMPLATES_TEMPLATE, oaRowId));
 }
 
-/** POST zalo-oas/{id}/templates/sync, no body — `template/all` then `template/info` per template, on the server. */
+/**
+ * POST zalo-oas/{id}/templates/sync, no body — `template/all` then `template/info` per template, on the server.
+ * `withCode`: `/gui-thong-bao` names a 403 `forbidden` in its own words (the remedy is a key, `admin.zalo`,
+ * the generic authz sentence does not name); Cấu hình ignores the code and shows `thongBao` as before.
+ */
 export function syncZaloOATemplates(
   oaRowId: string,
 ): Promise<KetQua<comms_zaloOASyncResultOut>> {
   return docThanLoiGoi<comms_zaloOASyncResultOut>(
-    goiGhi(withId(OA_TEMPLATES_SYNC_TEMPLATE, oaRowId), "POST", undefined, ZALO_OA_STATUS.synced),
+    goiGhi(withId(OA_TEMPLATES_SYNC_TEMPLATE, oaRowId), "POST", undefined, ZALO_OA_STATUS.synced, undefined, {
+      withCode: true,
+    }),
   );
 }
 

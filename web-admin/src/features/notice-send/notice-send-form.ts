@@ -25,6 +25,7 @@ import type {
   NoticeChannel,
   NoticeRecipient,
   NoticeTemplateParam,
+  NoticeTemplates,
   SmsNoticeTemplate,
   ZnsNoticeTemplate,
 } from "@/lib/api/notice-campaigns";
@@ -262,6 +263,41 @@ export function groupByOA(list: readonly ZnsNoticeTemplate[]): { oaId: string; o
     else g.items.push(t);
   }
   return groups;
+}
+
+/**
+ * The ZNS groups step 2 draws: one per OA that has templates, then — for an account that may sync — one
+ * EMPTY group per linked OA with none yet, so a freshly connected OA can be loaded from here (D-8). An OA
+ * waiting for re-authorisation gets no empty group: a sync against it would only be refused.
+ */
+export function znsGroups(
+  list: readonly ZnsNoticeTemplate[],
+  syncableOAs: readonly { id: string; oa_name: string }[],
+): { oaId: string; oaName: string; items: ZnsNoticeTemplate[] }[] {
+  const groups = groupByOA(list);
+  for (const o of syncableOAs) {
+    if (!groups.some((g) => g.oaId === o.id)) groups.push({ oaId: o.id, oaName: o.oa_name, items: [] });
+  }
+  return groups;
+}
+
+export const SYNC_TEMPLATES_BUTTON = "Nạp mẫu từ OA";
+export const SYNC_FORBIDDEN = "Bạn không có quyền nạp mẫu (cần quyền Cấu hình kênh Zalo)";
+export const OA_GROUP_EMPTY = "Chưa có mẫu tin nào nạp từ OA này.";
+
+/**
+ * After the template list is read again: the picked template as it now stands, or null when it is gone
+ * (Zalo removed it, or the OA lost it) — the caller then clears its parameters.
+ */
+export function reconcilePicked(picked: PickedTemplate | null, fresh: NoticeTemplates): PickedTemplate | null {
+  if (picked === null) return null;
+  const key = templateKey(picked);
+  if (picked.channel === "zns") {
+    const t = fresh.zns.find((x) => templateKey({ channel: "zns", t: x }) === key);
+    return t === undefined ? null : { channel: "zns", t };
+  }
+  const t = fresh.sms.find((x) => templateKey({ channel: "sms", t: x }) === key);
+  return t === undefined ? null : { channel: "sms", t };
 }
 
 /** The SMS accounts that have templates, in the server's order — the filter's options. */
