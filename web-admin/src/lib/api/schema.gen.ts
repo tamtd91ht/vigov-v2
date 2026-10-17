@@ -138,14 +138,6 @@ export type comms_communeZaloBotSavedOut = {
   "revoke_notice"?: string;
 };
 
-export type comms_communeZaloOACurrentOut = {
-  "configured": boolean;
-  "has_oa": boolean;
-  "oa": comms_communeZaloOAOut | null;
-  "template_count": number;
-  "attached_count": number;
-};
-
 export type comms_communeZaloOADisconnectIn = {
   "reason": string;
 };
@@ -156,7 +148,13 @@ export type comms_communeZaloOADisconnectedOut = {
   "revoke_notice": string;
 };
 
+export type comms_communeZaloOAListOut = {
+  "configured": boolean;
+  "items": Array<comms_communeZaloOAOut>;
+};
+
 export type comms_communeZaloOAOut = {
+  "id": string;
   "oa_id": string;
   "oa_name": string;
   "authorized_at": string;
@@ -167,6 +165,8 @@ export type comms_communeZaloOAOut = {
   "token_refreshed_at": string;
   "needs_reauthorization": comms_zaloOAReauthorizationOut | null;
   "last_check": comms_zaloOALastCheckOut | null;
+  "template_count": number;
+  "attached_count": number;
 };
 
 export type comms_coverFileOut = {
@@ -621,6 +621,80 @@ export type comms_noiDungRa = {
   "audio"?: comms_audioOut | null;
 };
 
+export type comms_noticeAudienceIn = {
+  "kind": string;
+  "ids": Array<string>;
+  "tags": Array<string>;
+};
+
+export type comms_noticeCampaignIn = {
+  "title": string;
+  "channel": string;
+  "oa_id"?: string;
+  "sms_account_id"?: string;
+  "template_ref": string;
+  "audience": comms_noticeAudienceIn;
+  "params": Record<string, string>;
+};
+
+export type comms_noticeCampaignListOut = {
+  "items": Array<comms_noticeCampaignOut>;
+  "next_cursor": string;
+};
+
+export type comms_noticeCampaignOut = {
+  "id": string;
+  "title": string;
+  "channel": string;
+  "oa_id": string | null;
+  "sms_account_id": string | null;
+  "source_name": string;
+  "template_ref": string;
+  "template_name": string;
+  "audience_kind": string;
+  "audience_ids": Array<string>;
+  "recipient_count": number;
+  "skipped_count": number;
+  "sent_count": number;
+  "failed_count": number;
+  "unit_price": string | null;
+  "estimated_cost": string | null;
+  "status": string;
+  "created_at": string;
+  "created_by": string;
+  "created_by_name": string;
+  "finished_at": string | null;
+};
+
+export type comms_noticePreviewIn = {
+  "channel": string;
+  "oa_id"?: string;
+  "sms_account_id"?: string;
+  "template_ref": string;
+  "audience": comms_noticeAudienceIn;
+  "params": Record<string, string>;
+};
+
+export type comms_noticePreviewOut = {
+  "content": string | null;
+  "recipient_count": number;
+  "skipped_count": number;
+  "unit_price": string | null;
+  "estimated_cost": string | null;
+  "missing_params": Array<string>;
+};
+
+export type comms_noticeTemplateParamOut = {
+  "field": string;
+  "name": string;
+  "max_length": number;
+};
+
+export type comms_noticeTemplatesOut = {
+  "zns": Array<comms_znsNoticeTemplateOut>;
+  "sms": Array<comms_smsNoticeTemplateOut>;
+};
+
 export type comms_notificationOut = {
   "id": string;
   "kind": string;
@@ -793,6 +867,98 @@ export type comms_seedMapAssetTypesOut = {
   /** xã đã XOÁ mã này — không khôi phục */
   "skipped_deleted": Array<comms_mapAssetTypeRefOut>;
   "created_count": number;
+};
+
+export type comms_smsAccountCreateIn = {
+  "label": string;
+  "api_key": string;
+  "secret_key": string;
+  "brandname": string;
+  "is_default": boolean;
+};
+
+export type comms_smsAccountListOut = {
+  "items": Array<comms_smsAccountOut>;
+};
+
+export type comms_smsAccountOut = {
+  "id": string;
+  "provider": string;
+  "label": string;
+  "brandname": string;
+  "is_default": boolean;
+  "set_at": string;
+  "set_by": string;
+  "last_check": comms_smsCheckOut | null;
+  "created_at": string;
+};
+
+export type comms_smsAccountRetireIn = {
+  "reason": string;
+};
+
+export type comms_smsAccountRetiredOut = {
+  "retired": boolean;
+};
+
+export type comms_smsAccountUpdateIn = {
+  "label"?: string | null;
+  "api_key"?: string;
+  "secret_key"?: string;
+  "brandname"?: string | null;
+  "is_default"?: boolean | null;
+};
+
+export type comms_smsCheckOut = {
+  "at": string;
+  "result": string;
+  "balance": string | null;
+};
+
+export type comms_smsCheckResultOut = {
+  "result": string;
+  "checked_at": string;
+  "balance": string | null;
+};
+
+export type comms_smsNoticeTemplateOut = {
+  "channel": string;
+  "sms_account_id": string;
+  "account_label": string;
+  "brandname": string;
+  "template_ref": string;
+  "content": string;
+  "params": Array<comms_noticeTemplateParamOut>;
+  "unit_price": string | null;
+};
+
+export type comms_smsTemplateListOut = {
+  "items": Array<comms_smsTemplateOut>;
+};
+
+export type comms_smsTemplateNetworkOut = {
+  "network_id": number;
+  "template_id": string;
+};
+
+export type comms_smsTemplateOut = {
+  "content": string;
+  "params": Array<comms_smsTemplateParamOut>;
+  "networks": Array<comms_smsTemplateNetworkOut>;
+  "synced_at": string;
+};
+
+export type comms_smsTemplateParamOut = {
+  "name": string;
+  "max_length": number;
+};
+
+export type comms_smsTemplateSyncOut = {
+  "added": number;
+  "updated": number;
+  "vanished": number;
+  "skipped": number;
+  "items": Array<comms_smsTemplateOut>;
 };
 
 export type comms_suaLoaiTaiNguyenVao = {
@@ -1095,6 +1261,7 @@ export type comms_zaloOATemplateListOut = {
 
 export type comms_zaloOATemplateOut = {
   "id": string;
+  "oa_row_id": string;
   "template_id": string;
   "template_name": string;
   "zalo_status": string;
@@ -1122,6 +1289,18 @@ export type comms_zaloOATemplatePatchIn = {
 
 export type comms_zaloUpdateAck = {
   "ok": boolean;
+};
+
+export type comms_znsNoticeTemplateOut = {
+  "channel": string;
+  "oa_id": string;
+  "oa_name": string;
+  "oa_needs_reauthorization": boolean;
+  "template_ref": string;
+  "template_name": string;
+  "tag": string;
+  "params": Array<comms_noticeTemplateParamOut>;
+  "unit_price": string | null;
 };
 
 export type documents_addCitizenLetterTypeIn = {
@@ -10101,6 +10280,123 @@ export type identity_get_my_residential_units = {
   };
 };
 
+/** POST /api/v1/notice-campaign-previews — Xem trước đợt tin — số người nhận (đã khử trùng theo số), số bỏ qua (ngừng liên hệ, không có số), nội dung SMS đã điền (chỗ chưa gõ giữ nguyên), các tham số còn thiếu, đơn giá và chi phí dự kiến (ước tính, chưa VAT); không ghi gì, không vết, không lộ số điện thoại nào */
+export type comms_post_notice_campaign_previews = {
+  duongDan: "/api/v1/notice-campaign-previews";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_noticePreviewIn;
+  phanHoi: {
+    200: comms_noticePreviewOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    400: "notice_invalid";
+    404: "not_found";
+    409: "source_unavailable" | "template_not_sendable";
+    503: "encryption_not_configured" | "identity_unavailable";
+  };
+};
+
+/** GET /api/v1/notice-campaigns — Lịch sử đợt tin đã gửi của xã — mới nhất trước, 50 đợt mỗi trang (con trỏ `cursor`); mỗi đợt: kênh, nguồn gửi, mẫu, đối tượng, số người nhận / đã gửi / thất bại / bỏ qua, chi phí ước tính, trạng thái, ai gửi lúc nào */
+export type comms_get_notice_campaigns = {
+  duongDan: "/api/v1/notice-campaigns";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "cursor"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: comms_noticeCampaignListOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "notice_invalid";
+  };
+};
+
+/** POST /api/v1/notice-campaigns — Gửi đợt tin ZNS / SMS — ghi đợt (dang-gui) cùng MỌI dòng người nhận (mã dòng danh bạ + số đã che, không bao giờ số đầy đủ) và vết trong MỘT giao dịch; việc nền gửi theo lô sau đó; identity không trả lời thì không ghi gì; chi phí là ước tính, không chặn gửi */
+export type comms_post_notice_campaigns = {
+  duongDan: "/api/v1/notice-campaigns";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_noticeCampaignIn;
+  phanHoi: {
+    201: comms_noticeCampaignOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    400: "notice_invalid";
+    404: "not_found";
+    409: "no_recipients" | "source_unavailable" | "template_not_sendable";
+    422: "missing_params";
+    503: "encryption_not_configured" | "identity_unavailable";
+  };
+};
+
+/** GET /api/v1/notice-campaigns/{id} — Một đợt tin của xã — tiến độ gửi (số đã gửi / thất bại tăng dần khi đang gửi), trạng thái, chi phí ước tính; mã đợt của xã khác trả 404 như mã không có */
+export type comms_get_notice_campaigns_by_id = {
+  duongDan: "/api/v1/notice-campaigns/{id}";
+  phuongThuc: "GET";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_noticeCampaignOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    404: "not_found";
+  };
+};
+
+/** GET /api/v1/notice-templates — Mẫu để soạn đợt tin — mọi mẫu ZBS đang ENABLE của mọi OA đang nối của xã (kèm đơn giá ước tính theo loại mẫu) và mọi mẫu tin CSKH eSMS còn liệt kê của mọi tài khoản SMS đang dùng (mỗi nội dung một mục); mỗi mẫu kèm các tham số cần gõ và `field` để điền */
+export type comms_get_notice_templates = {
+  duongDan: "/api/v1/notice-templates";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_noticeTemplatesOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/notifications — Hộp thông báo ở chuông của CHÍNH cán bộ đang đăng nhập — mới nhất trước, có con trỏ trang */
 export type comms_get_notifications = {
   duongDan: "/api/v1/notifications";
@@ -11535,6 +11831,187 @@ export type identity_delete_sla_by_id = {
     404: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/sms-accounts — Danh sách tài khoản eSMS đang dùng của xã — tên gợi nhớ, Brandname, mặc định, khoá đặt lúc nào bởi ai, lần kiểm gần nhất và số dư; không bao giờ trả ApiKey hay SecretKey */
+export type comms_get_sms_accounts = {
+  duongDan: "/api/v1/sms-accounts";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "cursor"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: comms_smsAccountListOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/sms-accounts — Thêm tài khoản eSMS cho xã — tên gợi nhớ, ApiKey và SecretKey (chỉ ghi, niêm phong bằng khoá riêng của xã), Brandname, có làm mặc định không; hỏi eSMS (số dư, mẫu của Brandname) TRƯỚC khi lưu, khoá eSMS không nhận thì không lưu; có ghi vết */
+export type comms_post_sms_accounts = {
+  duongDan: "/api/v1/sms-accounts";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_smsAccountCreateIn;
+  phanHoi: {
+    201: comms_smsAccountOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    502: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    400: "sms_account_invalid";
+    409: "sms_account_changed" | "sms_label_taken";
+    422: "sms_brandname_inactive" | "sms_key_rejected" | "sms_rejected";
+    502: "sms_unavailable";
+    503: "encryption_not_configured";
+  };
+};
+
+/** PATCH /api/v1/sms-accounts/{id} — Sửa tài khoản eSMS của xã — tên, ApiKey / SecretKey (để trống = giữ), Brandname, mặc định; đổi khoá hoặc Brandname thì hỏi eSMS trước, eSMS không nhận thì giữ nguyên; đổi mặc định bỏ mặc định cũ trong cùng giao dịch; có ghi vết */
+export type comms_patch_sms_accounts_by_id = {
+  duongDan: "/api/v1/sms-accounts/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: comms_smsAccountUpdateIn;
+  phanHoi: {
+    200: comms_smsAccountOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    502: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    400: "sms_account_invalid";
+    404: "not_found";
+    409: "sms_account_changed" | "sms_label_taken";
+    422: "sms_brandname_inactive" | "sms_key_rejected" | "sms_rejected";
+    502: "sms_unavailable";
+    503: "encryption_not_configured";
+  };
+};
+
+/** DELETE /api/v1/sms-accounts/{id} — Ngừng dùng tài khoản eSMS của xã — xoá mềm, giữ làm lịch sử (các đợt đã gửi vẫn trỏ tới), cần lý do; nếu là mặc định thì xã không còn tài khoản mặc định, hệ thống không tự chọn tài khoản khác; có ghi vết */
+export type comms_delete_sms_accounts_by_id = {
+  duongDan: "/api/v1/sms-accounts/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: comms_smsAccountRetireIn;
+  phanHoi: {
+    200: comms_smsAccountRetiredOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "sms_account_invalid";
+    404: "not_found";
+  };
+};
+
+/** POST /api/v1/sms-accounts/{id}/check — Kiểm tra kết nối tài khoản eSMS — hỏi số dư và mẫu của Brandname bằng khoá đã lưu, ghi kết quả (lớp, không bao giờ chữ của eSMS), số dư khi thành công, và vết; kiểm tra không đạt vẫn trả 200 kèm lớp kết quả */
+export type comms_post_sms_accounts_by_id_check = {
+  duongDan: "/api/v1/sms-accounts/{id}/check";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_smsCheckResultOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    404: "not_found";
+    409: "sms_account_changed";
+    503: "encryption_not_configured";
+  };
+};
+
+/** GET /api/v1/sms-accounts/{id}/templates — Mẫu tin CSKH của một tài khoản eSMS — mỗi nội dung một mục, kèm các nhà mạng đã đăng ký (NetworkID, TempId) và các ô tham số theo thứ tự ({P1,20} → tên P1, tối đa 20 ký tự); mẫu eSMS không còn liệt kê thì không hiện */
+export type comms_get_sms_accounts_by_id_templates = {
+  duongDan: "/api/v1/sms-accounts/{id}/templates";
+  phuongThuc: "GET";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_smsTemplateListOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    404: "not_found";
+  };
+};
+
+/** POST /api/v1/sms-accounts/{id}/templates/sync — Nạp mẫu tin CSKH từ eSMS cho một tài khoản — ghi mỗi (TempId, nhà mạng) một dòng, mẫu eSMS không còn liệt kê thì đánh dấu đã mất (giữ dòng), mẫu không lưu được thì đếm bỏ qua; eSMS không trả lời được thì không ghi gì; một vết cho cả lần nạp */
+export type comms_post_sms_accounts_by_id_templates_sync = {
+  duongDan: "/api/v1/sms-accounts/{id}/templates/sync";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_smsTemplateSyncOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    502: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    404: "not_found";
+    409: "sms_account_changed";
+    422: "sms_brandname_inactive" | "sms_key_rejected" | "sms_rejected";
+    502: "sms_unavailable";
+    503: "encryption_not_configured";
   };
 };
 
@@ -13572,137 +14049,9 @@ export type comms_get_zalo_oa_authorizations = {
   };
 };
 
-/** GET /api/v1/zalo-oas/current — OA Zalo của xã — nền tảng đã khai ứng dụng Zalo dùng chung chưa, xã đã nối OA chưa, tên và mã OA, nối lúc nào bởi ai, token hết hạn lúc nào, có cần uỷ quyền lại không, lần kiểm gần nhất, số mẫu đã nạp và đã gắn mốc; không bao giờ trả token */
-export type comms_get_zalo_oas_current = {
-  duongDan: "/api/v1/zalo-oas/current";
-  phuongThuc: "GET";
-  thamSo: {
-  };
-  truyVan: {
-  };
-  than: never;
-  phanHoi: {
-    200: comms_communeZaloOACurrentOut;
-    401: httpx_Error;
-    403: httpx_Error;
-    500: httpx_Error;
-  };
-};
-
-/** DELETE /api/v1/zalo-oas/current — Ngắt OA của xã — xoá mềm dòng OA (giữ token đã niêm làm lịch sử, cần lý do), gỡ mọi mốc đã gắn mẫu trong cùng giao dịch, có ghi vết; câu trả lời nhắc xã thu hồi quyền của ứng dụng trong OA Manager vì ngắt ở đây không thu hồi gì ở Zalo */
-export type comms_delete_zalo_oas_current = {
-  duongDan: "/api/v1/zalo-oas/current";
-  phuongThuc: "DELETE";
-  thamSo: {
-  };
-  truyVan: {
-  };
-  than: comms_communeZaloOADisconnectIn;
-  phanHoi: {
-    200: comms_communeZaloOADisconnectedOut;
-    400: httpx_Error;
-    401: httpx_Error;
-    403: httpx_Error;
-    500: httpx_Error;
-  };
-  errorCodes: {
-    400: "invalid_request";
-  };
-};
-
-/** POST /api/v1/zalo-oas/current/authorization-links — Tạo link uỷ quyền OA — sinh state CSPRNG một lần (chỉ lưu băm) và cặp PKCE (code verifier niêm bằng khoá của xã), trả link Zalo để quản trị viên OA mở và bấm Cho phép; link sống 10 phút, có ghi vết; Cache-Control no-store */
-export type comms_post_zalo_oas_current_authorization_links = {
-  duongDan: "/api/v1/zalo-oas/current/authorization-links";
-  phuongThuc: "POST";
-  thamSo: {
-  };
-  truyVan: {
-  };
-  than: never;
-  phanHoi: {
-    201: comms_zaloOAAuthorizationLinkOut;
-    401: httpx_Error;
-    403: httpx_Error;
-    500: httpx_Error;
-    503: httpx_Error;
-  };
-  errorCodes: {
-    503: "encryption_not_configured" | "zalo_oa_not_configured";
-  };
-};
-
-/** POST /api/v1/zalo-oas/current/check — Kiểm tra OA của xã — gọi getoa bằng token đã lưu (làm mới trước nếu sắp hết hạn), ghi kết quả (lớp lỗi, không bao giờ chữ của Zalo), cập nhật tên OA và ghi vết */
-export type comms_post_zalo_oas_current_check = {
-  duongDan: "/api/v1/zalo-oas/current/check";
-  phuongThuc: "POST";
-  thamSo: {
-  };
-  truyVan: {
-  };
-  than: never;
-  phanHoi: {
-    200: comms_zaloOACheckResultOut;
-    401: httpx_Error;
-    403: httpx_Error;
-    409: httpx_Error;
-    500: httpx_Error;
-    502: httpx_Error;
-    503: httpx_Error;
-  };
-  errorCodes: {
-    409: "zalo_oa_changed" | "zalo_oa_missing" | "zalo_oa_needs_reauthorization";
-    502: "zalo_unavailable";
-    503: "encryption_not_configured" | "zalo_oa_not_configured";
-  };
-};
-
-/** GET /api/v1/zalo-oas/current/templates — Mẫu tin ZBS đã nạp từ OA của xã — mã và tên mẫu, trạng thái và chất lượng Zalo, tham số, có đủ ba tham số bắt buộc không (thiếu gì), mốc đã gắn, gắn lúc nào bởi ai; lần nạp gần nhất */
-export type comms_get_zalo_oas_current_templates = {
-  duongDan: "/api/v1/zalo-oas/current/templates";
-  phuongThuc: "GET";
-  thamSo: {
-  };
-  truyVan: {
-  };
-  than: never;
-  phanHoi: {
-    200: comms_zaloOATemplateListOut;
-    401: httpx_Error;
-    403: httpx_Error;
-    500: httpx_Error;
-  };
-};
-
-/** POST /api/v1/zalo-oas/current/templates/sync — Nạp mẫu từ OA — gọi template/all rồi template/info từng mẫu, ghi mọi mẫu trong một giao dịch (mẫu Zalo không còn liệt kê thì đánh DELETE), giữ mốc đã gắn, có ghi vết */
-export type comms_post_zalo_oas_current_templates_sync = {
-  duongDan: "/api/v1/zalo-oas/current/templates/sync";
-  phuongThuc: "POST";
-  thamSo: {
-  };
-  truyVan: {
-  };
-  than: never;
-  phanHoi: {
-    200: comms_zaloOASyncResultOut;
-    401: httpx_Error;
-    403: httpx_Error;
-    409: httpx_Error;
-    422: httpx_Error;
-    500: httpx_Error;
-    502: httpx_Error;
-    503: httpx_Error;
-  };
-  errorCodes: {
-    409: "zalo_oa_changed" | "zalo_oa_missing" | "zalo_oa_needs_reauthorization";
-    422: "zalo_token_rejected";
-    502: "zalo_unavailable";
-    503: "encryption_not_configured" | "zalo_oa_not_configured";
-  };
-};
-
-/** PATCH /api/v1/zalo-oas/current/templates/{id} — Gắn hoặc gỡ mốc cho một mẫu ZBS — chỉ mẫu ENABLE có đủ ba tham số ma_tra_cuu, moc_nhan, viec_tiep_theo mới gắn được (thiếu thì nói thiếu gì); một mốc một mẫu, một mẫu một mốc; milestone null là gỡ; có ghi vết */
-export type comms_patch_zalo_oas_current_templates_by_id = {
-  duongDan: "/api/v1/zalo-oas/current/templates/{id}";
+/** PATCH /api/v1/zalo-oa-templates/{id} — Gắn hoặc gỡ mốc cho một mẫu ZBS — chỉ mẫu ENABLE có đủ ba tham số ma_tra_cuu, moc_nhan, viec_tiep_theo mới gắn được (thiếu thì nói thiếu gì); một mốc một mẫu trong cả xã dù xã có nhiều OA, tin báo dân theo mốc đi từ OA của mẫu đã gắn; milestone null là gỡ; có ghi vết */
+export type comms_patch_zalo_oa_templates_by_id = {
+  duongDan: "/api/v1/zalo-oa-templates/{id}";
   phuongThuc: "PATCH";
   thamSo: {
     "id": string;
@@ -13723,7 +14072,149 @@ export type comms_patch_zalo_oas_current_templates_by_id = {
   errorCodes: {
     400: "invalid_request";
     404: "not_found";
-    409: "milestone_taken" | "zalo_oa_changed" | "zalo_oa_missing";
+    409: "milestone_taken" | "zalo_oa_changed";
     422: "template_not_attachable";
+  };
+};
+
+/** GET /api/v1/zalo-oas — Các OA Zalo của xã — nền tảng đã khai ứng dụng Zalo dùng chung chưa; mọi OA đang nối (nhiều OA cùng lúc): mã dòng, tên và mã OA, nối lúc nào bởi ai, token hết hạn lúc nào, có cần uỷ quyền lại không, lần kiểm gần nhất, số mẫu đã nạp và đã gắn mốc của từng OA; không bao giờ trả token */
+export type comms_get_zalo_oas = {
+  duongDan: "/api/v1/zalo-oas";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_communeZaloOAListOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/zalo-oas/authorization-links — Tạo link uỷ quyền OA — sinh state CSPRNG một lần (chỉ lưu băm) và cặp PKCE (code verifier niêm bằng khoá của xã), trả link Zalo để quản trị viên OA mở và bấm Cho phép; OA mới được thêm cạnh các OA đã nối, OA đã nối thì được uỷ quyền lại; link sống 10 phút, có ghi vết; Cache-Control no-store */
+export type comms_post_zalo_oas_authorization_links = {
+  duongDan: "/api/v1/zalo-oas/authorization-links";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    201: comms_zaloOAAuthorizationLinkOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    503: "encryption_not_configured" | "zalo_oa_not_configured";
+  };
+};
+
+/** DELETE /api/v1/zalo-oas/{id} — Ngắt một OA của xã — xoá mềm dòng OA (giữ token đã niêm làm lịch sử, cần lý do), gỡ mọi mốc đã gắn mẫu của OA ấy trong cùng giao dịch, có ghi vết; các OA khác của xã giữ nguyên; câu trả lời nhắc xã thu hồi quyền của ứng dụng trong OA Manager vì ngắt ở đây không thu hồi gì ở Zalo */
+export type comms_delete_zalo_oas_by_id = {
+  duongDan: "/api/v1/zalo-oas/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: comms_communeZaloOADisconnectIn;
+  phanHoi: {
+    200: comms_communeZaloOADisconnectedOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    404: "not_found";
+  };
+};
+
+/** POST /api/v1/zalo-oas/{id}/check — Kiểm tra một OA của xã — gọi getoa bằng token đã lưu của OA ấy (làm mới trước nếu sắp hết hạn), ghi kết quả (lớp lỗi, không bao giờ chữ của Zalo), cập nhật tên OA và ghi vết */
+export type comms_post_zalo_oas_by_id_check = {
+  duongDan: "/api/v1/zalo-oas/{id}/check";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_zaloOACheckResultOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    502: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    404: "not_found";
+    409: "zalo_oa_changed" | "zalo_oa_needs_reauthorization";
+    502: "zalo_unavailable";
+    503: "encryption_not_configured" | "zalo_oa_not_configured";
+  };
+};
+
+/** GET /api/v1/zalo-oas/{id}/templates — Mẫu tin ZBS đã nạp từ một OA của xã — mã và tên mẫu, trạng thái và chất lượng Zalo, tham số, có đủ ba tham số bắt buộc không (thiếu gì), mốc đã gắn, gắn lúc nào bởi ai; lần nạp gần nhất */
+export type comms_get_zalo_oas_by_id_templates = {
+  duongDan: "/api/v1/zalo-oas/{id}/templates";
+  phuongThuc: "GET";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_zaloOATemplateListOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    404: "not_found";
+  };
+};
+
+/** POST /api/v1/zalo-oas/{id}/templates/sync — Nạp mẫu từ một OA — gọi template/all rồi template/info từng mẫu, ghi mọi mẫu trong một giao dịch (mẫu Zalo không còn liệt kê thì đánh DELETE), giữ mốc đã gắn, có ghi vết */
+export type comms_post_zalo_oas_by_id_templates_sync = {
+  duongDan: "/api/v1/zalo-oas/{id}/templates/sync";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_zaloOASyncResultOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    502: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    404: "not_found";
+    409: "zalo_oa_changed" | "zalo_oa_needs_reauthorization";
+    422: "zalo_token_rejected";
+    502: "zalo_unavailable";
+    503: "encryption_not_configured" | "zalo_oa_not_configured";
   };
 };

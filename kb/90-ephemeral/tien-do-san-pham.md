@@ -3,8 +3,8 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: ef753334
-expires: 2027-01-14
+derived_from_commit: 2ea93ae1
+expires: 2027-01-15
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
 ---
@@ -17,7 +17,7 @@ không dòng nào viết tay (luật 9, bất biến 1).
 Trục ở đây là **phân hệ sản phẩm**. Trục theo **module kho mã** nằm ở `kb/90-ephemeral/tien-do.md`;
 hai tệp trả lời hai câu khác nhau và không chép của nhau.
 
-Sinh ngày **2026-10-16** · hết hạn **2027-01-14**.
+Sinh ngày **2026-10-17** · hết hạn **2027-01-15**.
 
 ## 1 · Theo chương đặc tả
 
@@ -46,7 +46,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **15** Phụ lục: giao diện dùng chung & xác thực | 9 | 9/9 | ✓ |
 | **16** Danh bạ người dân | 16 | 16/16 | ✓ |
 
-Tổng **421 tuyến** trong hợp đồng. **22** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
+Tổng **433 tuyến** trong hợp đồng. **22** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
 
 ## 2 · web-admin, theo từng mục menu
 
@@ -66,7 +66,7 @@ dòng `// @screens` của khối nói; mỗi phần đếm một lần, ở màn
 | 7 | Thu - Chi ngân sách | `/giai-ngan/thu-chi` | `QUYEN_XEM_GIAI_NGAN` | ✓ | 0 |
 | 8 | Thông báo nội bộ | `/thong-bao` | `QUYEN_SOAN_THONG_BAO` | ✓ | 8 |
 | 9 | Danh bạ người dân | `/nguoi-dan` | `CITIZEN_READ_PERMISSION` | ✓ | 1 |
-| 10 | Gửi tin ZNS / SMS | — | — | ✗ | |
+| 10 | Gửi tin ZNS / SMS | `/gui-thong-bao` | `NOTICE_SEND_PERMISSION` | ✓ | **không khai** |
 | 11 | Phản ánh người dân | `/phan-anh` | `QUYEN_XEM_PHAN_ANH` | ✓ | 0 |
 | 12 | Bản đồ kinh tế số | `/ban-do` | `ASSET_READ_PERMISSION` | ✓ | 5 |
 | 13 | Nội dung Mini App | `/mini-app` | `MINI_APP_MENU_KEYS` | ✓ | 10 |
@@ -77,9 +77,9 @@ dòng `// @screens` của khối nói; mỗi phần đếm một lần, ở màn
 | 18 | Cấu hình | `/cau-hinh` | `KHOA_MO_CAU_HINH` | ✓ | 1 |
 | 19 | Hệ thống | `/he-thong` | `SYSTEM_MENU_KEYS` | ✓ | 0 |
 
-**17/19** mục menu có màn thật. **43** phần chưa dựng đang hiện trên các màn ấy.
+**18/19** mục menu có màn thật. **43** phần chưa dựng đang hiện trên các màn ấy.
 
-⚠ **1 màn KHÔNG KHAI khối `PHAN_CHUA_DUNG`**, và ô của chúng đọc là `không khai` chứ không phải `0` —
+⚠ **2 màn KHÔNG KHAI khối `PHAN_CHUA_DUNG`**, và ô của chúng đọc là `không khai` chứ không phải `0` —
 hai thứ khác hẳn nhau. `0` nghĩa là màn có khai một danh sách và danh sách ấy rỗng, tức mọi phần
 đặc tả đã dựng. `không khai` nghĩa là **chưa ai nói màn ấy còn thiếu gì**, nên con số 0 ở đó sẽ là
 một lời trấn an không có gì đứng sau.
@@ -128,7 +128,7 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `deploy` | 23 | 18 | 1 | 0 |
 | `platform-admin` | 13 | 4 | 0 | 0 |
 | `proto` | 20 | 3 | 0 | 0 |
-| `service-comms` | 39 | 19 | 5 | 3 |
+| `service-comms` | 40 | 18 | 5 | 3 |
 | `service-documents` | 14 | 6 | 3 | 0 |
 | `service-finance` | 36 | 6 | 2 | 0 |
 | `service-identity` | 68 | 15 | 3 | 1 |
@@ -136,5 +136,5 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `service-platform` | 23 | 22 | 5 | 1 |
 | `service-reporting` | 6 | 0 | 1 | 0 |
 | `tools` | 24 | 0 | 0 | 0 |
-| `web-admin` | 137 | 46 | 4 | 1 |
+| `web-admin` | 137 | 47 | 4 | 1 |
 

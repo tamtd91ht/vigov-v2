@@ -380,14 +380,14 @@
       "service": "comms",
       "scope": "tenant",
       "table": "notice_campaign",
-      "source": "service-comms/migrations/0032_notice_campaigns_sms_multi_oa.sql:471"
+      "source": "service-comms/migrations/0032_notice_campaigns_sms_multi_oa.sql:470"
     },
     {
       "entity": "NoticeRecipient",
       "service": "comms",
       "scope": "tenant",
       "table": "notice_recipient",
-      "source": "service-comms/migrations/0032_notice_campaigns_sms_multi_oa.sql:638"
+      "source": "service-comms/migrations/0032_notice_campaigns_sms_multi_oa.sql:637"
     },
     {
       "entity": "OperatorAccount",
@@ -646,14 +646,14 @@
       "service": "comms",
       "scope": "tenant",
       "table": "sms_account",
-      "source": "service-comms/migrations/0032_notice_campaigns_sms_multi_oa.sql:232"
+      "source": "service-comms/migrations/0032_notice_campaigns_sms_multi_oa.sql:231"
     },
     {
       "entity": "SmsTemplate",
       "service": "comms",
       "scope": "tenant",
       "table": "sms_template",
-      "source": "service-comms/migrations/0032_notice_campaigns_sms_multi_oa.sql:366"
+      "source": "service-comms/migrations/0032_notice_campaigns_sms_multi_oa.sql:365"
     },
     {
       "entity": "StaffNotification",

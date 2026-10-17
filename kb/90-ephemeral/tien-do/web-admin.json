@@ -1666,7 +1666,6 @@
       "id": "gui-tin-zns-sms-giao-dien-17-10",
       "viec": "Menu Gửi tin ZNS / SMS (/gui-thong-bao, notice.send) theo prototype NoticeWorkspace, kèm thẻ OA Zalo của xã (ADR 0098) — lượt GIAO DIỆN",
       "trang_thai": "dang_lam",
-      "menu": "gui-tin-zns-sms",
       "bang_chung": "e1675e6d: app/gui-thong-bao, features/notice-send (màn, form, thẻ OA, 17 test); menu mở bằng notice.send (khoá có ở identity 0028). Thật: nhóm/nhãn/bộ phận, số người nhận 1 nhóm/1 nhãn/cán bộ, mẫu ZBS từ OA xã, trạng thái OA. tsc + eslint + vitest 2545 ca xanh, check_quyen + check_security PASS.",
       "no_confirm": [],
       "tiep_theo": "CHƯA xem ảnh render cạnh prototype (không có trình duyệt). Còn '?': xem trước, gửi đợt, lịch sử đợt gửi, đơn giá/chi phí (câu mở ai trả phí ZNS), toàn bộ SMS — tích hợp eSMS (developers.esms.vn) lượt sau. Backend cần: tuyến đọc mẫu OA cho notice.send (hiện chỉ admin.zalo), tuyến xem trước/gửi/lịch sử (khối D, ADR mới), bộ phát ZNS (khối B). Số người dân đếm cả người ngừng liên hệ — tuyến gửi phải quyết bỏ qua hay không. Chưa có PHAN_CHUA_DUNG // @screens /gui-thong-bao cho tien_do_san_pham."

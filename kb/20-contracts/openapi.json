@@ -24743,6 +24743,493 @@
         }
       }
     },
+    "/api/v1/notice-campaign-previews": {
+      "post": {
+        "summary": "Xem trước đợt tin — số người nhận (đã khử trùng theo số), số bỏ qua (ngừng liên hệ, không có số), nội dung SMS đã điền (chỗ chưa gõ giữ nguyên), các tham số còn thiếu, đơn giá và chi phí dự kiến (ước tính, chưa VAT); không ghi gì, không vết, không lộ số điện thoại nào",
+        "operationId": "comms_post_notice_campaign_previews",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0099 #7 — Gửi tin ZNS / SMS, nút \"Xem trước\"",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "notice.send"
+        },
+        "x-vigov-task": "855b3e054500",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.noticePreviewIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.noticePreviewOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "notice_invalid"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "not_found"
+            ]
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "source_unavailable",
+              "template_not_sendable"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "encryption_not_configured",
+              "identity_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    "/api/v1/notice-campaigns": {
+      "get": {
+        "summary": "Lịch sử đợt tin đã gửi của xã — mới nhất trước, 50 đợt mỗi trang (con trỏ `cursor`); mỗi đợt: kênh, nguồn gửi, mẫu, đối tượng, số người nhận / đã gửi / thất bại / bỏ qua, chi phí ước tính, trạng thái, ai gửi lúc nào",
+        "operationId": "comms_get_notice_campaigns",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0099 #8 — Gửi tin ZNS / SMS, tab \"Đã gửi\"",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "notice.send"
+        },
+        "x-vigov-task": "08cdac2d310f",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.noticeCampaignListOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "notice_invalid"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Gửi đợt tin ZNS / SMS — ghi đợt (dang-gui) cùng MỌI dòng người nhận (mã dòng danh bạ + số đã che, không bao giờ số đầy đủ) và vết trong MỘT giao dịch; việc nền gửi theo lô sau đó; identity không trả lời thì không ghi gì; chi phí là ước tính, không chặn gửi",
+        "operationId": "comms_post_notice_campaigns",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0099 #8 — Gửi tin ZNS / SMS, nút \"Gửi\"",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "notice.send"
+        },
+        "x-vigov-task": "5942a5d00321",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.noticeCampaignIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.noticeCampaignOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "notice_invalid"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "not_found"
+            ]
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "no_recipients",
+              "source_unavailable",
+              "template_not_sendable"
+            ]
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "missing_params"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "encryption_not_configured",
+              "identity_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    "/api/v1/notice-campaigns/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Một đợt tin của xã — tiến độ gửi (số đã gửi / thất bại tăng dần khi đang gửi), trạng thái, chi phí ước tính; mã đợt của xã khác trả 404 như mã không có",
+        "operationId": "comms_get_notice_campaigns_by_id",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0099 #8 — Gửi tin ZNS / SMS, chi tiết đợt",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "notice.send"
+        },
+        "x-vigov-task": "97d2fbd2e7e2",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.noticeCampaignOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "not_found"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/notice-templates": {
+      "get": {
+        "summary": "Mẫu để soạn đợt tin — mọi mẫu ZBS đang ENABLE của mọi OA đang nối của xã (kèm đơn giá ước tính theo loại mẫu) và mọi mẫu tin CSKH eSMS còn liệt kê của mọi tài khoản SMS đang dùng (mỗi nội dung một mục); mỗi mẫu kèm các tham số cần gõ và `field` để điền",
+        "operationId": "comms_get_notice_templates",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0099 #4 — Gửi tin ZNS / SMS, ô chọn mẫu",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "notice.send"
+        },
+        "x-vigov-task": "987064bf2c79",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.noticeTemplatesOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/notifications": {
       "get": {
         "summary": "Hộp thông báo ở chuông của CHÍNH cán bộ đang đăng nhập — mới nhất trước, có con trỏ trang",
@@ -30987,6 +31474,791 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/sms-accounts": {
+      "get": {
+        "summary": "Danh sách tài khoản eSMS đang dùng của xã — tên gợi nhớ, Brandname, mặc định, khoá đặt lúc nào bởi ai, lần kiểm gần nhất và số dư; không bao giờ trả ApiKey hay SecretKey",
+        "operationId": "comms_get_sms_accounts",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0099 #2 — Cấu hình → tab Kênh SMS",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sms"
+        },
+        "x-vigov-task": "f333048845be",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.smsAccountListOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Thêm tài khoản eSMS cho xã — tên gợi nhớ, ApiKey và SecretKey (chỉ ghi, niêm phong bằng khoá riêng của xã), Brandname, có làm mặc định không; hỏi eSMS (số dư, mẫu của Brandname) TRƯỚC khi lưu, khoá eSMS không nhận thì không lưu; có ghi vết",
+        "operationId": "comms_post_sms_accounts",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0099 #2 — Cấu hình → tab Kênh SMS \"Thêm tài khoản\"",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sms"
+        },
+        "x-vigov-task": "ba7c06d724ed",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.smsAccountCreateIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.smsAccountOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "sms_account_invalid"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "sms_account_changed",
+              "sms_label_taken"
+            ]
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "sms_brandname_inactive",
+              "sms_key_rejected",
+              "sms_rejected"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "sms_unavailable"
+            ]
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "encryption_not_configured"
+            ]
+          }
+        }
+      }
+    },
+    "/api/v1/sms-accounts/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Ngừng dùng tài khoản eSMS của xã — xoá mềm, giữ làm lịch sử (các đợt đã gửi vẫn trỏ tới), cần lý do; nếu là mặc định thì xã không còn tài khoản mặc định, hệ thống không tự chọn tài khoản khác; có ghi vết",
+        "operationId": "comms_delete_sms_accounts_by_id",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0099 #2 — Cấu hình → tab Kênh SMS \"Ngừng dùng\"",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sms"
+        },
+        "x-vigov-task": "03132a4c5272",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.smsAccountRetireIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.smsAccountRetiredOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "sms_account_invalid"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "not_found"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Sửa tài khoản eSMS của xã — tên, ApiKey / SecretKey (để trống = giữ), Brandname, mặc định; đổi khoá hoặc Brandname thì hỏi eSMS trước, eSMS không nhận thì giữ nguyên; đổi mặc định bỏ mặc định cũ trong cùng giao dịch; có ghi vết",
+        "operationId": "comms_patch_sms_accounts_by_id",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0099 #2 — Cấu hình → tab Kênh SMS \"Sửa\"",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sms"
+        },
+        "x-vigov-task": "baf6837f1fe3",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.smsAccountUpdateIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.smsAccountOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "sms_account_invalid"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "not_found"
+            ]
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "sms_account_changed",
+              "sms_label_taken"
+            ]
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "sms_brandname_inactive",
+              "sms_key_rejected",
+              "sms_rejected"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "sms_unavailable"
+            ]
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "encryption_not_configured"
+            ]
+          }
+        }
+      }
+    },
+    "/api/v1/sms-accounts/{id}/check": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Kiểm tra kết nối tài khoản eSMS — hỏi số dư và mẫu của Brandname bằng khoá đã lưu, ghi kết quả (lớp, không bao giờ chữ của eSMS), số dư khi thành công, và vết; kiểm tra không đạt vẫn trả 200 kèm lớp kết quả",
+        "operationId": "comms_post_sms_accounts_by_id_check",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0099 #2 — Cấu hình → tab Kênh SMS \"Kiểm tra kết nối\"",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sms"
+        },
+        "x-vigov-task": "4ab9c59dcbdd",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.smsCheckResultOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "not_found"
+            ]
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "sms_account_changed"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "encryption_not_configured"
+            ]
+          }
+        }
+      }
+    },
+    "/api/v1/sms-accounts/{id}/templates": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Mẫu tin CSKH của một tài khoản eSMS — mỗi nội dung một mục, kèm các nhà mạng đã đăng ký (NetworkID, TempId) và các ô tham số theo thứ tự ({P1,20} → tên P1, tối đa 20 ký tự); mẫu eSMS không còn liệt kê thì không hiện",
+        "operationId": "comms_get_sms_accounts_by_id_templates",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0099 #2 — Cấu hình → tab Kênh SMS \"Mẫu tin\"",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sms"
+        },
+        "x-vigov-task": "beb51fc3f90c",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.smsTemplateListOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "not_found"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sms-accounts/{id}/templates/sync": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Nạp mẫu tin CSKH từ eSMS cho một tài khoản — ghi mỗi (TempId, nhà mạng) một dòng, mẫu eSMS không còn liệt kê thì đánh dấu đã mất (giữ dòng), mẫu không lưu được thì đếm bỏ qua; eSMS không trả lời được thì không ghi gì; một vết cho cả lần nạp",
+        "operationId": "comms_post_sms_accounts_by_id_templates_sync",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0099 #2 — Cấu hình → tab Kênh SMS \"Nạp mẫu\"",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sms"
+        },
+        "x-vigov-task": "06dda3c63340",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.smsTemplateSyncOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "not_found"
+            ]
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "sms_account_changed"
+            ]
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "sms_brandname_inactive",
+              "sms_key_rejected",
+              "sms_rejected"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "sms_unavailable"
+            ]
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "encryption_not_configured"
+            ]
           }
         }
       }
@@ -40030,481 +41302,7 @@
         }
       }
     },
-    "/api/v1/zalo-oas/current": {
-      "delete": {
-        "summary": "Ngắt OA của xã — xoá mềm dòng OA (giữ token đã niêm làm lịch sử, cần lý do), gỡ mọi mốc đã gắn mẫu trong cùng giao dịch, có ghi vết; câu trả lời nhắc xã thu hồi quyền của ứng dụng trong OA Manager vì ngắt ở đây không thu hồi gì ở Zalo",
-        "operationId": "comms_delete_zalo_oas_current",
-        "tags": [
-          "comms"
-        ],
-        "x-vigov-screen": "ADR 0098 #11 — Cấu hình → tab Kênh Zalo, \"Ngắt OA\"",
-        "x-vigov-permission": {
-          "kind": "permission",
-          "key": "admin.zalo"
-        },
-        "x-vigov-task": "2738ef4aca26",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/comms.communeZaloOADisconnectIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/comms.communeZaloOADisconnectedOut"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            },
-            "x-vigov-error-codes": [
-              "invalid_request"
-            ]
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "get": {
-        "summary": "OA Zalo của xã — nền tảng đã khai ứng dụng Zalo dùng chung chưa, xã đã nối OA chưa, tên và mã OA, nối lúc nào bởi ai, token hết hạn lúc nào, có cần uỷ quyền lại không, lần kiểm gần nhất, số mẫu đã nạp và đã gắn mốc; không bao giờ trả token",
-        "operationId": "comms_get_zalo_oas_current",
-        "tags": [
-          "comms"
-        ],
-        "x-vigov-screen": "ADR 0098 #7 — Cấu hình → tab Kênh Zalo, mục \"OA Zalo của xã\"",
-        "x-vigov-permission": {
-          "kind": "permission",
-          "key": "admin.zalo"
-        },
-        "x-vigov-task": "088edde934bb",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/comms.communeZaloOACurrentOut"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/zalo-oas/current/authorization-links": {
-      "post": {
-        "summary": "Tạo link uỷ quyền OA — sinh state CSPRNG một lần (chỉ lưu băm) và cặp PKCE (code verifier niêm bằng khoá của xã), trả link Zalo để quản trị viên OA mở và bấm Cho phép; link sống 10 phút, có ghi vết; Cache-Control no-store",
-        "operationId": "comms_post_zalo_oas_current_authorization_links",
-        "tags": [
-          "comms"
-        ],
-        "x-vigov-screen": "ADR 0098 #4 #7 — Cấu hình → tab Kênh Zalo, \"Kết nối OA\" / \"Uỷ quyền lại\"",
-        "x-vigov-permission": {
-          "kind": "permission",
-          "key": "admin.zalo"
-        },
-        "x-vigov-task": "df3e3be22456",
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/comms.zaloOAAuthorizationLinkOut"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            },
-            "x-vigov-error-codes": [
-              "encryption_not_configured",
-              "zalo_oa_not_configured"
-            ]
-          }
-        }
-      }
-    },
-    "/api/v1/zalo-oas/current/check": {
-      "post": {
-        "summary": "Kiểm tra OA của xã — gọi getoa bằng token đã lưu (làm mới trước nếu sắp hết hạn), ghi kết quả (lớp lỗi, không bao giờ chữ của Zalo), cập nhật tên OA và ghi vết",
-        "operationId": "comms_post_zalo_oas_current_check",
-        "tags": [
-          "comms"
-        ],
-        "x-vigov-screen": "ADR 0098 #7 — Cấu hình → tab Kênh Zalo, \"Kiểm tra kết nối\"",
-        "x-vigov-permission": {
-          "kind": "permission",
-          "key": "admin.zalo"
-        },
-        "x-vigov-task": "87319bd89c12",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/comms.zaloOACheckResultOut"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            },
-            "x-vigov-error-codes": [
-              "zalo_oa_changed",
-              "zalo_oa_missing",
-              "zalo_oa_needs_reauthorization"
-            ]
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "Bad Gateway",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            },
-            "x-vigov-error-codes": [
-              "zalo_unavailable"
-            ]
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            },
-            "x-vigov-error-codes": [
-              "encryption_not_configured",
-              "zalo_oa_not_configured"
-            ]
-          }
-        }
-      }
-    },
-    "/api/v1/zalo-oas/current/templates": {
-      "get": {
-        "summary": "Mẫu tin ZBS đã nạp từ OA của xã — mã và tên mẫu, trạng thái và chất lượng Zalo, tham số, có đủ ba tham số bắt buộc không (thiếu gì), mốc đã gắn, gắn lúc nào bởi ai; lần nạp gần nhất",
-        "operationId": "comms_get_zalo_oas_current_templates",
-        "tags": [
-          "comms"
-        ],
-        "x-vigov-screen": "ADR 0098 #8 #9 — Cấu hình → tab Kênh Zalo, mục \"Mẫu tin ZBS\"",
-        "x-vigov-permission": {
-          "kind": "permission",
-          "key": "admin.zalo"
-        },
-        "x-vigov-task": "9d0374ac113f",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/comms.zaloOATemplateListOut"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/zalo-oas/current/templates/sync": {
-      "post": {
-        "summary": "Nạp mẫu từ OA — gọi template/all rồi template/info từng mẫu, ghi mọi mẫu trong một giao dịch (mẫu Zalo không còn liệt kê thì đánh DELETE), giữ mốc đã gắn, có ghi vết",
-        "operationId": "comms_post_zalo_oas_current_templates_sync",
-        "tags": [
-          "comms"
-        ],
-        "x-vigov-screen": "ADR 0098 #8 — Cấu hình → tab Kênh Zalo, \"Nạp mẫu từ OA\"",
-        "x-vigov-permission": {
-          "kind": "permission",
-          "key": "admin.zalo"
-        },
-        "x-vigov-task": "c111eb076343",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/comms.zaloOASyncResultOut"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            },
-            "x-vigov-error-codes": [
-              "zalo_oa_changed",
-              "zalo_oa_missing",
-              "zalo_oa_needs_reauthorization"
-            ]
-          },
-          "422": {
-            "description": "Unprocessable Entity",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            },
-            "x-vigov-error-codes": [
-              "zalo_token_rejected"
-            ]
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "Bad Gateway",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            },
-            "x-vigov-error-codes": [
-              "zalo_unavailable"
-            ]
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            },
-            "x-vigov-error-codes": [
-              "encryption_not_configured",
-              "zalo_oa_not_configured"
-            ]
-          }
-        }
-      }
-    },
-    "/api/v1/zalo-oas/current/templates/{id}": {
+    "/api/v1/zalo-oa-templates/{id}": {
       "parameters": [
         {
           "name": "id",
@@ -40516,17 +41314,17 @@
         }
       ],
       "patch": {
-        "summary": "Gắn hoặc gỡ mốc cho một mẫu ZBS — chỉ mẫu ENABLE có đủ ba tham số ma_tra_cuu, moc_nhan, viec_tiep_theo mới gắn được (thiếu thì nói thiếu gì); một mốc một mẫu, một mẫu một mốc; milestone null là gỡ; có ghi vết",
-        "operationId": "comms_patch_zalo_oas_current_templates_by_id",
+        "summary": "Gắn hoặc gỡ mốc cho một mẫu ZBS — chỉ mẫu ENABLE có đủ ba tham số ma_tra_cuu, moc_nhan, viec_tiep_theo mới gắn được (thiếu thì nói thiếu gì); một mốc một mẫu trong cả xã dù xã có nhiều OA, tin báo dân theo mốc đi từ OA của mẫu đã gắn; milestone null là gỡ; có ghi vết",
+        "operationId": "comms_patch_zalo_oa_templates_by_id",
         "tags": [
           "comms"
         ],
-        "x-vigov-screen": "ADR 0098 #8 #9 — Cấu hình → tab Kênh Zalo, mục \"Mẫu tin ZBS\"",
+        "x-vigov-screen": "ADR 0098 #8 #9, ADR 0099 #1 — Cấu hình → tab Kênh Zalo, mục \"Mẫu tin ZBS\"",
         "x-vigov-permission": {
           "kind": "permission",
           "key": "admin.zalo"
         },
-        "x-vigov-task": "38dc01fd1db9",
+        "x-vigov-task": "8a2afbb95aed",
         "requestBody": {
           "required": true,
           "content": {
@@ -40605,8 +41403,7 @@
             },
             "x-vigov-error-codes": [
               "milestone_taken",
-              "zalo_oa_changed",
-              "zalo_oa_missing"
+              "zalo_oa_changed"
             ]
           },
           "422": {
@@ -40631,6 +41428,572 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/zalo-oas": {
+      "get": {
+        "summary": "Các OA Zalo của xã — nền tảng đã khai ứng dụng Zalo dùng chung chưa; mọi OA đang nối (nhiều OA cùng lúc): mã dòng, tên và mã OA, nối lúc nào bởi ai, token hết hạn lúc nào, có cần uỷ quyền lại không, lần kiểm gần nhất, số mẫu đã nạp và đã gắn mốc của từng OA; không bao giờ trả token",
+        "operationId": "comms_get_zalo_oas",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0099 #1 #10 — Cấu hình → tab Kênh Zalo, mục \"OA Zalo của xã\"",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.zalo"
+        },
+        "x-vigov-task": "0ae18a65b5da",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.communeZaloOAListOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/zalo-oas/authorization-links": {
+      "post": {
+        "summary": "Tạo link uỷ quyền OA — sinh state CSPRNG một lần (chỉ lưu băm) và cặp PKCE (code verifier niêm bằng khoá của xã), trả link Zalo để quản trị viên OA mở và bấm Cho phép; OA mới được thêm cạnh các OA đã nối, OA đã nối thì được uỷ quyền lại; link sống 10 phút, có ghi vết; Cache-Control no-store",
+        "operationId": "comms_post_zalo_oas_authorization_links",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0098 #4 #7, ADR 0099 #1 — Cấu hình → tab Kênh Zalo, \"Kết nối OA\" / \"Uỷ quyền lại\"",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.zalo"
+        },
+        "x-vigov-task": "2b042e1c20c6",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.zaloOAAuthorizationLinkOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "encryption_not_configured",
+              "zalo_oa_not_configured"
+            ]
+          }
+        }
+      }
+    },
+    "/api/v1/zalo-oas/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Ngắt một OA của xã — xoá mềm dòng OA (giữ token đã niêm làm lịch sử, cần lý do), gỡ mọi mốc đã gắn mẫu của OA ấy trong cùng giao dịch, có ghi vết; các OA khác của xã giữ nguyên; câu trả lời nhắc xã thu hồi quyền của ứng dụng trong OA Manager vì ngắt ở đây không thu hồi gì ở Zalo",
+        "operationId": "comms_delete_zalo_oas_by_id",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0098 #11, ADR 0099 #1 — Cấu hình → tab Kênh Zalo, \"Ngắt OA\"",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.zalo"
+        },
+        "x-vigov-task": "546b28547453",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.communeZaloOADisconnectIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.communeZaloOADisconnectedOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_request"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "not_found"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/zalo-oas/{id}/check": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Kiểm tra một OA của xã — gọi getoa bằng token đã lưu của OA ấy (làm mới trước nếu sắp hết hạn), ghi kết quả (lớp lỗi, không bao giờ chữ của Zalo), cập nhật tên OA và ghi vết",
+        "operationId": "comms_post_zalo_oas_by_id_check",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0098 #7, ADR 0099 #1 — Cấu hình → tab Kênh Zalo, \"Kiểm tra kết nối\"",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.zalo"
+        },
+        "x-vigov-task": "1985c963a3b0",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.zaloOACheckResultOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "not_found"
+            ]
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "zalo_oa_changed",
+              "zalo_oa_needs_reauthorization"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "zalo_unavailable"
+            ]
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "encryption_not_configured",
+              "zalo_oa_not_configured"
+            ]
+          }
+        }
+      }
+    },
+    "/api/v1/zalo-oas/{id}/templates": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Mẫu tin ZBS đã nạp từ một OA của xã — mã và tên mẫu, trạng thái và chất lượng Zalo, tham số, có đủ ba tham số bắt buộc không (thiếu gì), mốc đã gắn, gắn lúc nào bởi ai; lần nạp gần nhất",
+        "operationId": "comms_get_zalo_oas_by_id_templates",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0098 #8 #9, ADR 0099 #1 — Cấu hình → tab Kênh Zalo, mục \"Mẫu tin ZBS\"",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.zalo"
+        },
+        "x-vigov-task": "82162df9460b",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.zaloOATemplateListOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "not_found"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/zalo-oas/{id}/templates/sync": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Nạp mẫu từ một OA — gọi template/all rồi template/info từng mẫu, ghi mọi mẫu trong một giao dịch (mẫu Zalo không còn liệt kê thì đánh DELETE), giữ mốc đã gắn, có ghi vết",
+        "operationId": "comms_post_zalo_oas_by_id_templates_sync",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0098 #8, ADR 0099 #1 — Cấu hình → tab Kênh Zalo, \"Nạp mẫu từ OA\"",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.zalo"
+        },
+        "x-vigov-task": "41972b3d0020",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.zaloOASyncResultOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "not_found"
+            ]
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "zalo_oa_changed",
+              "zalo_oa_needs_reauthorization"
+            ]
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "zalo_token_rejected"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "zalo_unavailable"
+            ]
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "encryption_not_configured",
+              "zalo_oa_not_configured"
+            ]
           }
         }
       }
@@ -41103,41 +42466,6 @@
         ],
         "additionalProperties": false
       },
-      "comms.communeZaloOACurrentOut": {
-        "type": "object",
-        "properties": {
-          "configured": {
-            "type": "boolean"
-          },
-          "has_oa": {
-            "type": "boolean"
-          },
-          "oa": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/comms.communeZaloOAOut"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "template_count": {
-            "type": "integer"
-          },
-          "attached_count": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "attached_count",
-          "configured",
-          "has_oa",
-          "oa",
-          "template_count"
-        ],
-        "additionalProperties": false
-      },
       "comms.communeZaloOADisconnectIn": {
         "type": "object",
         "properties": {
@@ -41170,9 +42498,31 @@
         ],
         "additionalProperties": false
       },
+      "comms.communeZaloOAListOut": {
+        "type": "object",
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.communeZaloOAOut"
+            }
+          }
+        },
+        "required": [
+          "configured",
+          "items"
+        ],
+        "additionalProperties": false
+      },
       "comms.communeZaloOAOut": {
         "type": "object",
         "properties": {
+          "id": {
+            "type": "string"
+          },
           "oa_id": {
             "type": "string"
           },
@@ -41217,17 +42567,26 @@
                 "type": "null"
               }
             ]
+          },
+          "template_count": {
+            "type": "integer"
+          },
+          "attached_count": {
+            "type": "integer"
           }
         },
         "required": [
           "access_expires_at",
+          "attached_count",
           "authorized_at",
           "authorized_by",
           "authorized_by_name",
+          "id",
           "last_check",
           "needs_reauthorization",
           "oa_id",
           "oa_name",
+          "template_count",
           "token_refreshed_at"
         ],
         "additionalProperties": false
@@ -42905,6 +44264,319 @@
         ],
         "additionalProperties": false
       },
+      "comms.noticeAudienceIn": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "ids",
+          "kind",
+          "tags"
+        ],
+        "additionalProperties": false
+      },
+      "comms.noticeCampaignIn": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string"
+          },
+          "oa_id": {
+            "type": "string"
+          },
+          "sms_account_id": {
+            "type": "string"
+          },
+          "template_ref": {
+            "type": "string"
+          },
+          "audience": {
+            "$ref": "#/components/schemas/comms.noticeAudienceIn"
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "audience",
+          "channel",
+          "params",
+          "template_ref",
+          "title"
+        ],
+        "additionalProperties": false
+      },
+      "comms.noticeCampaignListOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.noticeCampaignOut"
+            }
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "additionalProperties": false
+      },
+      "comms.noticeCampaignOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string"
+          },
+          "oa_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sms_account_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_name": {
+            "type": "string"
+          },
+          "template_ref": {
+            "type": "string"
+          },
+          "template_name": {
+            "type": "string"
+          },
+          "audience_kind": {
+            "type": "string"
+          },
+          "audience_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "recipient_count": {
+            "type": "integer"
+          },
+          "skipped_count": {
+            "type": "integer"
+          },
+          "sent_count": {
+            "type": "integer"
+          },
+          "failed_count": {
+            "type": "integer"
+          },
+          "unit_price": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "estimated_cost": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "created_by_name": {
+            "type": "string"
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "audience_ids",
+          "audience_kind",
+          "channel",
+          "created_at",
+          "created_by",
+          "created_by_name",
+          "estimated_cost",
+          "failed_count",
+          "finished_at",
+          "id",
+          "oa_id",
+          "recipient_count",
+          "sent_count",
+          "skipped_count",
+          "sms_account_id",
+          "source_name",
+          "status",
+          "template_name",
+          "template_ref",
+          "title",
+          "unit_price"
+        ],
+        "additionalProperties": false
+      },
+      "comms.noticePreviewIn": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string"
+          },
+          "oa_id": {
+            "type": "string"
+          },
+          "sms_account_id": {
+            "type": "string"
+          },
+          "template_ref": {
+            "type": "string"
+          },
+          "audience": {
+            "$ref": "#/components/schemas/comms.noticeAudienceIn"
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "audience",
+          "channel",
+          "params",
+          "template_ref"
+        ],
+        "additionalProperties": false
+      },
+      "comms.noticePreviewOut": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "recipient_count": {
+            "type": "integer"
+          },
+          "skipped_count": {
+            "type": "integer"
+          },
+          "unit_price": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "estimated_cost": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "missing_params": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "content",
+          "estimated_cost",
+          "missing_params",
+          "recipient_count",
+          "skipped_count",
+          "unit_price"
+        ],
+        "additionalProperties": false
+      },
+      "comms.noticeTemplateParamOut": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "max_length": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "field",
+          "max_length",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "comms.noticeTemplatesOut": {
+        "type": "object",
+        "properties": {
+          "zns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.znsNoticeTemplateOut"
+            }
+          },
+          "sms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.smsNoticeTemplateOut"
+            }
+          }
+        },
+        "required": [
+          "sms",
+          "zns"
+        ],
+        "additionalProperties": false
+      },
       "comms.notificationOut": {
         "type": "object",
         "properties": {
@@ -43581,6 +45253,363 @@
           "created_count",
           "skipped_deleted",
           "skipped_existing"
+        ],
+        "additionalProperties": false
+      },
+      "comms.smsAccountCreateIn": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "api_key": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "secret_key": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "brandname": {
+            "type": "string"
+          },
+          "is_default": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "api_key",
+          "brandname",
+          "is_default",
+          "label",
+          "secret_key"
+        ],
+        "additionalProperties": false
+      },
+      "comms.smsAccountListOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.smsAccountOut"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "comms.smsAccountOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "brandname": {
+            "type": "string"
+          },
+          "is_default": {
+            "type": "boolean"
+          },
+          "set_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "set_by": {
+            "type": "string"
+          },
+          "last_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/comms.smsCheckOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "brandname",
+          "created_at",
+          "id",
+          "is_default",
+          "label",
+          "last_check",
+          "provider",
+          "set_at",
+          "set_by"
+        ],
+        "additionalProperties": false
+      },
+      "comms.smsAccountRetireIn": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "comms.smsAccountRetiredOut": {
+        "type": "object",
+        "properties": {
+          "retired": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "retired"
+        ],
+        "additionalProperties": false
+      },
+      "comms.smsAccountUpdateIn": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "api_key": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "secret_key": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "brandname": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_default": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "comms.smsCheckOut": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "result": {
+            "type": "string"
+          },
+          "balance": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "at",
+          "balance",
+          "result"
+        ],
+        "additionalProperties": false
+      },
+      "comms.smsCheckResultOut": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string"
+          },
+          "checked_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "balance": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "balance",
+          "checked_at",
+          "result"
+        ],
+        "additionalProperties": false
+      },
+      "comms.smsNoticeTemplateOut": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string"
+          },
+          "sms_account_id": {
+            "type": "string"
+          },
+          "account_label": {
+            "type": "string"
+          },
+          "brandname": {
+            "type": "string"
+          },
+          "template_ref": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "params": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.noticeTemplateParamOut"
+            }
+          },
+          "unit_price": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "account_label",
+          "brandname",
+          "channel",
+          "content",
+          "params",
+          "sms_account_id",
+          "template_ref",
+          "unit_price"
+        ],
+        "additionalProperties": false
+      },
+      "comms.smsTemplateListOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.smsTemplateOut"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "comms.smsTemplateNetworkOut": {
+        "type": "object",
+        "properties": {
+          "network_id": {
+            "type": "integer"
+          },
+          "template_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "network_id",
+          "template_id"
+        ],
+        "additionalProperties": false
+      },
+      "comms.smsTemplateOut": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "params": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.smsTemplateParamOut"
+            }
+          },
+          "networks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.smsTemplateNetworkOut"
+            }
+          },
+          "synced_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "content",
+          "networks",
+          "params",
+          "synced_at"
+        ],
+        "additionalProperties": false
+      },
+      "comms.smsTemplateParamOut": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "max_length": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "max_length",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "comms.smsTemplateSyncOut": {
+        "type": "object",
+        "properties": {
+          "added": {
+            "type": "integer"
+          },
+          "updated": {
+            "type": "integer"
+          },
+          "vanished": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "integer"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.smsTemplateOut"
+            }
+          }
+        },
+        "required": [
+          "added",
+          "items",
+          "skipped",
+          "updated",
+          "vanished"
         ],
         "additionalProperties": false
       },
@@ -44857,6 +46886,9 @@
           "id": {
             "type": "string"
           },
+          "oa_row_id": {
+            "type": "string"
+          },
           "template_id": {
             "type": "string"
           },
@@ -44920,6 +46952,7 @@
           "milestone_set_by",
           "milestone_set_by_name",
           "missing_params",
+          "oa_row_id",
           "params",
           "params_match",
           "template_id",
@@ -44978,6 +47011,56 @@
         },
         "required": [
           "ok"
+        ],
+        "additionalProperties": false
+      },
+      "comms.znsNoticeTemplateOut": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string"
+          },
+          "oa_id": {
+            "type": "string"
+          },
+          "oa_name": {
+            "type": "string"
+          },
+          "oa_needs_reauthorization": {
+            "type": "boolean"
+          },
+          "template_ref": {
+            "type": "string"
+          },
+          "template_name": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "params": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.noticeTemplateParamOut"
+            }
+          },
+          "unit_price": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "channel",
+          "oa_id",
+          "oa_name",
+          "oa_needs_reauthorization",
+          "params",
+          "tag",
+          "template_name",
+          "template_ref",
+          "unit_price"
         ],
         "additionalProperties": false
       },
