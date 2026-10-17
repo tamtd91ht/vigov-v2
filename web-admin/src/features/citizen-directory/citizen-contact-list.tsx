@@ -12,7 +12,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { PendingMarker } from "@/components/ui/pending-feature";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import { Tooltip } from "@/components/ui/tooltip";
-import { contactEmailMasked, normalizeCitizenKeyword, type CitizenContact, type CitizenContactFilter, type CitizenContactPage, type CitizenContactTag } from "@/lib/api/citizen-contacts";
+import { normalizeCitizenKeyword, type CitizenContact, type CitizenContactFilter, type CitizenContactPage, type CitizenContactTag } from "@/lib/api/citizen-contacts";
 import type { CitizenField } from "@/lib/api/citizen-fields";
 import type { CitizenGroup } from "@/lib/api/citizen-groups";
 import { cn } from "@/lib/cn";
@@ -22,7 +22,6 @@ import { CitizenContactFilters, FILTER_PANEL_ID } from "./citizen-contact-filter
 import { PHAN_CHUA_DUNG } from "./citizen-directory-pending";
 import {
   ALL_GROUPS,
-  COLUMN_EMAIL,
   COLUMN_NAME,
   COLUMN_PHONE,
   COLUMN_TAGS,
@@ -310,9 +309,6 @@ export function CitizenContactList({
                     {COLUMN_PHONE}
                   </th>
                   <th scope="col" className="px-4 py-2.5 font-semibold">
-                    {COLUMN_EMAIL}
-                  </th>
-                  <th scope="col" className="px-4 py-2.5 font-semibold">
                     {COLUMN_UNIT}
                   </th>
                   <th scope="col" className="px-4 py-2.5 font-semibold">
@@ -348,12 +344,10 @@ export function CitizenContactList({
                   >
                     <td className="text-navy px-4 py-2.5 font-semibold">{row.full_name}</td>
                     <td className="px-4 py-2.5 tabular-nums">{row.phone_masked}</td>
-                    {/* Masked by the server, as the number is (ADR 0101 #6); drawn as it arrives. */}
-                    <td className="px-4 py-2.5">{contactEmailMasked(row) !== "" ? contactEmailMasked(row) : EMPTY_CELL}</td>
                     <td className="text-ink px-4 py-2.5">{unitCellText(row)}</td>
                     <td className="px-4 py-2.5">{tagsCellText(row.tags)}</td>
                     {listColumns.map((f) => {
-                      const text = displayAttribute(f, row.attributes?.[f.code]);
+                      const text = displayAttribute(f, row.attributes[f.code]);
                       return (
                         <td key={f.code} className="px-4 py-2.5">
                           {text === "" ? EMPTY_CELL : text}

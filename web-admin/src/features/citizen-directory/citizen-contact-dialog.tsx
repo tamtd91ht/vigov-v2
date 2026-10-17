@@ -9,7 +9,6 @@ import { Field } from "@/components/ui/field";
 import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 import { pickableResidentialUnits } from "@/features/cau-hinh/nhan-thon";
 import {
-  contactEmailMasked,
   createCitizenContact,
   getCitizenContact,
   revealCitizenContactPhone,
@@ -172,7 +171,7 @@ export function CitizenContactDialog({
       });
       setStored(d.attributes);
       setAttrInputs(inputsFromAttributes(fields, d.attributes));
-      setEmailMasked(contactEmailMasked(d));
+      setEmailMasked(d.email_masked);
       setReady(true);
     });
     return () => {
@@ -215,9 +214,10 @@ export function CitizenContactDialog({
       tags: parseTags(draft.tagText),
       group_ids: [...draft.groupIds],
       is_active: draft.isActive,
+      // `null` keeps the stored address: on an edit the officer only ever saw it masked (citizenContactIn).
+      email: emailEdited ? draft.email.trim() : null,
       attributes: attrs.attributes,
     };
-    if (emailEdited) body.email = draft.email.trim();
     setSaving(true);
     const kq = mode.kind === "add" ? await createCitizenContact(body, mode.idempotencyKey) : await updateCitizenContact(mode.contact.id, body);
     setSaving(false);

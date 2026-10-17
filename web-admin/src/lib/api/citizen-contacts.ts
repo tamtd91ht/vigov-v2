@@ -9,7 +9,7 @@
  *   GET   /api/v1/citizen-contact-tags            citizen.read    the tag strip, `{tag, count}` each
  *   POST  /api/v1/citizen-contacts                citizen.update  201 `{id}` · 409 `phone_taken` · Idempotency-Key
  *   GET   /api/v1/citizen-contacts/{id}           citizen.read    the edit dialog's detail — address and note, number STILL masked
- *   PATCH /api/v1/citizen-contacts/{id}           citizen.update  204 · 409 `phone_taken`
+ *   PATCH /api/v1/citizen-contacts/{id}           citizen.update  204 · 409 `phone_taken` · `email: null` keeps the address
  *   POST  /api/v1/citizen-contacts/{id}/deletion  citizen.update  204 · `{reason}` MANDATORY (D7)
  *   GET   /api/v1/citizen-contacts/{id}/phone     citizen.update  the ONE route that answers a full number — one audit entry per call (D2)
  *
@@ -21,9 +21,12 @@
  * KIỂU LẤY TỪ HỢP ĐỒNG, KHÔNG GÕ TAY (rule 9): every shape below is `schema.gen.ts`'s. The paths are
  * `satisfies <route>["duongDan"]`, so a renamed route is a `tsc` error here, not a 404 in a commune.
  *
- * ADR 0101 ADDS `email` (masked on the way out, like the number) and the commune's dynamic `attributes` to the
- * contact, and a creation-date range and attribute filters to the search — see the UNTIL REGEN block.
- * A search using those can be answered 503 when the server has no search engine configured.
+ * ADR 0101 ADDS `email` (on the detail only, as `email_masked`; the full address is `GET …/{id}/email`,
+ * audited, `citizen.update` — this screen does not call it: "Nhập email mới" replaces the address without
+ * reading it) and the commune's dynamic `attributes` (the list carries only the `show_in_list` ones) to the
+ * contact, and a creation-date range and attribute filters to the search. A search using those is answered
+ * 503 `search_unavailable` when the server's search engine is off, and 400 when combined with
+ * `has_own_app_session` (the server's sentence is shown).
  *
  * NO `tenant_id`, RELATIVE PATHS, `credentials: same-origin`: the three rules of `goi.ts`.
  */
@@ -49,6 +52,7 @@ import type {
   identity_citizenContactCreatedOut,
   identity_citizenContactDeletionIn,
   identity_citizenContactDetailOut,
+  identity_citizenContactFilterIn,
   identity_citizenContactIn,
   identity_citizenContactOut,
   identity_citizenContactPhoneOut,
@@ -68,54 +72,33 @@ import type {
 
 export type { identity_citizenContactTagOut as CitizenContactTag } from "./schema.gen";
 
-// ---- UNTIL REGEN (TASK E-1) ------------------------------------------------------------------------
-// ADR 0101 adds to the contact a static `email` (#6) and the commune's dynamic `attributes` (#1), and to
-// the search a creation-date range and per-attribute filters (#10). `schema.gen.ts` lags the backend that
-// is built in parallel, so the additions are written here BY HAND, ON TOP OF the generated shapes, until
-// `make kb` regenerates them — then each alias below collapses back to its `identity_*` type.
-//
-// The reply fields are OPTIONAL here on purpose: a server still on the old shape answers without them,
-// and the screen must keep working against it. After regen they are whatever the contract says.
+// ADR 0101 added `email` (masked on the way out, as `email_masked`) and the commune's dynamic `attributes`
+// to the contact, and a creation-date range and attribute filters to the search. The ONLY local additions
+// narrow `attributes` from the contract's `JsonValue` to what a field can hold (below); every other shape is
+// the generated one.
 
 /** One attribute value: text / one choice -> string, several choices -> string[], number and dateTime (epoch millis) -> number. */
 export type CitizenAttributeValue = string | string[] | number;
+/** The contract's `Record<string, JsonValue>`, narrowed to what the field types of ADR 0101 #2 store. */
 export type CitizenAttributes = Record<string, CitizenAttributeValue>;
 
 /**
- * The create / update body. `email` is OPTIONAL in the body: on an edit it is sent only when the officer
- * typed a new one, because the detail answers it MASKED and sending the mask back would overwrite the
- * real address with asterisks. Absent = unchanged (assumption stated to the backend, TASK E-1).
+ * The create / update body. `email`: `null` = keep the stored address (the detail only ever shows it
+ * masked, and sending the mask back would overwrite the real address with asterisks), `""` = clear, a
+ * value = set. `attributes` is the whole set of live values (`citizenContactIn`, service-identity).
  */
-export type CitizenContactBody = identity_citizenContactIn & { email?: string; attributes: CitizenAttributes };
-/**
- * The masked address on a reply. TASK E-1 names it `email`; this repo's other masked address is
- * `email_masked` (`danh_ba_chon_nguoi.go`), next to `phone_masked`. Both are read until regen settles the
- * name — through `contactEmailMasked`, the one reader, so the regen is a one-line change.
- */
-type MaskedEmailReply = { email?: string | null; email_masked?: string | null };
-/** A list row. The address arrives masked, like `phone_masked`. */
-export type CitizenContact = identity_citizenContactOut & MaskedEmailReply & { attributes?: CitizenAttributes };
-/** The edit dialog's detail — the address masked here too. */
-export type CitizenContactDetail = identity_citizenContactDetailOut & MaskedEmailReply & { attributes?: CitizenAttributes };
-
-/** The masked address of a row or a detail, `""` when there is none. Never a raw address: the server masks it. */
-export function contactEmailMasked(r: MaskedEmailReply): string {
-  return r.email_masked ?? r.email ?? "";
-}
+export type CitizenContactBody = Omit<identity_citizenContactIn, "attributes"> & { attributes: CitizenAttributes };
+/** A list row. `attributes` holds only the fields shown in the list (`show_in_list`); no address, no e-mail. */
+export type CitizenContact = Omit<identity_citizenContactOut, "attributes"> & { attributes: CitizenAttributes };
+/** The edit dialog's detail — `email_masked` (`""` when none) and every stored attribute. */
+export type CitizenContactDetail = Omit<identity_citizenContactDetailOut, "attributes"> & { attributes: CitizenAttributes };
 export type CitizenContactPage = Omit<page_Result_identity_citizenContactOut, "items"> & { items: CitizenContact[] };
 
-/** One attribute filter: a set of option values (combobox / singleBox), or a range (number / dateTime) with at least one bound. */
-export type CitizenAttributeFilter =
-  | { readonly code: string; readonly values: readonly string[] }
-  | { readonly code: string; readonly from?: number; readonly to?: number };
-
-/** The search additions. Sent only when set, so a filter that uses none of them is today's request byte for byte. */
-type AdvancedSearchFields = {
-  created_from?: number;
-  created_to?: number;
-  filters?: CitizenAttributeFilter[];
-};
-// ---- end UNTIL REGEN -------------------------------------------------------------------------------
+/**
+ * One attribute filter, as the contract has it: `values` for a combobox / singleBox field (`from`/`to`
+ * null), or `from`/`to` for a number / dateTime field (`values` empty, at least one bound set).
+ */
+export type CitizenAttributeFilter = identity_citizenContactFilterIn;
 
 /** Rows per page — the screen's choice (chapter 16 §3, prototype `PAGE_SIZE`). Sent on every page read. */
 export const CITIZEN_CONTACT_PAGE_SIZE = 50;
@@ -185,44 +168,27 @@ export function normalizeCitizenKeyword(typed: string): TuKhoaTim {
   return chuanHoaTuKhoaTim(typed);
 }
 
-/** The ADR 0101 additions of a filter, each key present only when set. */
-function advancedSearchFields(f: CitizenContactFilter): AdvancedSearchFields {
-  const extra: AdvancedSearchFields = {};
-  if (f.createdFrom !== null) extra.created_from = f.createdFrom;
-  if (f.createdTo !== null) extra.created_to = f.createdTo;
-  if (f.attributeFilters.length > 0) extra.filters = f.attributeFilters.map((a) => ({ ...a }));
-  return extra;
-}
-
 /**
  * The search body — every generated field, as the generated type requires; `limit` is the screen's page
- * size; the ADR 0101 additions only when set. The keyword stays IN THE BODY (ADR 0097 D11, kept by 0101 #7).
+ * size. An unset date bound is `null` and no attribute filter is `[]`: the server reads both as "not
+ * filtered", so a filter that uses none of ADR 0101's additions never needs the search engine. The keyword
+ * stays IN THE BODY (ADR 0097 D11, kept by 0101 #7).
  */
-export function citizenContactSearchBody(
-  f: CitizenContactFilter,
-  cursor: string | null,
-): identity_citizenContactSearchIn & AdvancedSearchFields {
-  return {
-    q: f.keyword,
-    group_id: f.groupId,
-    residential_unit_id: f.residentialUnitId,
-    active: f.activeOnly ? true : null,
-    has_own_app_session: f.hasOwnAppSession,
-    limit: CITIZEN_CONTACT_PAGE_SIZE,
-    cursor: cursor ?? "",
-    ...advancedSearchFields(f),
-  };
+export function citizenContactSearchBody(f: CitizenContactFilter, cursor: string | null): identity_citizenContactSearchIn {
+  return { ...citizenContactCountBody(f), limit: CITIZEN_CONTACT_PAGE_SIZE, cursor: cursor ?? "" };
 }
 
 /** The count body — the search's filter without its paging, so both answers describe one set of rows. */
-export function citizenContactCountBody(f: CitizenContactFilter): identity_citizenContactCountQueryIn & AdvancedSearchFields {
+export function citizenContactCountBody(f: CitizenContactFilter): identity_citizenContactCountQueryIn {
   return {
     q: f.keyword,
     group_id: f.groupId,
     residential_unit_id: f.residentialUnitId,
     active: f.activeOnly ? true : null,
     has_own_app_session: f.hasOwnAppSession,
-    ...advancedSearchFields(f),
+    created_from: f.createdFrom,
+    created_to: f.createdTo,
+    filters: f.attributeFilters.map((a) => ({ ...a, values: [...a.values] })),
   };
 }
 

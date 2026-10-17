@@ -78,7 +78,6 @@ export function tagChipText(tag: string, count: number): string {
 
 export const COLUMN_NAME = "Họ tên";
 export const COLUMN_PHONE = "Điện thoại";
-export const COLUMN_EMAIL = "Email";
 export const COLUMN_UNIT = "Thôn, tổ";
 export const COLUMN_TAGS = "Nhãn";
 export const COLUMN_ZALO = "Zalo";

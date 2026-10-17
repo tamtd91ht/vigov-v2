@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  CITIZEN_FIELD_CODE_TAKEN,
   CITIZEN_FIELD_ORDER_PATH,
   citizenFieldPath,
   citizenFieldsPath,
@@ -10,9 +11,10 @@ import {
   retireCitizenField,
   updateCitizenField,
   type CitizenFieldCreateBody,
+  type CitizenFieldUpdateBody,
 } from "./citizen-fields";
 
-/** The citizen-field routes (ADR 0101, contract of TASK E-1): paths, methods, bodies, the key on create. */
+/** The citizen-field routes (ADR 0101): paths, methods, bodies, the key on create, each route's one success status. */
 
 function stub(res: Response) {
   const fake = vi.fn(async (_url: string, _init?: RequestInit) => res);
@@ -34,10 +36,22 @@ const CREATE: CitizenFieldCreateBody = {
     { value: "ho-ngheo", label: "Hộ nghèo", retired: false },
     { value: "can-ngheo", label: "Cận nghèo", retired: false },
   ],
-  number_kind: null,
-  date_pattern: null,
+  number_kind: "",
+  date_pattern: "",
   required: true,
   show_in_list: true,
+};
+
+const UNCHANGED: CitizenFieldUpdateBody = {
+  code: null,
+  label: null,
+  field_type: null,
+  placeholder: null,
+  options: null,
+  number_kind: null,
+  date_pattern: null,
+  required: null,
+  show_in_list: null,
 };
 
 afterEach(() => {
@@ -58,7 +72,7 @@ describe("citizen-fields client", () => {
     expect(fake2.mock.calls[0]?.[0]).toBe("/api/v1/citizen-fields?include_retired=true");
   });
 
-  it("create: POST with the caller's Idempotency-Key and the body verbatim; 201 or 200 → ok", async () => {
+  it("create: POST with the caller's Idempotency-Key and the body verbatim; 201 → ok, any other success status is not the contract", async () => {
     const fake = stub(json({ ...CREATE, sort_order: 1, retired_at: null }, 201));
     expect(await createCitizenField(CREATE, "khoa-1")).toEqual({ ok: true, duLieu: null });
     expect(fake.mock.calls[0]?.[0]).toBe("/api/v1/citizen-fields");
@@ -66,20 +80,22 @@ describe("citizen-fields client", () => {
     expect(sentHeaders(fake)?.["Idempotency-Key"]).toBe("khoa-1");
     expect(sentBody(fake)).toEqual(CREATE);
     stub(json({}, 200));
-    expect((await createCitizenField(CREATE, "khoa-1")).ok).toBe(true);
+    expect((await createCitizenField(CREATE, "khoa-1")).ok).toBe(false);
   });
 
-  it("create refused: the server's sentence AND its code", async () => {
+  it("create refused: the server's sentence AND its code (taken code, limit)", async () => {
     stub(json({ code: "citizen_field_code_taken", message: "Mã đã dùng.", trace_id: "" }, 409));
-    expect(await createCitizenField(CREATE, "k")).toEqual({ ok: false, thongBao: "Mã đã dùng.", code: "citizen_field_code_taken" });
+    expect(await createCitizenField(CREATE, "k")).toEqual({ ok: false, thongBao: "Mã đã dùng.", code: CITIZEN_FIELD_CODE_TAKEN });
+    stub(json({ code: "citizen_field_limit", message: "Đã đủ 50.", trace_id: "" }, 409));
+    expect(await createCitizenField(CREATE, "k")).toEqual({ ok: false, thongBao: "Đã đủ 50.", code: "citizen_field_limit" });
   });
 
-  it("update: PATCH /citizen-fields/{code} with only the changed keys; 204 → ok", async () => {
-    const fake = stub(empty(204));
-    expect(await updateCitizenField("hongheo1", { label: "Hộ", required: false })).toEqual({ ok: true, duLieu: null });
+  it("update: PATCH /citizen-fields/{code}, unchanged keys null; 200 with the field → ok", async () => {
+    const fake = stub(json({ ...CREATE, label: "Hộ", required: false }, 200));
+    expect(await updateCitizenField("hongheo1", { ...UNCHANGED, label: "Hộ", required: false })).toEqual({ ok: true, duLieu: null });
     expect(fake.mock.calls[0]?.[0]).toBe("/api/v1/citizen-fields/hongheo1");
     expect(fake.mock.calls[0]?.[1]?.method).toBe("PATCH");
-    expect(sentBody(fake)).toEqual({ label: "Hộ", required: false });
+    expect(sentBody(fake)).toEqual({ ...UNCHANGED, label: "Hộ", required: false });
     expect(sentHeaders(fake)?.["Idempotency-Key"]).toBeUndefined();
   });
 

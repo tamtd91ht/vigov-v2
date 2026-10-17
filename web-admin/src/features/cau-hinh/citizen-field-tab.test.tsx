@@ -30,16 +30,21 @@ const BASE: CitizenField = {
     { value: "ho-ngheo", label: "Hộ nghèo", retired: false },
     { value: "can-ngheo", label: "Cận nghèo", retired: false },
   ],
-  number_kind: null,
-  date_pattern: null,
+  number_kind: "",
+  date_pattern: "",
   required: false,
   show_in_list: true,
   sort_order: 1,
+  created_at: "2026-10-17T00:00:00Z",
+  updated_at: "2026-10-17T00:00:00Z",
   retired_at: null,
 };
 const NUMBER: CitizenField = { ...BASE, code: "sonhan01", label: "Số nhân khẩu", field_type: "number", options: [], number_kind: "integer", sort_order: 2 };
 const DATE: CitizenField = { ...BASE, code: "ngaysinh", label: "Ngày sinh chủ hộ", field_type: "dateTime", options: [], date_pattern: "dd/MM/yyyy", sort_order: 3 };
 const RETIRED: CitizenField = { ...BASE, code: "cucu0001", label: "Thuộc tính cũ", field_type: "singleText", options: [], sort_order: 0, retired_at: "2026-10-17T01:00:00Z" };
+
+/** The PATCH body with nothing changed: every key the contract names, null. */
+const UNCHANGED = { code: null, label: null, field_type: null, placeholder: null, options: null, number_kind: null, date_pattern: null, required: null, show_in_list: null };
 
 function session(permissions: string[]): PhienDaDoc {
   return { ok: true, duLieu: { staff: { full_name: "A", position: "B" }, role: null, permissions } } as unknown as PhienDaDoc;
@@ -214,8 +219,8 @@ describe("add dialog", () => {
       field_type: "combobox",
       placeholder: "",
       options: [{ value: "dien", label: "Điện", retired: false }],
-      number_kind: null,
-      date_pattern: null,
+      number_kind: "",
+      date_pattern: "",
       required: false,
       show_in_list: false,
     });
@@ -245,9 +250,9 @@ describe("add dialog", () => {
 });
 
 describe("edit and retire", () => {
-  it("edit: code and type read-only; relabel an option + retire another → PATCH with only what changed", async () => {
+  it("edit: code and type read-only; relabel an option + retire another → PATCH with only what changed (the rest null)", async () => {
     H.phien = session(["admin.citizen_field"]);
-    answers["PATCH /api/v1/citizen-fields/hongheo1"] = { status: 204, body: null };
+    answers["PATCH /api/v1/citizen-fields/hongheo1"] = { status: 200, body: BASE };
     const el = await mount();
     act(() => byLabel(el, "Sửa thuộc tính Phân loại hộ").click());
     const dlg = document.querySelector<HTMLFormElement>("form[aria-label='Sửa thuộc tính']")!;
@@ -262,6 +267,7 @@ describe("edit and retire", () => {
     await settle();
     const patch = writes().find((c) => c.method === "PATCH")!;
     expect(JSON.parse(patch.body!)).toEqual({
+      ...UNCHANGED,
       options: [
         { value: "ho-ngheo", label: "Hộ nghèo (2026)", retired: false },
         { value: "can-ngheo", label: "Cận nghèo", retired: true },

@@ -60,6 +60,7 @@ const ROWS: CitizenContact[] = [
     source: "nhap-tay",
     has_own_app_session: true,
     created_at: "2026-10-16T01:00:00Z",
+    attributes: {},
   },
   {
     id: "01JCONTACTB",
@@ -73,6 +74,7 @@ const ROWS: CitizenContact[] = [
     source: "nhap-excel",
     has_own_app_session: false,
     created_at: "2026-10-16T01:00:00Z",
+    attributes: {},
   },
 ];
 

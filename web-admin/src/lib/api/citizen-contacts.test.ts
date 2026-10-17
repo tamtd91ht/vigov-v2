@@ -9,7 +9,6 @@ import {
   citizenContactListPath,
   citizenContactPhonePath,
   citizenContactSearchBody,
-  contactEmailMasked,
   countCitizenContacts,
   createCitizenContact,
   deleteCitizenContact,
@@ -85,9 +84,21 @@ describe("the filter", () => {
       has_own_app_session: true,
       limit: CITIZEN_CONTACT_PAGE_SIZE,
       cursor: "con-tro-2",
+      created_from: null,
+      created_to: null,
+      filters: [],
     });
     expect(citizenContactSearchBody(NO_CITIZEN_CONTACT_FILTER, null).cursor).toBe("");
-    expect(citizenContactCountBody(f)).toEqual({ q: "0001", group_id: "01JGROUP", residential_unit_id: "", active: null, has_own_app_session: true });
+    expect(citizenContactCountBody(f)).toEqual({
+      q: "0001",
+      group_id: "01JGROUP",
+      residential_unit_id: "",
+      active: null,
+      has_own_app_session: true,
+      created_from: null,
+      created_to: null,
+      filters: [],
+    });
   });
 });
 
@@ -97,31 +108,31 @@ describe("the ADR 0101 additions to the filter", () => {
     createdFrom: 1760634000000,
     createdTo: null,
     attributeFilters: [
-      { code: "hongheo1", values: ["ho-ngheo", "can-ngheo"] },
-      { code: "sonhan01", from: 2 },
+      { code: "hongheo1", values: ["ho-ngheo", "can-ngheo"], from: null, to: null },
+      { code: "sonhan01", values: [], from: 2, to: null },
     ],
   };
 
   it("a date range or an attribute filter makes the filter non-empty AND advanced; a keyword alone is not advanced", () => {
     expect(isCitizenContactFilterEmpty({ ...NO_CITIZEN_CONTACT_FILTER, createdTo: 1 })).toBe(false);
-    expect(isCitizenContactFilterEmpty({ ...NO_CITIZEN_CONTACT_FILTER, attributeFilters: [{ code: "hongheo1", values: ["x"] }] })).toBe(false);
+    expect(isCitizenContactFilterEmpty({ ...NO_CITIZEN_CONTACT_FILTER, attributeFilters: [{ code: "hongheo1", values: ["x"], from: null, to: null }] })).toBe(false);
     expect(hasAdvancedCitizenFilter(ADV)).toBe(true);
     expect(hasAdvancedCitizenFilter({ ...NO_CITIZEN_CONTACT_FILTER, keyword: "An" })).toBe(false);
   });
 
-  it("search and count bodies carry created_from / created_to / filters ONLY when set — today's body otherwise", () => {
+  it("search and count bodies carry created_from / created_to / filters as the contract has them — null / [] when unset", () => {
     expect(citizenContactSearchBody(ADV, null)).toMatchObject({
       q: "",
       created_from: 1760634000000,
+      created_to: null,
       filters: [
-        { code: "hongheo1", values: ["ho-ngheo", "can-ngheo"] },
-        { code: "sonhan01", from: 2 },
+        { code: "hongheo1", values: ["ho-ngheo", "can-ngheo"], from: null, to: null },
+        { code: "sonhan01", values: [], from: 2, to: null },
       ],
     });
-    expect(citizenContactSearchBody(ADV, null)).not.toHaveProperty("created_to");
     expect(citizenContactCountBody(ADV)).toMatchObject({ created_from: 1760634000000, filters: ADV.attributeFilters });
     const plain = citizenContactSearchBody({ ...NO_CITIZEN_CONTACT_FILTER, keyword: "An" }, null);
-    for (const k of ["created_from", "created_to", "filters"]) expect(plain).not.toHaveProperty(k);
+    expect(plain).toMatchObject({ created_from: null, created_to: null, filters: [] });
   });
 
   it("503 on an ADVANCED search: `searchUnavailable` and the fixed sentence, not the server's", async () => {
@@ -141,15 +152,6 @@ describe("the ADR 0101 additions to the filter", () => {
   it("200 on an advanced search: the page", async () => {
     stub(json(PAGE, 200));
     expect(await readCitizenContactPage(ADV, "c2")).toEqual({ ok: true, duLieu: PAGE });
-  });
-});
-
-describe("the masked address", () => {
-  it("read from `email_masked` or `email` (name unsettled until regen), empty when absent or null", () => {
-    expect(contactEmailMasked({ email_masked: "ng***@example.com" })).toBe("ng***@example.com");
-    expect(contactEmailMasked({ email: "ng***@example.com" })).toBe("ng***@example.com");
-    expect(contactEmailMasked({ email_masked: null })).toBe("");
-    expect(contactEmailMasked({})).toBe("");
   });
 });
 
@@ -184,7 +186,16 @@ describe("page reads", () => {
     const fake = stub(json({ count: 12 }, 200));
     expect(await countCitizenContacts({ ...NO_CITIZEN_CONTACT_FILTER, keyword: "An" })).toEqual({ ok: true, duLieu: 12 });
     expect(fake.mock.calls[0]?.[0]).toBe("/api/v1/citizen-contact-count-queries");
-    expect(sentBody(fake)).toEqual({ q: "An", group_id: "", residential_unit_id: "", active: null, has_own_app_session: null });
+    expect(sentBody(fake)).toEqual({
+      q: "An",
+      group_id: "",
+      residential_unit_id: "",
+      active: null,
+      has_own_app_session: null,
+      created_from: null,
+      created_to: null,
+      filters: [],
+    });
   });
 
   it("tags and detail: their GET paths; the detail's number arrives masked", async () => {

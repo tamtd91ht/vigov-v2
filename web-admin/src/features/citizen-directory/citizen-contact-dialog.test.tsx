@@ -43,6 +43,7 @@ const ROW: CitizenContact = {
   source: "nhap-tay",
   has_own_app_session: false,
   created_at: "2026-10-16T01:00:00Z",
+  attributes: {},
 };
 const DETAIL: CitizenContactDetail = {
   id: ROW.id,
@@ -58,6 +59,8 @@ const DETAIL: CitizenContactDetail = {
   import_batch_id: "",
   created_at: ROW.created_at,
   updated_at: ROW.created_at,
+  email_masked: "",
+  attributes: {},
 };
 
 let root: Root | null = null;
@@ -157,9 +160,9 @@ describe("edit dialog — Xem số đầy đủ (ADR 0097 D2)", () => {
       tags: ["tổ trưởng"],
       group_ids: [],
       is_active: true,
+      // `null` keeps the stored address: the body never carries a mask.
+      email: null,
       attributes: {},
     });
-    // The detail answered no email to replace: the body carries none — never a mask.
-    expect(update.mock.calls[0]?.[1]).not.toHaveProperty("email");
   });
 });

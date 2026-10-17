@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 //
 // `/nguoi-dan` with the commune's attributes (ADR 0101): the list's extra columns (`show_in_list`, option
-// labels, the masked email), the advanced filter panel and the body it sends (keyword still in the BODY,
+// labels), the advanced filter panel and the body it sends (keyword still in the BODY,
 // D11), and the 503 "search engine not configured" answer that leaves the list one press away.
 
 import { act } from "react";
@@ -32,11 +32,13 @@ const base = (over: Partial<CitizenField>): CitizenField => ({
   field_type: "singleText",
   placeholder: "",
   options: [],
-  number_kind: null,
-  date_pattern: null,
+  number_kind: "",
+  date_pattern: "",
   required: false,
   show_in_list: false,
   sort_order: 0,
+  created_at: "2026-10-17T00:00:00Z",
+  updated_at: "2026-10-17T00:00:00Z",
   retired_at: null,
   ...over,
 });
@@ -70,7 +72,6 @@ const ROWS: CitizenContact[] = [
     source: "nhap-tay",
     has_own_app_session: false,
     created_at: "2026-10-16T01:00:00Z",
-    email: "ng***@example.com",
     attributes: { hongheo1: "ho-ngheo", sonhan01: 4 },
   },
 ];
@@ -138,17 +139,16 @@ const searches = () => calls.filter((c) => c.url === "/api/v1/citizen-contact-se
 const bodyOf = (c: Call) => JSON.parse(String(c.init?.body)) as Record<string, unknown>;
 
 describe("list columns", () => {
-  it("reads the LIVE definitions (no include_retired); a show_in_list field is a column with the option LABEL; email masked as returned", async () => {
+  it("reads the LIVE definitions (no include_retired); a show_in_list field is a column with the option LABEL; no Email column (the list item carries none)", async () => {
     const el = await mount();
     expect(calls.some((c) => c.url === "/api/v1/citizen-fields")).toBe(true);
     const heads = [...el.querySelectorAll("thead th")].map((th) => th.textContent);
-    expect(heads).toContain("Email");
+    expect(heads).not.toContain("Email");
     expect(heads).toContain("Phân loại hộ");
     expect(heads).not.toContain("Số nhân khẩu");
     const row = el.querySelector("tbody tr")!;
     expect(row.textContent).toContain("Hộ nghèo");
     expect(row.textContent).not.toContain("ho-ngheo");
-    expect(row.textContent).toContain("ng***@example.com");
   });
 });
 
@@ -173,11 +173,11 @@ describe("advanced filters", () => {
       q: "",
       created_from: Date.UTC(2026, 9, 16, 17, 0),
       filters: [
-        { code: "hongheo1", values: ["ho-ngheo"] },
-        { code: "sonhan01", from: 3 },
+        { code: "hongheo1", values: ["ho-ngheo"], from: null, to: null },
+        { code: "sonhan01", values: [], from: 3, to: null },
       ],
+      created_to: null,
     });
-    expect(bodyOf(s)).not.toHaveProperty("created_to");
     for (const c of calls) expect(c.url).not.toContain("ho-ngheo");
     // One for the date range, one per attribute filter.
     expect(buttonNamed(el, filterToggleLabel(3))).toBeDefined();

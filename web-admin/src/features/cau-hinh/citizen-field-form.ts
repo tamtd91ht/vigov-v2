@@ -80,8 +80,8 @@ export const NUMBER_KINDS: readonly { readonly value: CitizenFieldNumberKind; re
 export const DATE_PATTERNS = ["dd/MM/yyyy", "dd/MM/yyyy HH:mm", "MM/yyyy", "yyyy"] as const;
 export type DatePattern = (typeof DATE_PATTERNS)[number];
 
-export function isDatePattern(p: string | null): p is DatePattern {
-  return p !== null && (DATE_PATTERNS as readonly string[]).includes(p);
+export function isDatePattern(p: string): p is DatePattern {
+  return (DATE_PATTERNS as readonly string[]).includes(p);
 }
 
 export function hasOptions(t: CitizenFieldType): boolean {
@@ -147,7 +147,7 @@ export function draftFromField(f: CitizenField): CitizenFieldDraft {
     fieldType: f.field_type,
     placeholder: f.placeholder,
     options: f.options.map((o) => ({ value: o.value, label: o.label, retired: o.retired, saved: true })),
-    numberKind: f.number_kind ?? "integer",
+    numberKind: f.number_kind === "" ? "integer" : f.number_kind,
     datePattern: isDatePattern(f.date_pattern) ? f.date_pattern : "dd/MM/yyyy",
     required: f.required,
     showInList: f.show_in_list,
@@ -283,8 +283,8 @@ export function buildCreateBody(d: CitizenFieldDraft): CitizenFieldCreateBody {
     field_type: d.fieldType,
     placeholder: hasPlaceholder(d.fieldType) ? d.placeholder.trim() : "",
     options: hasOptions(d.fieldType) ? optionsOut(d) : [],
-    number_kind: d.fieldType === "number" ? d.numberKind : null,
-    date_pattern: d.fieldType === "dateTime" ? d.datePattern : null,
+    number_kind: d.fieldType === "number" ? d.numberKind : "",
+    date_pattern: d.fieldType === "dateTime" ? d.datePattern : "",
     required: d.required,
     show_in_list: d.showInList,
   };
@@ -294,9 +294,23 @@ function sameOptions(a: readonly CitizenFieldOption[], b: readonly CitizenFieldO
   return a.length === b.length && a.every((o, i) => o.value === b[i]!.value && o.label === b[i]!.label && o.retired === b[i]!.retired);
 }
 
-/** The PATCH body — only what changed; `null` when nothing did (Lưu then just closes, nothing is written). */
+/**
+ * The PATCH body — every key the contract names, `null` for what did not change (the immutable `code`,
+ * `field_type` and `number_kind` always `null`); `null` as a whole when nothing did (Lưu then just
+ * closes, nothing is written).
+ */
 export function buildUpdateBody(f: CitizenField, d: CitizenFieldDraft): CitizenFieldUpdateBody | null {
-  const body: CitizenFieldUpdateBody = {};
+  const body: CitizenFieldUpdateBody = {
+    code: null,
+    label: null,
+    field_type: null,
+    placeholder: null,
+    options: null,
+    number_kind: null,
+    date_pattern: null,
+    required: null,
+    show_in_list: null,
+  };
   const label = d.label.trim();
   if (label !== f.label) body.label = label;
   if (hasPlaceholder(f.field_type) && d.placeholder.trim() !== f.placeholder) body.placeholder = d.placeholder.trim();
@@ -307,7 +321,7 @@ export function buildUpdateBody(f: CitizenField, d: CitizenFieldDraft): CitizenF
   if (f.field_type === "dateTime" && d.datePattern !== f.date_pattern) body.date_pattern = d.datePattern;
   if (d.required !== f.required) body.required = d.required;
   if (d.showInList !== f.show_in_list) body.show_in_list = d.showInList;
-  return Object.keys(body).length === 0 ? null : body;
+  return Object.values(body).every((v) => v === null) ? null : body;
 }
 
 /* ---- retire ---------------------------------------------------------------------------------------- */

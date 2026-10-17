@@ -26,6 +26,7 @@ import { NoAccess } from "@/components/ui/no-access";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import {
+  CITIZEN_FIELD_CODE_TAKEN,
   CITIZEN_FIELD_LIMIT,
   createCitizenField,
   listCitizenFields,
@@ -90,8 +91,6 @@ import { citizenFieldTabDecision } from "./quyen-tab";
 
 export const SAVE_FAILED = "Chưa lưu được. Vui lòng thử lại.";
 
-/** The server's code for a code already taken — drawn under "Mã" instead of at the bottom of the form. */
-const CODE_TAKEN_CODES = ["citizen_field_code_taken", "field_code_taken", "code_taken"];
 
 // Same card as Kênh SMS / Kênh Zalo.
 const SECTION = "border-line shadow-card rounded-card m-0 min-w-0 border border-solid bg-white p-5";
@@ -521,7 +520,8 @@ export function CitizenFieldDialog({
     setBusy(false);
     if (!r.ok) {
       const text = r.thongBao === LOI_KHONG_RO ? SAVE_FAILED : r.thongBao;
-      if (r.code !== undefined && CODE_TAKEN_CODES.includes(r.code)) setErrors({ code: text });
+      // A taken code is drawn under "Mã"; every other refusal (`citizen_field_limit` included) at the bottom.
+      if (r.code === CITIZEN_FIELD_CODE_TAKEN) setErrors({ code: text });
       else setFormError(text);
       return;
     }

@@ -42,11 +42,13 @@ const base = (over: Partial<CitizenField>): CitizenField => ({
   field_type: "singleText",
   placeholder: "",
   options: [],
-  number_kind: null,
-  date_pattern: null,
+  number_kind: "",
+  date_pattern: "",
   required: false,
   show_in_list: false,
   sort_order: 0,
+  created_at: "2026-10-17T00:00:00Z",
+  updated_at: "2026-10-17T00:00:00Z",
   retired_at: null,
   ...over,
 });
@@ -200,6 +202,7 @@ describe("edit dialog — stored values, email mask, retired values", () => {
     source: "nhap-tay",
     has_own_app_session: false,
     created_at: "2026-10-16T01:00:00Z",
+    attributes: {},
   };
   const DETAIL: CitizenContactDetail = {
     id: ROW.id,
@@ -215,7 +218,7 @@ describe("edit dialog — stored values, email mask, retired values", () => {
     import_batch_id: "",
     created_at: ROW.created_at,
     updated_at: ROW.created_at,
-    email: "ng***@example.com",
+    email_masked: "ng***@example.com",
     attributes: { nghenghi: "Nông dân", nhucau01: ["cu-1"], ngaysinh: OCT17_VN, cucu0001: "của thuộc tính đã ngừng" },
   };
 
@@ -234,14 +237,14 @@ describe("edit dialog — stored values, email mask, retired values", () => {
     expect(el.querySelector('[data-attribute="nhucau01"]')!.textContent).toContain("(ngừng dùng)");
   });
 
-  it("the email is shown MASKED and read-only; saving without 'Nhập email mới' sends NO email; retired fields' values are kept", async () => {
+  it("the email is shown MASKED and read-only; saving without 'Nhập email mới' sends `email: null` (keep); retired fields' values are kept", async () => {
     const el = await mountEdit();
     const email = el.querySelector<HTMLInputElement>("#nguoi-dan-email")!;
     expect(email.value).toBe("ng***@example.com");
     expect(email.readOnly).toBe(true);
     await act(async () => buttonNamed(el, SUBMIT_EDIT).click());
     const body = update.mock.calls[0]![1];
-    expect(body).not.toHaveProperty("email");
+    expect(body.email).toBeNull();
     expect(body.attributes).toEqual({ cucu0001: "của thuộc tính đã ngừng", nghenghi: "Nông dân", nhucau01: ["cu-1"], ngaysinh: OCT17_VN });
   });
 

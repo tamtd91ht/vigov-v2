@@ -56,7 +56,7 @@ function vnInstant(y: number, mo: number, d: number, h = 0, mi = 0): number | nu
 /** Which native picker a pattern uses, and what string it holds. */
 export type DateInputKind = "date" | "datetime-local" | "month" | "year";
 
-export function dateInputKind(pattern: string | null): DateInputKind {
+export function dateInputKind(pattern: string): DateInputKind {
   switch (pattern) {
     case "dd/MM/yyyy HH:mm":
       return "datetime-local";
@@ -134,7 +134,7 @@ export function pickerToEndMillis(kind: DateInputKind, s: string): number | null
 }
 
 /** Epoch millis shown per the field's pattern: `17/10/2026`, `17/10/2026 08:30`, `10/2026`, `2026`. */
-export function formatDateByPattern(pattern: string | null, ms: number): string {
+export function formatDateByPattern(pattern: string, ms: number): string {
   const p = vnParts(ms);
   switch (pattern) {
     case "dd/MM/yyyy HH:mm":
@@ -170,6 +170,11 @@ export function parseNumberInput(kind: "integer" | "decimal", s: string): number
 /** A stored number as a commune reads it: the Vietnamese decimal comma, no grouping (it is a value, not an amount). */
 export function formatNumber(n: number): string {
   return String(n).replace(".", ",");
+}
+
+/** A number field's kind; `""` (the server's "not set") reads as decimal, the kind that refuses no number. */
+function numberKindOf(f: CitizenField): "integer" | "decimal" {
+  return f.number_kind === "integer" ? "integer" : "decimal";
 }
 
 /* ---- the form's values ----------------------------------------------------------------------------- */
@@ -256,7 +261,7 @@ function valueFromInput(f: CitizenField, input: AttributeInput, stored: CitizenA
       return [...text].length > max ? { error: textTooLong(max) } : { value: text };
     }
     case "number": {
-      const kind = f.number_kind ?? "decimal";
+      const kind = numberKindOf(f);
       const n = parseNumberInput(kind, text);
       if (n === null) return { error: kind === "integer" && /^-?\d+$/.test(text) ? NUMBER_TOO_LARGE : kind === "integer" ? INTEGER_INVALID : DECIMAL_INVALID };
       return { value: n };
@@ -357,13 +362,13 @@ export function filtersFromDraft(
     const input = d.fields[f.code];
     if (input === undefined) continue;
     if ("values" in input) {
-      if (input.values.length > 0) filters.push({ code: f.code, values: [...input.values] });
+      if (input.values.length > 0) filters.push({ code: f.code, values: [...input.values], from: null, to: null });
       continue;
     }
     let r: { from?: number; to?: number };
     if (f.field_type === "number") {
       r = {};
-      const kind = f.number_kind ?? "decimal";
+      const kind = numberKindOf(f);
       for (const side of ["from", "to"] as const) {
         const raw = input[side];
         if (raw.trim() === "") continue;
@@ -375,7 +380,7 @@ export function filtersFromDraft(
     } else {
       r = range(dateInputKind(f.date_pattern), input.from, input.to, f.code);
     }
-    if (errors[f.code] === undefined && (r.from !== undefined || r.to !== undefined)) filters.push({ code: f.code, ...r });
+    if (errors[f.code] === undefined && (r.from !== undefined || r.to !== undefined)) filters.push({ code: f.code, values: [], from: r.from ?? null, to: r.to ?? null });
   }
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   return { ok: true, createdFrom: created.from ?? null, createdTo: created.to ?? null, filters };

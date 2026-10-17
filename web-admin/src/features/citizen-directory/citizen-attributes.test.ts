@@ -30,11 +30,13 @@ const F = (over: Partial<CitizenField>): CitizenField => ({
   field_type: "singleText",
   placeholder: "",
   options: [],
-  number_kind: null,
-  date_pattern: null,
+  number_kind: "",
+  date_pattern: "",
   required: false,
   show_in_list: false,
   sort_order: 0,
+  created_at: "2026-10-17T00:00:00Z",
+  updated_at: "2026-10-17T00:00:00Z",
   retired_at: null,
   ...over,
 });
@@ -63,7 +65,7 @@ describe("dateTime ↔ epoch millis, pinned to Vietnam time (+07:00)", () => {
     expect(dateInputKind("dd/MM/yyyy HH:mm")).toBe("datetime-local");
     expect(dateInputKind("MM/yyyy")).toBe("month");
     expect(dateInputKind("yyyy")).toBe("year");
-    expect(dateInputKind(null)).toBe("date");
+    expect(dateInputKind("")).toBe("date");
   });
 
   it("picker → millis at the START of the period, whatever the machine's zone", () => {
@@ -205,9 +207,9 @@ describe("filter body building (ADR 0101 #10)", () => {
       createdFrom: OCT17_VN,
       createdTo: null,
       filters: [
-        { code: "sonhan01", to: 5 },
-        { code: "ngaysinh", to: OCT17_VN + 86_400_000 - 1 },
-        { code: "hongheo1", values: ["ho-ngheo", "can-ngheo"] },
+        { code: "sonhan01", values: [], from: null, to: 5 },
+        { code: "ngaysinh", values: [], from: null, to: OCT17_VN + 86_400_000 - 1 },
+        { code: "hongheo1", values: ["ho-ngheo", "can-ngheo"], from: null, to: null },
       ],
     });
   });
@@ -223,6 +225,6 @@ describe("filter body building (ADR 0101 #10)", () => {
 
   it("the toggle's figure counts the date range once and each attribute filter", () => {
     expect(advancedFilterCount(null, null, [])).toBe(0);
-    expect(advancedFilterCount(1, 2, [{ code: "a", values: ["x"] }])).toBe(2);
+    expect(advancedFilterCount(1, 2, [{ code: "a", values: ["x"], from: null, to: null }])).toBe(2);
   });
 });

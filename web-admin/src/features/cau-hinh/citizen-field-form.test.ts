@@ -42,11 +42,13 @@ const CHOICE: CitizenField = {
     { value: "ho-ngheo", label: "Hộ nghèo", retired: false },
     { value: "can-ngheo", label: "Cận nghèo", retired: false },
   ],
-  number_kind: null,
-  date_pattern: null,
+  number_kind: "",
+  date_pattern: "",
   required: false,
   show_in_list: true,
   sort_order: 1,
+  created_at: "2026-10-17T00:00:00Z",
+  updated_at: "2026-10-17T00:00:00Z",
   retired_at: null,
 };
 
@@ -152,17 +154,23 @@ describe("bodies", () => {
       placeholder: "",
       options: [],
       number_kind: "decimal",
-      date_pattern: null,
+      date_pattern: "",
       required: false,
       show_in_list: false,
     });
-    expect(buildCreateBody(draft({ fieldType: "dateTime", datePattern: "MM/yyyy" }))).toMatchObject({ date_pattern: "MM/yyyy", number_kind: null });
+    expect(buildCreateBody(draft({ fieldType: "dateTime", datePattern: "MM/yyyy" }))).toMatchObject({ date_pattern: "MM/yyyy", number_kind: "" });
   });
 
-  it("update: only what changed; nothing changed → null", () => {
+  it("update: only what changed, every other key null; nothing changed → null", () => {
     expect(buildUpdateBody(CHOICE, draftFromField(CHOICE))).toBeNull();
     const d = retireOrRemoveOption({ ...draftFromField(CHOICE), label: "Hộ", required: true }, 1);
     expect(buildUpdateBody(CHOICE, d)).toEqual({
+      code: null,
+      field_type: null,
+      placeholder: null,
+      number_kind: null,
+      date_pattern: null,
+      show_in_list: null,
       label: "Hộ",
       required: true,
       options: [

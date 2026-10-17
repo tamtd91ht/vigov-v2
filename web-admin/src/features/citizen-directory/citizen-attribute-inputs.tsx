@@ -131,7 +131,7 @@ export function CitizenAttributeInputs({
             required={f.required}
             grow="auto"
             error={error}
-            hint={f.field_type === "dateTime" && f.date_pattern !== null ? `Định dạng ${f.date_pattern}` : undefined}
+            hint={f.field_type === "dateTime" && f.date_pattern !== "" ? `Định dạng ${f.date_pattern}` : undefined}
             className={cn(wide && "sm:col-span-2")}
           >
             {control}
