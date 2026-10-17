@@ -32,7 +32,7 @@ thuộc tính thì gửi tin zns, sms có thể map nội dung theo thuộc tín
 | # | Điểm | Chốt |
 |---|---|---|
 | 1 | Định nghĩa thuộc tính | Mỗi xã một bộ (`tenant_id`). `fieldCode` 6–8 ký tự `[a-z][a-z0-9]{5,7}`, duy nhất trong xã, **không đổi** sau khi tạo; loại cũng không đổi. Tên hiển thị, placeholder (ô chữ), lựa chọn `{value, label}` (combobox, singleBox; lựa chọn đã dùng chỉ được ngừng, không xoá), số `integer`/`decimal`, `dateTime` + định dạng hiển thị. Thêm (đề xuất phiên chính, chủ dự án đồng ý): bắt buộc, hiện thành cột ở danh sách, ≤ 50 thuộc tính mỗi xã |
-| 1b | Sinh mã | Chủ dự án 17/10/2026: mã **tự sinh** từ tên hiển thị (bỏ dấu, a–z0–9, 6–8 ký tự), có nút **Sửa** để gõ tay lúc tạo; chống trùng trong xã kể cả thuộc tính đã ngừng dùng (màn kiểm trước, máy chủ trả 409 là chốt cuối). Sau khi tạo vẫn không đổi được (#1) |
+| 1b | Sinh mã | Chủ dự án 17/10/2026 (sửa lại cùng ngày): mã là id / `fieldCode` của thuộc tính và là khoá ghép biến ở luồng ZNS/SMS; web **sinh ngẫu nhiên** 8–12 ký tự `[a-z][a-z0-9]` (có nút Sửa, nút Sinh mã khác); lưu thì máy chủ kiểm trùng trong xã (409). Mã mới 8–12 ký tự; CSDL nhận 6–12 để mã tạo theo quy tắc 6–8 trước đó vẫn hợp lệ (migration 0037). Sau khi tạo không đổi được (#1). Lựa chọn của combobox/singleBox khai ngay trong hộp khi chọn loại |
 | 2 | Loại | Đúng tên chủ dự án viết: `singleText` (một dòng), `multiText` (nhiều dòng), `combobox` (chọn **nhiều**, lưu mảng), `singleBox` (chọn **một**), `number`, `dateTime`. Lệch ADR 0011 (enum tiếng Việt) có chủ ý: chủ dự án đặt tên |
 | 3 | Thứ tự | Kéo-thả trong màn cấu hình; form Thêm/Sửa hiện thuộc tính động ngay sau phần tĩnh theo thứ tự ấy |
 | 4 | Ngừng dùng | Ẩn khỏi form và lọc, **giữ** giá trị đã nhập (luật 7) |
