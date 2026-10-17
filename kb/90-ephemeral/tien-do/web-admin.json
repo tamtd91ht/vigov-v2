@@ -1684,8 +1684,8 @@
       "viec": "Cấu hình → Thuộc tính danh bạ (admin.citizen_field, kéo-thả thứ tự) + ô động/email/cột/bộ lọc ở /nguoi-dan (ADR 0101)",
       "trang_thai": "dang_lam",
       "no_confirm": [],
-      "bang_chung": "TASK E-1w (17/10/2026): lib/api/citizen-fields.ts, features/cau-hinh/citizen-field-*, features/citizen-directory/citizen-attribute*, citizen-contact-filters. tsc + eslint sạch, vitest 130 tệp / 2204 ca xanh.",
-      "tiep_theo": "Kiểu API viết tay trong khối UNTIL REGEN (TASK E-1) ở citizen-contacts.ts và citizen-fields.ts — thay sau khi backend E-1 lên + make kb. CHƯA xem ảnh render."
+      "bang_chung": "TASK E-1w (17/10/2026): lib/api/citizen-fields.ts, features/cau-hinh/citizen-field-*, features/citizen-directory/citizen-attribute*, citizen-contact-filters. tsc + eslint sạch, vitest 130 tệp / 2204 ca xanh. Tiếp 17/10/2026: mã ngẫu nhiên 8–12 ký tự + chống trùng trong xã (E-4b), Xoá có xác nhận (E-5), kiểu hiển thị full/dropdown (E-6), bố cục 2 cột: chế độ Bố cục xem trước + kéo-thả + Nửa hàng/Cả hàng, hộp người dân theo lưới layout_width (E-7). tsc 0 lỗi, eslint sạch, vitest cau-hinh+citizen-directory+api 131 tệp / 2247 ca xanh.",
+      "tiep_theo": "CHƯA xem ảnh render bố cục 2 cột ở mọi độ rộng. Combobox/singleBox ở hộp người dân trước luôn cả hàng, nay theo layout_width (mặc định half). Kéo-thả bằng phím của dnd-kit chỉ kiểm qua nút Lên/Xuống."
     },
     {
       "id": "gui-tin-map-thuoc-tinh-web-17-10",

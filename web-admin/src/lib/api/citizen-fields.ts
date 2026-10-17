@@ -5,7 +5,7 @@
  *
  *   GET    /api/v1/citizen-fields[?include_retired=true]  citizen.read         the definitions, in sort order
  *   POST   /api/v1/citizen-fields                         admin.citizen_field  201 the field · 409 `citizen_field_code_taken` / `citizen_field_limit`
- *   PATCH  /api/v1/citizen-fields/{code}                  admin.citizen_field  200 · label · placeholder · options · required · show_in_list · date_pattern
+ *   PATCH  /api/v1/citizen-fields/{code}                  admin.citizen_field  200 · label · placeholder · options · required · show_in_list · date_pattern · display_mode · layout_width
  *   DELETE /api/v1/citizen-fields/{code}                  admin.citizen_field  204 · `{reason}` — RETIRES (hidden, values kept, ADR 0101 #4)
  *   PUT    /api/v1/citizen-field-order                    admin.citizen_field  204 · `{codes}` — the whole live order
  *
@@ -51,6 +51,12 @@ export type CitizenFieldNumberKind = "integer" | "decimal";
  */
 export type CitizenFieldDisplayMode = "full" | "dropdown";
 
+/**
+ * How much of the contact form's 2-column grid a field takes (ADR 0101 #3c, owner 17/10/2026): `half` = one
+ * column (two half fields in a row sit left / right), `full` = the whole row. The order decides the flow (#3).
+ */
+export type CitizenFieldLayoutWidth = "half" | "full";
+
 /** One choice of a `combobox` / `singleBox` field. A saved value is never deleted, only `retired` (#1). */
 export type CitizenFieldOption = identity_citizenFieldOptionWire;
 
@@ -69,25 +75,40 @@ export type CitizenFieldList = Omit<identity_citizenFieldsOut, "items"> & { item
 
 /**
  * POST body: the whole definition; what does not apply to the type is `""` / `[]`. `layout_width` `null` =
- * the server's default (this screen does not set the width yet).
+ * the server's default (multiText full, others half), sent unless the person picked a width.
  */
-export type CitizenFieldCreateBody = Omit<identity_citizenFieldIn, "field_type" | "number_kind" | "display_mode"> & {
+export type CitizenFieldCreateBody = Omit<identity_citizenFieldIn, "field_type" | "number_kind" | "display_mode" | "layout_width"> & {
   field_type: CitizenFieldType;
   number_kind: CitizenFieldNumberKind | "";
   display_mode: CitizenFieldDisplayMode | "" | null;
+  layout_width: CitizenFieldLayoutWidth | null;
 };
 
 /**
  * PATCH body: every key present, `null` = unchanged. `code`, `field_type` and `number_kind` are immutable
  * (#1) and always sent `null` by this screen; `options`, when set, is the WHOLE list.
  */
-export type CitizenFieldUpdateBody = Omit<identity_citizenFieldPatchIn, "display_mode"> & {
+export type CitizenFieldUpdateBody = Omit<identity_citizenFieldPatchIn, "display_mode" | "layout_width"> & {
   display_mode: CitizenFieldDisplayMode | null;
+  layout_width: CitizenFieldLayoutWidth | null;
 };
 
 /** The drawing a field asks for — `full` unless the server says `dropdown` (owner: full is the default). */
 export function displayModeOf(f: { display_mode?: string }): CitizenFieldDisplayMode {
   return f.display_mode === "dropdown" ? "dropdown" : "full";
+}
+
+/** The server's default width of a type (ADR 0101 #3c): a multi-line text takes the row, everything else half. */
+export function defaultLayoutWidth(t: CitizenFieldType): CitizenFieldLayoutWidth {
+  return t === "multiText" ? "full" : "half";
+}
+
+/**
+ * The width a field is drawn with. The server always sends `half` or `full`; anything else (a field read
+ * before the column existed) is drawn as the type's default rather than guessed per screen.
+ */
+export function layoutWidthOf(f: { layout_width?: string; field_type: CitizenFieldType }): CitizenFieldLayoutWidth {
+  return f.layout_width === "full" || f.layout_width === "half" ? f.layout_width : defaultLayoutWidth(f.field_type);
 }
 
 /** The 409 of a code the commune already holds, retired fields included. */

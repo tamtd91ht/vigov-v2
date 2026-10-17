@@ -21,6 +21,8 @@ import {
   freeRandomFieldCode,
   randomFieldCode,
   isCodeCollision,
+  layoutWidthBody,
+  loneHalfCodes,
   manualCodeError,
   buildCreateBody,
   buildUpdateBody,
@@ -310,5 +312,32 @@ describe("random code (owner 17/10/2026: web tự gen random, chống trùng the
     expect(isCodeCollision(CODE_TAKEN_DELETED)).toBe(true);
     expect(isCodeCollision(CODE_INVALID)).toBe(false);
     expect(isCodeCollision(undefined)).toBe(false);
+  });
+});
+
+describe("layout width (ADR 0101 #3c)", () => {
+  const f = (code: string, layout_width: string, field_type: CitizenField["field_type"] = "singleText"): CitizenField => ({
+    ...CHOICE,
+    code,
+    field_type,
+    layout_width,
+  });
+
+  it("loneHalfCodes: a half before a full, or last on its row, leaves the right slot empty; a pair does not", () => {
+    expect([...loneHalfCodes([f("a", "half"), f("b", "full"), f("c", "half"), f("d", "half"), f("e", "half")])]).toEqual(["a", "e"]);
+    expect([...loneHalfCodes([f("a", "half"), f("b", "half")])]).toEqual([]);
+    expect([...loneHalfCodes([f("a", "full"), f("b", "full")])]).toEqual([]);
+    expect([...loneHalfCodes([])]).toEqual([]);
+    // A width the server did not send reads as the type's default: multiText full.
+    expect([...loneHalfCodes([f("a", "half"), f("b", "", "multiText")])]).toEqual(["a"]);
+  });
+
+  it("create sends null unless picked; edit PATCHes only a changed width", () => {
+    expect(buildCreateBody(draft({})).layout_width).toBeNull();
+    expect(buildCreateBody(draft({ layoutWidth: "full" })).layout_width).toBe("full");
+    expect(draftFromField(CHOICE).layoutWidth).toBe("full");
+    expect(buildUpdateBody(CHOICE, draftFromField(CHOICE))).toBeNull();
+    expect(buildUpdateBody(CHOICE, { ...draftFromField(CHOICE), layoutWidth: "half" })).toMatchObject({ layout_width: "half", label: null });
+    expect(layoutWidthBody("half")).toMatchObject({ layout_width: "half", label: null, display_mode: null, options: null });
   });
 });

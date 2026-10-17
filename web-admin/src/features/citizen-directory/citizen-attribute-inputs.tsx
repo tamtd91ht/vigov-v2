@@ -5,7 +5,7 @@ import { ChevronDown } from "lucide-react";
 
 import { controlClass, Field } from "@/components/ui/field";
 import type { CitizenAttributes } from "@/lib/api/citizen-contacts";
-import { displayModeOf, type CitizenField, type CitizenFieldOption } from "@/lib/api/citizen-fields";
+import { displayModeOf, layoutWidthOf, type CitizenField, type CitizenFieldOption } from "@/lib/api/citizen-fields";
 import { cn } from "@/lib/cn";
 
 import { dateInputKind, toggleChoice, type AttributeInput, type AttributeInputs } from "./citizen-attributes";
@@ -35,6 +35,11 @@ const ERROR = "text-danger m-0 text-[12px] font-medium";
  * `display_mode` (owner, 17/10/2026) only changes the DRAWING of a choice type: `dropdown` turns a singleBox
  * into a native `<select>` and a combobox into a popover of checkboxes; missing or `""` is `full`. The value
  * sent is the same either way.
+ *
+ * LAYOUT (ADR 0101 #3c): the fields sit in their OWN 2-column grid under the static section, in sort order;
+ * `layout_width` `full` spans both columns, `half` takes one, so two half fields in a row sit left / right.
+ * Its own grid, not the static fieldset's, so where the static section ends never shifts the first pair.
+ * Under `sm` it is one column, like the rest of the dialog. Cấu hình's layout preview draws the same classes.
  */
 export function CitizenAttributeInputs({
   fields,
@@ -50,13 +55,14 @@ export function CitizenAttributeInputs({
   errors: Readonly<Record<string, string>>;
   onChange: (code: string, value: AttributeInput) => void;
 }) {
+  if (fields.length === 0) return null;
   return (
-    <>
+    <div className="grid min-w-0 grid-cols-1 gap-4 sm:col-span-2 sm:grid-cols-2" data-attribute-grid="">
       {fields.map((f) => {
         const id = attributeInputId(f.code);
         const value = inputs[f.code];
         const error = errors[f.code];
-        const wide = f.field_type === "multiText" || f.field_type === "combobox" || f.field_type === "singleBox";
+        const wide = layoutWidthOf(f) === "full";
 
         if (f.field_type === "combobox" || f.field_type === "singleBox") {
           const held = stored?.[f.code];
@@ -65,7 +71,7 @@ export function CitizenAttributeInputs({
           const chosen = f.field_type === "combobox" ? (Array.isArray(value) ? value : []) : typeof value === "string" ? [value] : [];
           if (displayModeOf(f) === "dropdown") {
             return (
-              <Field key={f.code} label={f.label} htmlFor={id} required={f.required} grow="auto" error={error} className="sm:col-span-2">
+              <Field key={f.code} label={f.label} htmlFor={id} required={f.required} grow="auto" error={error} className={cn(wide && "sm:col-span-2")}>
                 {f.field_type === "singleBox" ? (
                   <select id={id} value={chosen[0] ?? ""} aria-invalid={error !== undefined} data-attribute={f.code} onChange={(e) => onChange(f.code, e.target.value)}>
                     <option value="">{NOTHING_CHOSEN}</option>
@@ -173,7 +179,7 @@ export function CitizenAttributeInputs({
           </Field>
         );
       })}
-    </>
+    </div>
   );
 }
 

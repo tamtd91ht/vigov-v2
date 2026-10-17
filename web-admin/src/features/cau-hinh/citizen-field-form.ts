@@ -14,9 +14,11 @@
 
 import {
   displayModeOf,
+  layoutWidthOf,
   type CitizenField,
   type CitizenFieldCreateBody,
   type CitizenFieldDisplayMode,
+  type CitizenFieldLayoutWidth,
   type CitizenFieldNumberKind,
   type CitizenFieldOption,
   type CitizenFieldType,
@@ -91,6 +93,43 @@ export const DISPLAY_MODES: readonly { readonly value: CitizenFieldDisplayMode; 
   { value: "dropdown", label: "Danh sách thả xuống" },
 ];
 
+/** "Độ rộng trên biểu mẫu" (ADR 0101 #3c): one column of the contact form's 2-column grid, or the whole row. */
+export const LAYOUT_WIDTH_LABEL = "Độ rộng trên biểu mẫu";
+export const LAYOUT_WIDTH_HINT = "Hai thuộc tính “Nửa hàng” liền nhau nằm trái / phải; màn hình hẹp luôn xếp một cột.";
+export const LAYOUT_WIDTHS: readonly { readonly value: CitizenFieldLayoutWidth; readonly label: string }[] = [
+  { value: "half", label: "Nửa hàng" },
+  { value: "full", label: "Cả hàng" },
+];
+
+/* ---- the layout preview (ADR 0101 #3c) ---- */
+
+export const LIST_VIEW = "Danh sách";
+export const LAYOUT_VIEW = "Bố cục";
+export const LAYOUT_TITLE = "Bố cục biểu mẫu";
+export const LAYOUT_STATIC_NOTE = "Các ô cố định (Họ tên, Số điện thoại, …) hiển thị phía trên theo mẫu.";
+export const LAYOUT_NARROW_NOTE = "Màn hình hẹp (dưới 640px): biểu mẫu thật cũng xếp mỗi thuộc tính một hàng như dưới đây.";
+export const EMPTY_SLOT_HINT = "Ô bên phải còn trống";
+export const WIDTH_SAVED_TOAST = "Đã lưu độ rộng.";
+export const WIDTH_FAILED_TOAST = "Chưa lưu được độ rộng. Độ rộng cũ được giữ.";
+
+/**
+ * The half fields left ALONE on their row, in the order given — what CSS grid's sparse auto-flow does with
+ * `half` = 1 column and `full` = 2: a half followed by a full (or by nothing) leaves the right slot empty,
+ * because the full one cannot fit beside it and the grid never back-fills. The preview marks that slot.
+ */
+export function loneHalfCodes(fields: readonly Pick<CitizenField, "code" | "layout_width" | "field_type">[]): ReadonlySet<string> {
+  const lone = new Set<string>();
+  let open: string | null = null; // a half sitting in the left column, its right slot still free
+  for (const f of fields) {
+    if (layoutWidthOf(f) === "full") {
+      if (open !== null) lone.add(open);
+      open = null;
+    } else open = open === null ? f.code : null;
+  }
+  if (open !== null) lone.add(open);
+  return lone;
+}
+
 export const NUMBER_KINDS: readonly { readonly value: CitizenFieldNumberKind; readonly label: string }[] = [
   { value: "integer", label: "Nguyên" },
   { value: "decimal", label: "Thập phân" },
@@ -149,6 +188,8 @@ export type CitizenFieldDraft = {
   readonly showInList: boolean;
   /** Only read for a type with options; kept across a type change inside the dialog. */
   readonly displayMode: CitizenFieldDisplayMode;
+  /** `null` on add until the person picks one: the server then applies the type's default (#3c). */
+  readonly layoutWidth: CitizenFieldLayoutWidth | null;
 };
 
 export function newFieldDraft(): CitizenFieldDraft {
@@ -163,6 +204,7 @@ export function newFieldDraft(): CitizenFieldDraft {
     required: false,
     showInList: false,
     displayMode: "full",
+    layoutWidth: null,
   };
 }
 
@@ -178,6 +220,7 @@ export function draftFromField(f: CitizenField): CitizenFieldDraft {
     required: f.required,
     showInList: f.show_in_list,
     displayMode: displayModeOf(f),
+    layoutWidth: layoutWidthOf(f),
   };
 }
 
@@ -394,8 +437,8 @@ export function buildCreateBody(d: CitizenFieldDraft): CitizenFieldCreateBody {
     required: d.required,
     show_in_list: d.showInList,
     display_mode: hasOptions(d.fieldType) ? d.displayMode : "",
-    // Not set by this screen yet (the layout task owns it): null = the server's default.
-    layout_width: null,
+    // null unless the person picked a width: the server's default then follows the type (#3c).
+    layout_width: d.layoutWidth,
   };
 }
 
@@ -420,7 +463,6 @@ export function buildUpdateBody(f: CitizenField, d: CitizenFieldDraft): CitizenF
     required: null,
     show_in_list: null,
     display_mode: null,
-    // Never touched here: the field keeps the width it has (the layout task owns it).
     layout_width: null,
   };
   const label = d.label.trim();
@@ -435,7 +477,25 @@ export function buildUpdateBody(f: CitizenField, d: CitizenFieldDraft): CitizenF
   if (d.showInList !== f.show_in_list) body.show_in_list = d.showInList;
   // Only when it changed: opening and saving a field never rewrites its drawing.
   if (hasOptions(f.field_type) && d.displayMode !== displayModeOf(f)) body.display_mode = d.displayMode;
+  if (d.layoutWidth !== null && d.layoutWidth !== layoutWidthOf(f)) body.layout_width = d.layoutWidth;
   return Object.values(body).every((v) => v === null) ? null : body;
+}
+
+/** The PATCH of the preview's "Nửa hàng / Cả hàng": the width alone, every other key unchanged. */
+export function layoutWidthBody(width: CitizenFieldLayoutWidth): CitizenFieldUpdateBody {
+  return {
+    code: null,
+    label: null,
+    field_type: null,
+    placeholder: null,
+    options: null,
+    number_kind: null,
+    date_pattern: null,
+    required: null,
+    show_in_list: null,
+    display_mode: null,
+    layout_width: width,
+  };
 }
 
 /* ---- retire ---------------------------------------------------------------------------------------- */

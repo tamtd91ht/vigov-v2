@@ -178,3 +178,37 @@ describe("display_mode dropdown", () => {
     expect(el.querySelector<HTMLButtonElement>(`button#${attributeInputId("nhucau01")}`)!.textContent).toBe(NOTHING_CHOSEN);
   });
 });
+
+describe("layout_width — the 2-column grid of the dynamic section (ADR 0101 #3c)", () => {
+  it("one own grid, 1 column under sm and 2 from sm; full spans both, half one; sort order kept", () => {
+    const el = mount([
+      base({ code: "aaaa0001", label: "A", layout_width: "half" }),
+      base({ code: "aaaa0002", label: "B", field_type: "multiText", layout_width: "full" }),
+      { ...SINGLE("dropdown"), layout_width: "full" },
+      { ...MULTI(), layout_width: "half" },
+      base({ code: "aaaa0005", label: "E", field_type: "multiText", layout_width: "half" }),
+    ]);
+    const grid = el.querySelector<HTMLElement>("[data-attribute-grid]")!;
+    expect(grid.className).toContain("grid-cols-1");
+    expect(grid.className).toContain("sm:grid-cols-2");
+    expect(grid.className).toContain("sm:col-span-2");
+    const cells = Array.from(grid.children) as HTMLElement[];
+    expect(cells).toHaveLength(5);
+    const spans = cells.map((c) => c.className.includes("sm:col-span-2"));
+    // The width is the field's setting, not its type: a half multiText stays half, a full singleBox spans.
+    expect(spans).toEqual([false, true, true, false, false]);
+    expect(cells[0]!.querySelector("#" + attributeInputId("aaaa0001"))).not.toBeNull();
+    expect(cells[2]!.querySelector("#" + attributeInputId("hongheo1"))).not.toBeNull();
+  });
+
+  it("a width the server did not send falls back to the type's default (multiText full, others half)", () => {
+    const el = mount([base({ code: "aaaa0001", layout_width: "" }), base({ code: "aaaa0002", field_type: "multiText", layout_width: "" })]);
+    const cells = Array.from(el.querySelector("[data-attribute-grid]")!.children) as HTMLElement[];
+    expect(cells.map((c) => c.className.includes("sm:col-span-2"))).toEqual([false, true]);
+  });
+
+  it("no live field: no empty grid", () => {
+    const el = mount([]);
+    expect(el.querySelector("[data-attribute-grid]")).toBeNull();
+  });
+});

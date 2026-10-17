@@ -1,17 +1,6 @@
 "use client";
 
-import {
-  closestCenter,
-  DndContext,
-  KeyboardSensor,
-  MouseSensor,
-  TouchSensor,
-  useDraggable,
-  useDroppable,
-  useSensor,
-  useSensors,
-  type Announcements,
-} from "@dnd-kit/core";
+import { closestCenter, DndContext, useDraggable, useDroppable } from "@dnd-kit/core";
 import { ArrowDown, ArrowUp, Ban, GripVertical, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -23,17 +12,21 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ErrorState } from "@/components/ui/error-state";
 import { controlClass } from "@/components/ui/field";
 import { NoAccess } from "@/components/ui/no-access";
+import { Segmented } from "@/components/ui/segmented";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import {
   CITIZEN_FIELD_CODE_TAKEN,
   CITIZEN_FIELD_LIMIT,
   createCitizenField,
+  defaultLayoutWidth,
+  layoutWidthOf,
   listCitizenFields,
   reorderCitizenFields,
   retireCitizenField,
   updateCitizenField,
   type CitizenField,
+  type CitizenFieldLayoutWidth,
 } from "@/lib/api/citizen-fields";
 // vi-name-ok: the existing result type and sentence of lib/api/goi.ts, imported, not a new name
 import { LOI_KHONG_RO, type KetQua } from "@/lib/api/goi";
@@ -59,6 +52,11 @@ import {
   FIELD_DELETED_TOAST,
   FIELD_SAVED_TOAST,
   FIELD_TYPES,
+  LAYOUT_VIEW,
+  LAYOUT_WIDTH_HINT,
+  LAYOUT_WIDTH_LABEL,
+  LAYOUT_WIDTHS,
+  LIST_VIEW,
   NO_FIELDS,
   NO_PERMISSION,
   NUMBER_KINDS,
@@ -66,6 +64,8 @@ import {
   ORDER_FAILED_TOAST,
   ORDER_SAVED_TOAST,
   RETIRE_REASON_MAX,
+  WIDTH_FAILED_TOAST,
+  WIDTH_SAVED_TOAST,
   addOption,
   buildCreateBody,
   buildUpdateBody,
@@ -80,6 +80,7 @@ import {
   hasOptions,
   hasPlaceholder,
   isCodeCollision,
+  layoutWidthBody,
   limitReachedText,
   manualCodeError,
   moveCode,
@@ -97,6 +98,8 @@ import {
   type DatePattern,
   type FieldFormErrors,
 } from "./citizen-field-form";
+import { DRAG_INSTRUCTIONS, orderAnnouncements, useOrderSensors } from "./citizen-field-dnd";
+import { FieldLayoutPreview } from "./citizen-field-layout";
 import { ConfigDialog } from "./config-dialog";
 import { citizenFieldTabDecision } from "./quyen-tab";
 
@@ -114,23 +117,6 @@ const DANGER_OUTLINE = "border-danger/30 text-danger hover:not-disabled:bg-dange
 const inputCls = cn(controlClass, "bg-white");
 const selectCls = cn(controlClass, "bg-white pr-8");
 
-/** The drag instructions a screen reader hears on a handle (dnd-kit's own are English). */
-const DRAG_INSTRUCTIONS = {
-  draggable:
-    "Nhấn Space hoặc Enter để nhấc thuộc tính, dùng mũi tên lên / xuống để di chuyển, nhấn Space hoặc Enter lần nữa để thả, Esc để huỷ. Cũng có thể dùng nút Lên / Xuống ở mỗi dòng.",
-};
-
-function announcements(labelOf: (code: string) => string): Announcements {
-  return {
-    onDragStart: ({ active }) => `Đã nhấc thuộc tính ${labelOf(String(active.id))}.`,
-    onDragOver: ({ active, over }) =>
-      over === null ? `Thuộc tính ${labelOf(String(active.id))} không ở trên dòng nào.` : `Đang ở vị trí của ${labelOf(String(over.id))}.`,
-    onDragEnd: ({ active, over }) =>
-      over === null ? `Đã thả ${labelOf(String(active.id))}, thứ tự không đổi.` : `Đã thả ${labelOf(String(active.id))} vào vị trí của ${labelOf(String(over.id))}.`,
-    onDragCancel: ({ active }) => `Đã huỷ kéo ${labelOf(String(active.id))}, thứ tự không đổi.`,
-  };
-}
-
 type DialogState = { mode: "add"; idempotencyKey: string } | { mode: "edit"; field: CitizenField };
 
 /**
@@ -142,6 +128,10 @@ type DialogState = { mode: "add"; idempotencyKey: string } | { mode: "edit"; fie
  * THE ORDER IS THE FORM'S ORDER (#3). A drag (mouse, touch, keyboard via dnd-kit) or the Lên / Xuống buttons
  * move a row; the new order shows at once and `PUT` saves the whole live list. A refusal puts the old
  * order back and says so — the screen never shows an order the server does not hold.
+ *
+ * "BỐ CỤC" (ADR 0101 #3c) is the same live list drawn as the contact form's 2-column grid: the same reorder,
+ * plus "Nửa hàng / Cả hàng" per field, saved by a PATCH of `layout_width` alone. The new width shows at once;
+ * a refusal puts the old one back and says so, like the order.
  *
  * "XOÁ" IS A SOFT DELETE OF THE DEFINITION ONLY (owner, 17/10/2026): `DELETE` retires it server-side, the values
  * already typed on every person stay (#4, rule 7). Deleted fields are NOT drawn, but they are still loaded
@@ -158,6 +148,9 @@ export function CitizenFieldTab() {
   const [pendingOrder, setPendingOrder] = useState<readonly string[] | null>(null);
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [deleting, setDeleting] = useState<CitizenField | null>(null);
+  const [view, setView] = useState<"list" | "layout">("list");
+  /** Codes whose width is being saved — their toggle waits, so two PATCHes of one field never race. */
+  const [widthSaving, setWidthSaving] = useState<readonly string[]>([]);
 
   const reload = useCallback(async () => {
     const r = await listCitizenFields(true);
@@ -223,6 +216,25 @@ export function CitizenFieldTab() {
     setPendingOrder(null);
   }
 
+  function setLocalWidth(code: string, width: string) {
+    setFields((cur) => (cur?.ok ? { ok: true, duLieu: cur.duLieu.map((x) => (x.code === code ? { ...x, layout_width: width } : x)) } : cur));
+  }
+
+  async function saveWidth(f: CitizenField, width: CitizenFieldLayoutWidth) {
+    if (widthSaving.includes(f.code) || layoutWidthOf(f) === width) return;
+    const before = f.layout_width;
+    setLocalWidth(f.code, width);
+    setWidthSaving((cur) => [...cur, f.code]);
+    const r = await updateCitizenField(f.code, layoutWidthBody(width));
+    setWidthSaving((cur) => cur.filter((c) => c !== f.code));
+    if (!r.ok) {
+      setLocalWidth(f.code, before);
+      toast.error(r.thongBao === LOI_KHONG_RO ? WIDTH_FAILED_TOAST : `${WIDTH_FAILED_TOAST} ${r.thongBao}`);
+      return;
+    }
+    toast.success(WIDTH_SAVED_TOAST);
+  }
+
   const addButton = (
     <Button
       type="button"
@@ -256,10 +268,34 @@ export function CitizenFieldTab() {
           </p>
         )}
 
+        {live.length > 0 && (
+          <Segmented
+            mode="buttons"
+            legend="Cách xem thuộc tính"
+            name="citizen-field-view"
+            className="mt-4"
+            value={view}
+            options={[
+              { value: "list", label: LIST_VIEW },
+              { value: "layout", label: LAYOUT_VIEW },
+            ]}
+            onChange={(v) => setView(v === "layout" ? "layout" : "list")}
+          />
+        )}
+
         {live.length === 0 ? (
           <p className="text-ink-muted m-0 mt-4 text-[12.5px]" data-fields-empty="">
             {NO_FIELDS}
           </p>
+        ) : view === "layout" ? (
+          <FieldLayoutPreview
+            fields={live}
+            busy={pendingOrder !== null}
+            widthSaving={widthSaving}
+            onMove={(from, to) => void saveOrder(moveCode(codes, from, to))}
+            onDrop={(active, over) => void saveOrder(orderAfterDrop(codes, active, over))}
+            onWidth={(f, w) => void saveWidth(f, w)}
+          />
         ) : (
           <LiveFieldList
             fields={live}
@@ -321,12 +357,7 @@ export function LiveFieldList({
   onEdit: (f: CitizenField) => void;
   onDelete: (f: CitizenField) => void;
 }) {
-  const sensors = useSensors(
-    // Mouse, not Pointer: a pointer sensor would race the touch sensor for one finger (`so-nhiem-vu.tsx`).
-    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
-    useSensor(KeyboardSensor),
-  );
+  const sensors = useOrderSensors();
   const labelOf = (code: string) => fields.find((f) => f.code === code)?.label ?? code;
 
   return (
@@ -335,7 +366,7 @@ export function LiveFieldList({
       id="citizen-field-order"
       sensors={sensors}
       collisionDetection={closestCenter}
-      accessibility={{ announcements: announcements(labelOf), screenReaderInstructions: DRAG_INSTRUCTIONS }}
+      accessibility={{ announcements: orderAnnouncements(labelOf), screenReaderInstructions: DRAG_INSTRUCTIONS }}
       onDragEnd={(e) => {
         if (busy) return;
         onDrop(String(e.active.id), e.over === null ? null : String(e.over.id));
@@ -745,6 +776,27 @@ export function CitizenFieldDialog({
               </div>
             </fieldset>
           )}
+
+          {/* Add: nothing picked = the type's default is drawn checked and `null` is sent (#3c). */}
+          <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0" data-layout-width="">
+            <legend className={cn(FIELD_LABEL, "p-0")}>{LAYOUT_WIDTH_LABEL}</legend>
+            <div className="flex flex-wrap gap-x-6 gap-y-2">
+              {LAYOUT_WIDTHS.map((w) => (
+                <label key={w.value} className="text-ink m-0 flex cursor-pointer items-center gap-2 text-[13px] font-normal">
+                  <input
+                    type="radio"
+                    name={id("layout-width")}
+                    value={w.value}
+                    className="accent-brand m-0 size-4 shrink-0"
+                    checked={(draft.layoutWidth ?? defaultLayoutWidth(t)) === w.value}
+                    onChange={() => setDraft({ ...draft, layoutWidth: w.value })}
+                  />
+                  {w.label}
+                </label>
+              ))}
+            </div>
+            <p className={HINT}>{LAYOUT_WIDTH_HINT}</p>
+          </fieldset>
 
           <div className="flex flex-wrap gap-x-6 gap-y-2">
             <label className="text-ink m-0 flex cursor-pointer items-center gap-2 text-[13px] font-normal">

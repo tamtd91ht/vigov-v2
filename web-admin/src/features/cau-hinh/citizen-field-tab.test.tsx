@@ -589,3 +589,148 @@ function typeIntoArea(el: HTMLTextAreaElement, value: string) {
     el.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
+
+describe("Bố cục — the 2-column layout preview (ADR 0101 #3c)", () => {
+  // A half, B full, C half, D half, E half → rows: [A, empty] [B B] [C, D] [E, empty]
+  const A: CitizenField = { ...BASE, code: "aaaaaaa1", label: "A", field_type: "singleText", options: [], layout_width: "half", sort_order: 1 };
+  const B: CitizenField = { ...A, code: "bbbbbbb1", label: "B", field_type: "multiText", layout_width: "full", sort_order: 2 };
+  const C: CitizenField = { ...A, code: "ccccccc1", label: "C", layout_width: "half", sort_order: 3 };
+  const D: CitizenField = { ...BASE, code: "ddddddd1", label: "D", display_mode: "dropdown", layout_width: "half", sort_order: 4 };
+  const E: CitizenField = { ...NUMBER, code: "eeeeeee1", label: "E", layout_width: "half", sort_order: 5 };
+
+  async function openLayout(): Promise<HTMLDivElement> {
+    H.phien = session(["admin.citizen_field"]);
+    items = [E, C, A, D, B, RETIRED];
+    const el = await mount();
+    expect(el.querySelector("[data-field-layout]")).toBeNull();
+    act(() => button(el, form.LAYOUT_VIEW).click());
+    return el;
+  }
+  const cards = (el: ParentNode) => Array.from(el.querySelectorAll<HTMLElement>("[data-layout-card]"));
+  const card = (el: ParentNode, code: string) => el.querySelector<HTMLElement>(`[data-layout-card="${code}"]`)!;
+
+  it("draws the live fields in sort order as a 1→2 column grid: full = sm:col-span-2, half = one column; the static note above", async () => {
+    const el = await openLayout();
+    const grid = el.querySelector<HTMLElement>("[data-layout-grid]")!;
+    expect(grid.className).toContain("grid-cols-1");
+    expect(grid.className).toContain("sm:grid-cols-2");
+    expect(cards(el).map((c) => c.dataset.layoutCard)).toEqual(["aaaaaaa1", "bbbbbbb1", "ccccccc1", "ddddddd1", "eeeeeee1"]);
+    expect(cards(el).map((c) => c.className.includes("sm:col-span-2"))).toEqual([false, true, false, false, false]);
+    expect(el.querySelector("[data-layout-static-note]")!.textContent).toBe(form.LAYOUT_STATIC_NOTE);
+    expect(el.querySelector("[data-layout-narrow-note]")!.className).toContain("sm:hidden");
+    // The mock follows type × display_mode; the deleted field is not drawn.
+    expect(card(el, "ddddddd1").querySelector("[data-mock-control]")!.textContent).toContain("Chưa chọn");
+    expect(card(el, "bbbbbbb1").querySelector("[data-card-type]")!.textContent).toBe("Chữ nhiều dòng");
+    expect(el.textContent).not.toContain("Thuộc tính cũ");
+    // Back to the list.
+    act(() => button(el, form.LIST_VIEW).click());
+    expect(el.querySelector("[data-field-layout]")).toBeNull();
+    expect(liveOrder(el)).toEqual(["aaaaaaa1", "bbbbbbb1", "ccccccc1", "ddddddd1", "eeeeeee1"]);
+  });
+
+  it("marks the empty right slot after a half field left alone (before a full one, and at the end) — only from sm", async () => {
+    const el = await openLayout();
+    const slots = Array.from(el.querySelectorAll<HTMLElement>("[data-empty-slot]"));
+    expect(slots.map((s) => s.dataset.emptySlot)).toEqual(["aaaaaaa1", "eeeeeee1"]);
+    expect(slots[0]!.textContent).toBe(form.EMPTY_SLOT_HINT);
+    expect(slots[0]!.className).toContain("hidden");
+    expect(slots[0]!.className).toContain("sm:flex");
+    // The slot sits right after its card, so the grid's auto-flow puts it in the free column.
+    expect(card(el, "aaaaaaa1").nextElementSibling).toBe(slots[0]);
+  });
+
+  it("Xuống on a card PUTs the whole live order (the keyboard path of the drag)", async () => {
+    answers["PUT /api/v1/citizen-field-order"] = { status: 204, body: null };
+    const el = await openLayout();
+    act(() => byLabel(card(el, "aaaaaaa1"), "Đưa A xuống").click());
+    await settle();
+    const put = writes().find((c) => c.method === "PUT")!;
+    expect(JSON.parse(put.body!)).toEqual({ codes: ["bbbbbbb1", "aaaaaaa1", "ccccccc1", "ddddddd1", "eeeeeee1"] });
+    expect(byLabel(el, "Thuộc tính C, vị trí 3 trên 5")).not.toBeNull();
+  });
+
+  it("Cả hàng PATCHes layout_width alone; the card spans at once and stays so on success", async () => {
+    answers["PATCH /api/v1/citizen-fields/aaaaaaa1"] = { status: 200, body: { ...A, layout_width: "full" } };
+    const el = await openLayout();
+    const group = card(el, "aaaaaaa1").querySelector<HTMLElement>("[role=group][aria-label='Độ rộng của A']")!;
+    expect(button(group, "Nửa hàng").getAttribute("aria-pressed")).toBe("true");
+    act(() => button(group, "Cả hàng").click());
+    // Optimistic: drawn full before the server answers.
+    expect(card(el, "aaaaaaa1").className).toContain("sm:col-span-2");
+    await settle();
+    const patch = writes().find((c) => c.method === "PATCH")!;
+    expect(patch.url).toBe("/api/v1/citizen-fields/aaaaaaa1");
+    expect(JSON.parse(patch.body!)).toEqual({ ...UNCHANGED, layout_width: "full" });
+    expect(card(el, "aaaaaaa1").dataset.width).toBe("full");
+    expect(H.toast.success).toHaveBeenCalledWith(form.WIDTH_SAVED_TOAST);
+    // A is no longer a lone half: only E's slot is left.
+    expect(Array.from(el.querySelectorAll<HTMLElement>("[data-empty-slot]")).map((s) => s.dataset.emptySlot)).toEqual(["eeeeeee1"]);
+  });
+
+  it("a refused width puts the old one back and says so", async () => {
+    answers["PATCH /api/v1/citizen-fields/bbbbbbb1"] = { status: 409, body: { code: "conflict", message: "Thuộc tính đã đổi.", trace_id: "" } };
+    const el = await openLayout();
+    act(() => button(card(el, "bbbbbbb1"), "Nửa hàng").click());
+    expect(card(el, "bbbbbbb1").dataset.width).toBe("half");
+    await settle();
+    expect(card(el, "bbbbbbb1").dataset.width).toBe("full");
+    expect(card(el, "bbbbbbb1").className).toContain("sm:col-span-2");
+    expect(H.toast.error).toHaveBeenCalledWith(`${form.WIDTH_FAILED_TOAST} Thuộc tính đã đổi.`);
+  });
+
+  it("pressing the width a card already has sends nothing", async () => {
+    const el = await openLayout();
+    act(() => button(card(el, "ccccccc1"), "Nửa hàng").click());
+    await settle();
+    expect(writes()).toHaveLength(0);
+  });
+});
+
+describe("Độ rộng trên biểu mẫu — in the field dialog", () => {
+  const widthRadios = (dlg: ParentNode) => Array.from(dlg.querySelectorAll<HTMLInputElement>("[data-layout-width] input[type=radio]"));
+
+  it("add: the type's default is checked (singleText half, multiText full) and null is sent when untouched", async () => {
+    H.phien = session(["admin.citizen_field"]);
+    answers["POST /api/v1/citizen-fields"] = { status: 201, body: {} };
+    const el = await mount();
+    const dlg = openAdd(el);
+    expect(dlg.querySelector("[data-layout-width] legend")!.textContent).toBe(form.LAYOUT_WIDTH_LABEL);
+    expect(widthRadios(dlg).map((r) => [r.value, r.checked, r.parentElement!.textContent])).toEqual([
+      ["half", true, "Nửa hàng"],
+      ["full", false, "Cả hàng"],
+    ]);
+    selectValue(dlg.querySelector<HTMLSelectElement>("#citizen-field-type")!, "multiText");
+    expect(widthRadios(dlg).map((r) => r.checked)).toEqual([false, true]);
+    typeInto(labelOf(dlg), "Ghi chú thêm");
+    act(() => saveButton(dlg).click());
+    await settle();
+    expect(JSON.parse(writes()[0]!.body!).layout_width).toBeNull();
+  });
+
+  it("add: a width the person picked is sent", async () => {
+    H.phien = session(["admin.citizen_field"]);
+    answers["POST /api/v1/citizen-fields"] = { status: 201, body: {} };
+    const el = await mount();
+    const dlg = openAdd(el);
+    typeInto(labelOf(dlg), "Nghề nghiệp");
+    act(() => widthRadios(dlg)[1]!.click());
+    act(() => saveButton(dlg).click());
+    await settle();
+    expect(JSON.parse(writes()[0]!.body!).layout_width).toBe("full");
+  });
+
+  it("edit: shows the stored width; changing it PATCHes layout_width only", async () => {
+    H.phien = session(["admin.citizen_field"]);
+    answers["PATCH /api/v1/citizen-fields/sonhan01"] = { status: 200, body: NUMBER };
+    items = [BASE, { ...NUMBER, layout_width: "half" }, DATE, RETIRED];
+    const el = await mount();
+    act(() => byLabel(el, "Sửa thuộc tính Số nhân khẩu").click());
+    const dlg = document.querySelector<HTMLFormElement>("form[aria-label='Sửa thuộc tính']")!;
+    expect(widthRadios(dlg).map((r) => r.checked)).toEqual([true, false]);
+    act(() => widthRadios(dlg)[1]!.click());
+    act(() => button(dlg, "Lưu").click());
+    await settle();
+    const patch = writes().find((c) => c.method === "PATCH")!;
+    expect(JSON.parse(patch.body!)).toEqual({ ...UNCHANGED, layout_width: "full" });
+  });
+});
