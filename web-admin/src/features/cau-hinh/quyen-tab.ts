@@ -20,6 +20,7 @@ import type { identity_phienHienTaiRa } from "@/lib/api/schema.gen";
 import {
   ASSET_READ_PERMISSION,
   AUDIT_READ_PERMISSION,
+  CITIZEN_FIELD_PERMISSION,
   MAIL_SERVER_PERMISSION,
   RESIDENTIAL_UNIT_PERMISSION,
   SMS_CHANNEL_PERMISSION,
@@ -127,6 +128,15 @@ export function zaloChannelTabDecision(ketQua: KetQua<identity_phienHienTaiRa>):
  */
 export function smsChannelTabDecision(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
   return theoKhoaQuyen(ketQua, SMS_CHANNEL_PERMISSION);
+}
+
+/**
+ * Tab "Thuộc tính danh bạ" — `admin.citizen_field` (ADR 0101 #5): the key of every write route of the
+ * citizen-field definitions. `citizen.read` (the read key of those definitions) does not open it, and neither
+ * does `admin.zalo`, although migration grants the new key to the roles holding it (rule 5, invariant 3b).
+ */
+export function citizenFieldTabDecision(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
+  return theoKhoaQuyen(ketQua, CITIZEN_FIELD_PERMISSION);
 }
 
 /**

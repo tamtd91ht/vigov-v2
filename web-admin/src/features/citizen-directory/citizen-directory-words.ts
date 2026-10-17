@@ -39,13 +39,30 @@ export function tabLabel(base: string, count: number | null): string {
 /* ---- filters (§3) ---------------------------------------------------------------------------- */
 
 export const SEARCH_LABEL = "Tìm người dân";
-export const SEARCH_PLACEHOLDER = "Tìm theo tên, số điện thoại, địa chỉ…";
+/** ADR 0101 #7: the keyword searches full name, phone and email (on the search engine). */
+export const SEARCH_PLACEHOLDER = "Tìm theo tên, số điện thoại, email…";
 /** The server's own sentence for a keyword over 200 characters — said before the keyword leaves the browser. */
 export const KEYWORD_TOO_LONG = "Từ khoá tìm kiếm quá dài (tối đa 200 ký tự).";
 export const GROUP_FILTER_LABEL = "Lọc theo nhóm";
 export const ALL_GROUPS = "Tất cả nhóm";
 export const ONLY_WITH_ZALO = "Chỉ người có Zalo";
 export const TAG_STRIP_LABEL = "Nhãn đang dùng";
+
+/* ---- advanced filters (ADR 0101 #10) ---------------------------------------------------------- */
+
+export const FILTER_TOGGLE = "Bộ lọc";
+/** `Bộ lọc (2)` — the number of conditions applied, none = the bare word. */
+export function filterToggleLabel(count: number): string {
+  return count > 0 ? `${FILTER_TOGGLE} (${count})` : FILTER_TOGGLE;
+}
+export const FILTER_PANEL_LABEL = "Bộ lọc nâng cao";
+export const FILTER_CREATED = "Ngày tạo";
+export const FILTER_FROM = "Từ";
+export const FILTER_TO = "Đến";
+export const FILTER_APPLY = "Áp dụng";
+export const FILTER_CLEAR = "Xoá lọc";
+export const FILTER_RANGE_HINT = "Chỉ cần điền một đầu.";
+export const DROP_ADVANCED_FILTER = "Bỏ bộ lọc nâng cao";
 
 /** `Tên nhóm (số thành viên)` — the prototype's option text (`CitizenWorkspace.tsx:114`). */
 export function groupOptionText(g: Pick<CitizenGroup, "name" | "member_count">): string {
@@ -61,6 +78,7 @@ export function tagChipText(tag: string, count: number): string {
 
 export const COLUMN_NAME = "Họ tên";
 export const COLUMN_PHONE = "Điện thoại";
+export const COLUMN_EMAIL = "Email";
 export const COLUMN_UNIT = "Thôn, tổ";
 export const COLUMN_TAGS = "Nhãn";
 export const COLUMN_ZALO = "Zalo";
@@ -134,6 +152,14 @@ export const CONTACT_EDIT_TITLE = "Sửa thông tin người dân";
 export const CONTACT_DIALOG_DESCRIPTION = "Bắt buộc họ tên và số điện thoại. Những ô còn lại điền được tới đâu hay tới đó.";
 export const FIELD_FULL_NAME = "Họ và tên";
 export const FIELD_PHONE = "Số điện thoại";
+/** ADR 0101 #6 — optional; answered masked like the number. */
+export const FIELD_EMAIL = "Email";
+export const EMAIL_INVALID = "Email chưa đúng, ví dụ: ten@example.com.";
+/** On edit the stored address arrives masked: replacing it is an explicit act, so the mask is never sent back. */
+export const EDIT_EMAIL_BUTTON = "Nhập email mới";
+export const KEEP_EMAIL_BUTTON = "Giữ email cũ";
+export const EMAIL_REPLACE_HINT = "Để trống rồi lưu là xoá email của người này.";
+export const EMAIL_MAX = 254;
 export const REVEAL_PHONE_BUTTON = "Xem số đầy đủ";
 export const REVEAL_PHONE_FAILED = "Chưa lấy được số. Thử lại.";
 /**
@@ -169,6 +195,8 @@ export const PHONE_MIN_CHARS = 8;
 export type ContactDraft = {
   readonly fullName: string;
   readonly phone: string;
+  /** What is typed in the Email box. On edit it is sent only once "Nhập email mới" was pressed (`emailEdited`). */
+  readonly email: string;
   readonly residentialUnitId: string;
   readonly address: string;
   readonly tagText: string;
@@ -180,6 +208,7 @@ export type ContactDraft = {
 export const EMPTY_CONTACT_DRAFT: ContactDraft = {
   fullName: "",
   phone: "",
+  email: "",
   residentialUnitId: "",
   address: "",
   tagText: "",
@@ -208,6 +237,16 @@ export function toggleGroup(ids: readonly string[], id: string): string[] {
 export function canSubmitContact(draft: ContactDraft, editing: boolean, phoneRevealed: boolean): boolean {
   if (draft.fullName.trim() === "" || draft.phone.trim().length < PHONE_MIN_CHARS) return false;
   return !editing || phoneRevealed;
+}
+
+/**
+ * The Email box's problem, or `null`. Empty is allowed (the field is optional). The shape check is the
+ * loose one — something@something.tld, no spaces, at most 254 characters — the server's is the real one.
+ */
+export function emailProblem(email: string): string | null {
+  const e = email.trim();
+  if (e === "") return null;
+  return e.length > EMAIL_MAX || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) ? EMAIL_INVALID : null;
 }
 
 /** Which toast a refused save gets: the chapter's sentence for `phone_taken`, its other sentence for the rest. */

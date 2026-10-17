@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  ADVANCED_SEARCH_OFF,
   CITIZEN_CONTACT_PAGE_SIZE,
   NO_CITIZEN_CONTACT_FILTER,
   PHONE_TAKEN_CODE,
@@ -8,10 +9,12 @@ import {
   citizenContactListPath,
   citizenContactPhonePath,
   citizenContactSearchBody,
+  contactEmailMasked,
   countCitizenContacts,
   createCitizenContact,
   deleteCitizenContact,
   getCitizenContact,
+  hasAdvancedCitizenFilter,
   isCitizenContactFilterEmpty,
   listCitizenContactTags,
   normalizeCitizenKeyword,
@@ -49,6 +52,8 @@ const BODY: CitizenContactBody = {
   tags: ["tổ trưởng"],
   group_ids: [],
   is_active: true,
+  email: "nguoidan@example.com",
+  attributes: { hongheo1: "ho-ngheo", sonhan01: 4, ngaysinh: 1760634000000, nhucau01: ["dien", "nuoc"] },
 };
 
 afterEach(() => {
@@ -83,6 +88,68 @@ describe("the filter", () => {
     });
     expect(citizenContactSearchBody(NO_CITIZEN_CONTACT_FILTER, null).cursor).toBe("");
     expect(citizenContactCountBody(f)).toEqual({ q: "0001", group_id: "01JGROUP", residential_unit_id: "", active: null, has_own_app_session: true });
+  });
+});
+
+describe("the ADR 0101 additions to the filter", () => {
+  const ADV = {
+    ...NO_CITIZEN_CONTACT_FILTER,
+    createdFrom: 1760634000000,
+    createdTo: null,
+    attributeFilters: [
+      { code: "hongheo1", values: ["ho-ngheo", "can-ngheo"] },
+      { code: "sonhan01", from: 2 },
+    ],
+  };
+
+  it("a date range or an attribute filter makes the filter non-empty AND advanced; a keyword alone is not advanced", () => {
+    expect(isCitizenContactFilterEmpty({ ...NO_CITIZEN_CONTACT_FILTER, createdTo: 1 })).toBe(false);
+    expect(isCitizenContactFilterEmpty({ ...NO_CITIZEN_CONTACT_FILTER, attributeFilters: [{ code: "hongheo1", values: ["x"] }] })).toBe(false);
+    expect(hasAdvancedCitizenFilter(ADV)).toBe(true);
+    expect(hasAdvancedCitizenFilter({ ...NO_CITIZEN_CONTACT_FILTER, keyword: "An" })).toBe(false);
+  });
+
+  it("search and count bodies carry created_from / created_to / filters ONLY when set — today's body otherwise", () => {
+    expect(citizenContactSearchBody(ADV, null)).toMatchObject({
+      q: "",
+      created_from: 1760634000000,
+      filters: [
+        { code: "hongheo1", values: ["ho-ngheo", "can-ngheo"] },
+        { code: "sonhan01", from: 2 },
+      ],
+    });
+    expect(citizenContactSearchBody(ADV, null)).not.toHaveProperty("created_to");
+    expect(citizenContactCountBody(ADV)).toMatchObject({ created_from: 1760634000000, filters: ADV.attributeFilters });
+    const plain = citizenContactSearchBody({ ...NO_CITIZEN_CONTACT_FILTER, keyword: "An" }, null);
+    for (const k of ["created_from", "created_to", "filters"]) expect(plain).not.toHaveProperty(k);
+  });
+
+  it("503 on an ADVANCED search: `searchUnavailable` and the fixed sentence, not the server's", async () => {
+    const fake = stub(json({ code: "search_unavailable", message: "elasticsearch not configured", trace_id: "" }, 503));
+    expect(await readCitizenContactPage(ADV, null)).toEqual({ ok: false, thongBao: ADVANCED_SEARCH_OFF, searchUnavailable: true });
+    expect(fake.mock.calls[0]?.[0]).toBe("/api/v1/citizen-contact-searches");
+    expect(sentBody(fake)).toMatchObject({ created_from: 1760634000000 });
+    expect(ADVANCED_SEARCH_OFF).toBe("Chưa bật tìm kiếm nâng cao trên máy chủ này");
+  });
+
+  it("503 on a KEYWORD-only search is the service down: the ordinary refusal, no `searchUnavailable`", async () => {
+    stub(json({ code: "unavailable", message: "Dịch vụ tạm ngừng.", trace_id: "" }, 503));
+    const r = await readCitizenContactPage({ ...NO_CITIZEN_CONTACT_FILTER, keyword: "An" }, null);
+    expect(r).toEqual({ ok: false, thongBao: "Dịch vụ tạm ngừng." });
+  });
+
+  it("200 on an advanced search: the page", async () => {
+    stub(json(PAGE, 200));
+    expect(await readCitizenContactPage(ADV, "c2")).toEqual({ ok: true, duLieu: PAGE });
+  });
+});
+
+describe("the masked address", () => {
+  it("read from `email_masked` or `email` (name unsettled until regen), empty when absent or null", () => {
+    expect(contactEmailMasked({ email_masked: "ng***@example.com" })).toBe("ng***@example.com");
+    expect(contactEmailMasked({ email: "ng***@example.com" })).toBe("ng***@example.com");
+    expect(contactEmailMasked({ email_masked: null })).toBe("");
+    expect(contactEmailMasked({})).toBe("");
   });
 });
 
@@ -136,7 +203,7 @@ describe("page reads", () => {
 });
 
 describe("writes", () => {
-  it("create: POST with the caller's Idempotency-Key, 201 → the id", async () => {
+  it("create: POST with the caller's Idempotency-Key, 201 → the id; email and attributes travel in the body", async () => {
     const fake = stub(json({ id: "01JNEW" }, 201));
     expect(await createCitizenContact(BODY, "khoa-1")).toEqual({ ok: true, duLieu: { id: "01JNEW" } });
     expect(fake.mock.calls[0]?.[0]).toBe("/api/v1/citizen-contacts");

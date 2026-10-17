@@ -24,6 +24,7 @@ import {
   type CitizenContactFilter,
   type CitizenContactTag,
 } from "@/lib/api/citizen-contacts";
+import { listCitizenFields, type CitizenField } from "@/lib/api/citizen-fields";
 import { listCitizenGroups, type CitizenGroup } from "@/lib/api/citizen-groups";
 import type { identity_thonToDanPhoRa } from "@/lib/api/schema.gen";
 import { layDanhSachThonToDanPho } from "@/lib/api/thon-to-dan-pho"; // vi-name-ok: existing export of thon-to-dan-pho.ts, imported not declared (rule 12 inv 3)
@@ -71,6 +72,9 @@ type ListQuery = { readonly filter: CitizenContactFilter; readonly stack: NganXe
  *   groups      on open and after every write (the filter's "(n)" and the Nhóm tab)
  *   tags        on open and after every contact write (the strip)
  *   units       on open, once, only for an editor (the dialog's select)
+ *   fields      on open, once — the commune's LIVE attributes (ADR 0101): the dialog's controls, the
+ *               list's extra columns, the advanced filters. A refusal (an older server) leaves none: the
+ *               directory works exactly as before, without them
  *   page        on every change of filter / cursor, and after every write
  *   count       on every change of filter, and after every write — `POST …/count-queries`, the SAME
  *               filter as the page (D8), so "(n)" and the rows describe one set
@@ -86,6 +90,7 @@ export function CitizenDirectoryWorkspace({ canEdit }: { canEdit: boolean }) {
   const [groups, setGroups] = useState<readonly CitizenGroup[] | null>(null);
   const [tags, setTags] = useState<readonly CitizenContactTag[]>([]);
   const [units, setUnits] = useState<readonly identity_thonToDanPhoRa[]>([]);
+  const [fields, setFields] = useState<readonly CitizenField[]>([]);
   const [reads, setReads] = useState(0);
 
   const [contactDialog, setContactDialog] = useState<ContactDialogMode | null>(null);
@@ -119,6 +124,17 @@ export function CitizenDirectoryWorkspace({ canEdit }: { canEdit: boolean }) {
   }, [reads]);
 
   useEffect(() => {
+    let dropped = false;
+    listCitizenFields().then((kq) => {
+      // Sorted here, once: the server's order is the form's order (#3), but a tie must not reshuffle.
+      if (!dropped && kq.ok) setFields([...kq.duLieu.items].filter((f) => f.retired_at === null).sort((a, b) => a.sort_order - b.sort_order));
+    });
+    return () => {
+      dropped = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!canEdit) return;
     let dropped = false;
     layDanhSachThonToDanPho().then((kq) => {
@@ -133,7 +149,13 @@ export function CitizenDirectoryWorkspace({ canEdit }: { canEdit: boolean }) {
     let dropped = false;
     readCitizenContactPage(query.filter, query.stack.hienTai).then((kq) => {
       if (dropped) return;
-      setPage(kq.ok ? { phase: "ready", page: kq.duLieu } : { phase: "error", message: kq.thongBao });
+      setPage(
+        kq.ok
+          ? { phase: "ready", page: kq.duLieu }
+          : kq.searchUnavailable === true
+            ? { phase: "unavailable", message: kq.thongBao }
+            : { phase: "error", message: kq.thongBao },
+      );
     });
     return () => {
       dropped = true;
@@ -255,6 +277,7 @@ export function CitizenDirectoryWorkspace({ canEdit }: { canEdit: boolean }) {
         {tab === "contacts" ? (
           <CitizenContactList
             filter={query.filter}
+            fields={fields}
             groups={groups ?? []}
             tags={tags}
             state={page}
@@ -300,6 +323,7 @@ export function CitizenDirectoryWorkspace({ canEdit }: { canEdit: boolean }) {
           mode={contactDialog}
           groups={groups ?? []}
           units={units}
+          fields={fields}
           canReveal={canEdit}
           onClose={() => setContactDialog(null)}
           onSaved={reread}

@@ -1,22 +1,28 @@
 "use client";
 
-import { Search, Tag, Trash2 } from "lucide-react";
+import { Filter, SearchX, Search, Tag, Trash2 } from "lucide-react";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field } from "@/components/ui/field";
 import { IconButton } from "@/components/ui/icon-button";
+import { Notice } from "@/components/ui/notice";
 import { Pagination } from "@/components/ui/pagination";
 import { PendingMarker } from "@/components/ui/pending-feature";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import { Tooltip } from "@/components/ui/tooltip";
-import { normalizeCitizenKeyword, type CitizenContact, type CitizenContactFilter, type CitizenContactPage, type CitizenContactTag } from "@/lib/api/citizen-contacts";
+import { contactEmailMasked, normalizeCitizenKeyword, type CitizenContact, type CitizenContactFilter, type CitizenContactPage, type CitizenContactTag } from "@/lib/api/citizen-contacts";
+import type { CitizenField } from "@/lib/api/citizen-fields";
 import type { CitizenGroup } from "@/lib/api/citizen-groups";
 import { cn } from "@/lib/cn";
 
+import { advancedFilterCount, displayAttribute, EMPTY_FILTER_DRAFT, filtersFromDraft, type FilterDraft } from "./citizen-attributes";
+import { CitizenContactFilters, FILTER_PANEL_ID } from "./citizen-contact-filters";
 import { PHAN_CHUA_DUNG } from "./citizen-directory-pending";
 import {
   ALL_GROUPS,
+  COLUMN_EMAIL,
   COLUMN_NAME,
   COLUMN_PHONE,
   COLUMN_TAGS,
@@ -33,8 +39,10 @@ import {
   TAG_STRIP_LABEL,
   ZALO_COLUMN_TOOLTIP,
   ZALO_YES,
+  DROP_ADVANCED_FILTER,
   deleteContactLabel,
   emptySentence,
+  filterToggleLabel,
   groupOptionText,
   pageLabel,
   tagChipText,
@@ -49,8 +57,15 @@ export const SEARCH_INPUT_ID = "tim-nguoi-dan"; // vi-name-ok: DOM id, same conv
 export const GROUP_FILTER_ID = "loc-nhom-nguoi-dan"; // vi-name-ok: DOM id, same convention
 export const ZALO_FILTER_ID = "loc-zalo-nguoi-dan"; // vi-name-ok: DOM id, same convention
 
-/** One page read, three phases apart. */
-export type ContactPageState = { phase: "loading" } | { phase: "error"; message: string } | { phase: "ready"; page: CitizenContactPage };
+/**
+ * One page read, four phases apart. `unavailable` is the server saying it has no search engine for the
+ * advanced filter in force (ADR 0101, TASK E-1): not an error of the list — the list is one press away.
+ */
+export type ContactPageState =
+  | { phase: "loading" }
+  | { phase: "error"; message: string }
+  | { phase: "unavailable"; message: string }
+  | { phase: "ready"; page: CitizenContactPage };
 
 const SELECT_CLASS =
   "border-line focus-visible:ring-ring/50 h-9 rounded-md border border-solid bg-white pr-9 pl-3 text-[12.5px] outline-none focus-visible:ring-[3px]";
@@ -75,6 +90,7 @@ const SELECT_CLASS =
  */
 export function CitizenContactList({
   filter,
+  fields = [],
   groups,
   tags,
   state,
@@ -89,6 +105,8 @@ export function CitizenContactList({
   confirm,
 }: {
   filter: CitizenContactFilter;
+  /** The commune's LIVE attributes in sort order — the columns (`show_in_list`) and the advanced filters. */
+  fields?: readonly CitizenField[];
   groups: readonly CitizenGroup[];
   tags: readonly CitizenContactTag[];
   state: ContactPageState;
@@ -106,6 +124,29 @@ export function CitizenContactList({
 }) {
   const [typed, setTyped] = useState("");
   const [keywordError, setKeywordError] = useState("");
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [filterDraft, setFilterDraft] = useState<FilterDraft>(EMPTY_FILTER_DRAFT);
+  const [filterErrors, setFilterErrors] = useState<Readonly<Record<string, string>>>({});
+
+  function applyAdvanced() {
+    const r = filtersFromDraft(fields, filterDraft);
+    if (!r.ok) {
+      // The list keeps the conditions it had; nothing half-typed is sent.
+      setFilterErrors(r.errors);
+      return;
+    }
+    setFilterErrors({});
+    onFilterChange({ createdFrom: r.createdFrom, createdTo: r.createdTo, attributeFilters: r.filters });
+  }
+
+  function clearAdvanced() {
+    setFilterDraft(EMPTY_FILTER_DRAFT);
+    setFilterErrors({});
+    onFilterChange({ createdFrom: null, createdTo: null, attributeFilters: [] });
+  }
+
+  const listColumns = fields.filter((f) => f.show_in_list);
+  const appliedCount = advancedFilterCount(filter.createdFrom, filter.createdTo, filter.attributeFilters);
 
   function apply(text: string) {
     const kw = normalizeCitizenKeyword(text);
@@ -187,7 +228,30 @@ export function CitizenContactList({
           />
           {ONLY_WITH_ZALO}
         </label>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="bg-white"
+          icon={<Filter aria-hidden="true" focusable="false" />}
+          aria-expanded={panelOpen}
+          aria-controls={FILTER_PANEL_ID}
+          onClick={() => setPanelOpen(!panelOpen)}
+        >
+          {filterToggleLabel(appliedCount)}
+        </Button>
       </div>
+
+      {panelOpen && (
+        <CitizenContactFilters
+          fields={fields}
+          draft={filterDraft}
+          errors={filterErrors}
+          onDraft={setFilterDraft}
+          onApply={applyAdvanced}
+          onClear={clearAdvanced}
+        />
+      )}
 
       {tags.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={TAG_STRIP_LABEL} data-tag-strip="">
@@ -222,6 +286,16 @@ export function CitizenContactList({
             {state.message}
           </p>
         )}
+        {state.phase === "unavailable" && (
+          <div className="m-4 flex flex-col items-start gap-3" data-search-unavailable="">
+            <Notice role="alert" icon={SearchX}>
+              {state.message}
+            </Notice>
+            <Button type="button" variant="outline" onClick={clearAdvanced}>
+              {DROP_ADVANCED_FILTER}
+            </Button>
+          </div>
+        )}
         {page !== null && page.items.length === 0 && <EmptyState tone="neutral" title={emptySentence(filter)} role="status" />}
         {page !== null && page.items.length > 0 && (
           <div className="overflow-x-auto">
@@ -236,11 +310,19 @@ export function CitizenContactList({
                     {COLUMN_PHONE}
                   </th>
                   <th scope="col" className="px-4 py-2.5 font-semibold">
+                    {COLUMN_EMAIL}
+                  </th>
+                  <th scope="col" className="px-4 py-2.5 font-semibold">
                     {COLUMN_UNIT}
                   </th>
                   <th scope="col" className="px-4 py-2.5 font-semibold">
                     {COLUMN_TAGS}
                   </th>
+                  {listColumns.map((f) => (
+                    <th key={f.code} scope="col" className="px-4 py-2.5 font-semibold" data-attribute-column={f.code}>
+                      {f.label}
+                    </th>
+                  ))}
                   <th scope="col" className="px-4 py-2.5 font-semibold">
                     {/* D13: the word stays "Zalo"; the meaning is the tooltip — and the `title`, for touch. */}
                     <Tooltip content={ZALO_COLUMN_TOOLTIP}>
@@ -266,8 +348,18 @@ export function CitizenContactList({
                   >
                     <td className="text-navy px-4 py-2.5 font-semibold">{row.full_name}</td>
                     <td className="px-4 py-2.5 tabular-nums">{row.phone_masked}</td>
+                    {/* Masked by the server, as the number is (ADR 0101 #6); drawn as it arrives. */}
+                    <td className="px-4 py-2.5">{contactEmailMasked(row) !== "" ? contactEmailMasked(row) : EMPTY_CELL}</td>
                     <td className="text-ink px-4 py-2.5">{unitCellText(row)}</td>
                     <td className="px-4 py-2.5">{tagsCellText(row.tags)}</td>
+                    {listColumns.map((f) => {
+                      const text = displayAttribute(f, row.attributes?.[f.code]);
+                      return (
+                        <td key={f.code} className="px-4 py-2.5">
+                          {text === "" ? EMPTY_CELL : text}
+                        </td>
+                      );
+                    })}
                     <td className="px-4 py-2.5">
                       {row.has_own_app_session ? <span className="text-leaf font-semibold">{ZALO_YES}</span> : <span className="text-ink-muted">{EMPTY_CELL}</span>}
                     </td>

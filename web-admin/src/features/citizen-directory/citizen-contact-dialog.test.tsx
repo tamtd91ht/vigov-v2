@@ -157,6 +157,9 @@ describe("edit dialog — Xem số đầy đủ (ADR 0097 D2)", () => {
       tags: ["tổ trưởng"],
       group_ids: [],
       is_active: true,
+      attributes: {},
     });
+    // The detail answered no email to replace: the body carries none — never a mask.
+    expect(update.mock.calls[0]?.[1]).not.toHaveProperty("email");
   });
 });

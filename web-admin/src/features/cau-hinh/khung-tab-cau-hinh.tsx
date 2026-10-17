@@ -8,6 +8,7 @@ import { cn } from "@/lib/cn";
 
 import { AuditLogTab } from "./audit-log-tab";
 import { AutomationTab } from "./automation-tab";
+import { CitizenFieldTab } from "./citizen-field-tab";
 import { CommuneBrandingTab } from "./commune-branding-tab";
 import { MailServerTab } from "./mail-server-tab";
 import { MapFieldTab } from "./map-field-tab";
@@ -46,6 +47,7 @@ const NOI_DUNG: Record<MaTabCauHinh, (active: boolean) => ReactNode> = {
   "may-chu-thu": () => <MailServerTab />,
   "kenh-zalo": () => <ZaloChannelTab />,
   "kenh-sms": () => <SmsChannelTab />,
+  "thuoc-tinh-danh-ba": () => <CitizenFieldTab />,
 };
 
 /** Panels of `/he-thong` — the three tabs that left `/cau-hinh` on 12/10/2026, components unchanged. */

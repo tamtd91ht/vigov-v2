@@ -488,6 +488,14 @@ export const ZALO_CHANNEL_PERMISSION = "admin.zalo";
 export const SMS_CHANNEL_PERMISSION = "admin.sms";
 
 /**
+ * `admin.citizen_field` — "Cấu hình thuộc tính danh bạ người dân" (ADR 0101 #5; seeded by the identity
+ * migration of TASK E-1 and granted to every role that held `admin.zalo`). Every WRITE route of the
+ * Thuộc tính danh bạ tab. Reading the definitions is `citizen.read` — the directory needs them to draw its
+ * form — but the tab itself, a configuration surface, opens on this key only.
+ */
+export const CITIZEN_FIELD_PERMISSION = "admin.citizen_field";
+
+/**
  * `feedback.unmask` — "Xem đầy đủ họ tên và số điện thoại người gửi"
  * (`service-identity/migrations/0007_quyen_phan_loai_va_xem_day_du.sql:59`). No screen gates on it
  * (the server decides what it returns); it is named here only because the Phân quyền tab warns when

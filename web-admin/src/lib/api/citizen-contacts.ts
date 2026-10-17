@@ -21,6 +21,10 @@
  * KIỂU LẤY TỪ HỢP ĐỒNG, KHÔNG GÕ TAY (rule 9): every shape below is `schema.gen.ts`'s. The paths are
  * `satisfies <route>["duongDan"]`, so a renamed route is a `tsc` error here, not a 404 in a commune.
  *
+ * ADR 0101 ADDS `email` (masked on the way out, like the number) and the commune's dynamic `attributes` to the
+ * contact, and a creation-date range and attribute filters to the search — see the UNTIL REGEN block.
+ * A search using those can be answered 503 when the server has no search engine configured.
+ *
  * NO `tenant_id`, RELATIVE PATHS, `credentials: same-origin`: the three rules of `goi.ts`.
  */
 
@@ -31,6 +35,7 @@ import {
 import {
   CHUNG, // vi-name-ok: existing export of goi.ts, imported not declared (rule 12 inv 3)
   docJSON, // vi-name-ok: existing export of goi.ts, imported not declared (rule 12 inv 3)
+  docThanKetQua, // vi-name-ok: existing export of goi.ts, imported not declared (rule 12 inv 3)
   docThanLoiGoi, // vi-name-ok: existing export of goi.ts, imported not declared (rule 12 inv 3)
   goiGhi, // vi-name-ok: existing export of goi.ts, imported not declared (rule 12 inv 3)
   LOI_KHONG_RO, // vi-name-ok: existing export of goi.ts, imported not declared (rule 12 inv 3)
@@ -45,6 +50,7 @@ import type {
   identity_citizenContactDeletionIn,
   identity_citizenContactDetailOut,
   identity_citizenContactIn,
+  identity_citizenContactOut,
   identity_citizenContactPhoneOut,
   identity_citizenContactSearchIn,
   identity_citizenContactTagsOut,
@@ -60,13 +66,56 @@ import type {
   page_Result_identity_citizenContactOut,
 } from "./schema.gen";
 
-export type {
-  identity_citizenContactDetailOut as CitizenContactDetail,
-  identity_citizenContactIn as CitizenContactBody,
-  identity_citizenContactOut as CitizenContact,
-  identity_citizenContactTagOut as CitizenContactTag,
-  page_Result_identity_citizenContactOut as CitizenContactPage,
-} from "./schema.gen";
+export type { identity_citizenContactTagOut as CitizenContactTag } from "./schema.gen";
+
+// ---- UNTIL REGEN (TASK E-1) ------------------------------------------------------------------------
+// ADR 0101 adds to the contact a static `email` (#6) and the commune's dynamic `attributes` (#1), and to
+// the search a creation-date range and per-attribute filters (#10). `schema.gen.ts` lags the backend that
+// is built in parallel, so the additions are written here BY HAND, ON TOP OF the generated shapes, until
+// `make kb` regenerates them — then each alias below collapses back to its `identity_*` type.
+//
+// The reply fields are OPTIONAL here on purpose: a server still on the old shape answers without them,
+// and the screen must keep working against it. After regen they are whatever the contract says.
+
+/** One attribute value: text / one choice -> string, several choices -> string[], number and dateTime (epoch millis) -> number. */
+export type CitizenAttributeValue = string | string[] | number;
+export type CitizenAttributes = Record<string, CitizenAttributeValue>;
+
+/**
+ * The create / update body. `email` is OPTIONAL in the body: on an edit it is sent only when the officer
+ * typed a new one, because the detail answers it MASKED and sending the mask back would overwrite the
+ * real address with asterisks. Absent = unchanged (assumption stated to the backend, TASK E-1).
+ */
+export type CitizenContactBody = identity_citizenContactIn & { email?: string; attributes: CitizenAttributes };
+/**
+ * The masked address on a reply. TASK E-1 names it `email`; this repo's other masked address is
+ * `email_masked` (`danh_ba_chon_nguoi.go`), next to `phone_masked`. Both are read until regen settles the
+ * name — through `contactEmailMasked`, the one reader, so the regen is a one-line change.
+ */
+type MaskedEmailReply = { email?: string | null; email_masked?: string | null };
+/** A list row. The address arrives masked, like `phone_masked`. */
+export type CitizenContact = identity_citizenContactOut & MaskedEmailReply & { attributes?: CitizenAttributes };
+/** The edit dialog's detail — the address masked here too. */
+export type CitizenContactDetail = identity_citizenContactDetailOut & MaskedEmailReply & { attributes?: CitizenAttributes };
+
+/** The masked address of a row or a detail, `""` when there is none. Never a raw address: the server masks it. */
+export function contactEmailMasked(r: MaskedEmailReply): string {
+  return r.email_masked ?? r.email ?? "";
+}
+export type CitizenContactPage = Omit<page_Result_identity_citizenContactOut, "items"> & { items: CitizenContact[] };
+
+/** One attribute filter: a set of option values (combobox / singleBox), or a range (number / dateTime) with at least one bound. */
+export type CitizenAttributeFilter =
+  | { readonly code: string; readonly values: readonly string[] }
+  | { readonly code: string; readonly from?: number; readonly to?: number };
+
+/** The search additions. Sent only when set, so a filter that uses none of them is today's request byte for byte. */
+type AdvancedSearchFields = {
+  created_from?: number;
+  created_to?: number;
+  filters?: CitizenAttributeFilter[];
+};
+// ---- end UNTIL REGEN -------------------------------------------------------------------------------
 
 /** Rows per page — the screen's choice (chapter 16 §3, prototype `PAGE_SIZE`). Sent on every page read. */
 export const CITIZEN_CONTACT_PAGE_SIZE = 50;
@@ -87,6 +136,12 @@ export type CitizenContactFilter = {
   readonly residentialUnitId: string;
   readonly activeOnly: boolean;
   readonly hasOwnAppSession: boolean | null;
+  /** "Ngày tạo từ" — epoch millis, inclusive; `null` = no lower bound (ADR 0101 #10). */
+  readonly createdFrom: number | null;
+  /** "Ngày tạo đến" — epoch millis, the LAST millisecond of the chosen day; `null` = no upper bound. */
+  readonly createdTo: number | null;
+  /** Per-attribute filters, each already complete (`citizen-attributes.ts` builds them). */
+  readonly attributeFilters: readonly CitizenAttributeFilter[];
 };
 
 export const NO_CITIZEN_CONTACT_FILTER: CitizenContactFilter = {
@@ -95,11 +150,30 @@ export const NO_CITIZEN_CONTACT_FILTER: CitizenContactFilter = {
   residentialUnitId: "",
   activeOnly: false,
   hasOwnAppSession: null,
+  createdFrom: null,
+  createdTo: null,
+  attributeFilters: [],
 };
+
+/**
+ * Whether the filter uses the search engine's own abilities — a creation-date range or an attribute filter.
+ * Only such a search can be answered 503 "search engine not configured" (TASK E-1), and only then is that
+ * 503 read as "advanced search is off" rather than as the service being down.
+ */
+export function hasAdvancedCitizenFilter(f: CitizenContactFilter): boolean {
+  return f.createdFrom !== null || f.createdTo !== null || f.attributeFilters.length > 0;
+}
 
 /** Whether anything narrows the list — decides which route reads the page and which empty sentence is said. */
 export function isCitizenContactFilterEmpty(f: CitizenContactFilter): boolean {
-  return f.keyword === "" && f.groupId === "" && f.residentialUnitId === "" && !f.activeOnly && f.hasOwnAppSession === null;
+  return (
+    f.keyword === "" &&
+    f.groupId === "" &&
+    f.residentialUnitId === "" &&
+    !f.activeOnly &&
+    f.hasOwnAppSession === null &&
+    !hasAdvancedCitizenFilter(f)
+  );
 }
 
 /**
@@ -111,8 +185,23 @@ export function normalizeCitizenKeyword(typed: string): TuKhoaTim {
   return chuanHoaTuKhoaTim(typed);
 }
 
-/** The search body — every field, as the generated type requires; `limit` is the screen's page size. */
-export function citizenContactSearchBody(f: CitizenContactFilter, cursor: string | null): identity_citizenContactSearchIn {
+/** The ADR 0101 additions of a filter, each key present only when set. */
+function advancedSearchFields(f: CitizenContactFilter): AdvancedSearchFields {
+  const extra: AdvancedSearchFields = {};
+  if (f.createdFrom !== null) extra.created_from = f.createdFrom;
+  if (f.createdTo !== null) extra.created_to = f.createdTo;
+  if (f.attributeFilters.length > 0) extra.filters = f.attributeFilters.map((a) => ({ ...a }));
+  return extra;
+}
+
+/**
+ * The search body — every generated field, as the generated type requires; `limit` is the screen's page
+ * size; the ADR 0101 additions only when set. The keyword stays IN THE BODY (ADR 0097 D11, kept by 0101 #7).
+ */
+export function citizenContactSearchBody(
+  f: CitizenContactFilter,
+  cursor: string | null,
+): identity_citizenContactSearchIn & AdvancedSearchFields {
   return {
     q: f.keyword,
     group_id: f.groupId,
@@ -121,17 +210,19 @@ export function citizenContactSearchBody(f: CitizenContactFilter, cursor: string
     has_own_app_session: f.hasOwnAppSession,
     limit: CITIZEN_CONTACT_PAGE_SIZE,
     cursor: cursor ?? "",
+    ...advancedSearchFields(f),
   };
 }
 
 /** The count body — the search's filter without its paging, so both answers describe one set of rows. */
-export function citizenContactCountBody(f: CitizenContactFilter): identity_citizenContactCountQueryIn {
+export function citizenContactCountBody(f: CitizenContactFilter): identity_citizenContactCountQueryIn & AdvancedSearchFields {
   return {
     q: f.keyword,
     group_id: f.groupId,
     residential_unit_id: f.residentialUnitId,
     active: f.activeOnly ? true : null,
     has_own_app_session: f.hasOwnAppSession,
+    ...advancedSearchFields(f),
   };
 }
 
@@ -165,13 +256,27 @@ export function citizenContactListPath(cursor: string | null): string {
  * BODY. One place decides the branch, so no screen can put a keyword on a URL by mistake (rule 3,
  * forbidden #4). No `Idempotency-Key`: a read sent twice is two reads.
  */
-export function readCitizenContactPage(
-  f: CitizenContactFilter,
-  cursor: string | null,
-): Promise<KetQua<page_Result_identity_citizenContactOut>> {
-  if (isCitizenContactFilterEmpty(f)) return docJSON<page_Result_identity_citizenContactOut>(citizenContactListPath(cursor));
-  return docThanLoiGoi<page_Result_identity_citizenContactOut>(goiGhi(SEARCH_PATH, "POST", citizenContactSearchBody(f, cursor), 200));
+export async function readCitizenContactPage(f: CitizenContactFilter, cursor: string | null): Promise<CitizenContactPageResult> {
+  if (isCitizenContactFilterEmpty(f)) return docJSON<CitizenContactPage>(citizenContactListPath(cursor));
+  const advanced = hasAdvancedCitizenFilter(f);
+  // 503 is accepted as an answer ONLY for an advanced search: that is the one 503 the contract gives a
+  // meaning to. A keyword search answered 503 is the service (or the proxy before it) being down, and keeps
+  // the ordinary refusal sentence.
+  const kq = await goiGhi(SEARCH_PATH, "POST", citizenContactSearchBody(f, cursor), advanced ? [200, 503] : 200);
+  if (kq.ok && kq.duLieu.status === 503) return { ok: false, thongBao: ADVANCED_SEARCH_OFF, searchUnavailable: true };
+  return docThanKetQua<CitizenContactPage>(kq);
 }
+
+/**
+ * Said when the server has no search engine configured and the filter needs one (TASK E-1). The list stays
+ * usable: the screen offers to drop the advanced part of the filter and read again.
+ */
+export const ADVANCED_SEARCH_OFF = "Chưa bật tìm kiếm nâng cao trên máy chủ này";
+
+/** A page read: the page, or a sentence — and `searchUnavailable` when that sentence is `ADVANCED_SEARCH_OFF`. */
+export type CitizenContactPageResult =
+  | { ok: true; duLieu: CitizenContactPage }
+  | { ok: false; thongBao: string; searchUnavailable?: true };
 
 /** `POST /api/v1/citizen-contact-count-queries` — how many rows the filter matches: the "Danh sách (n)" tab. */
 export async function countCitizenContacts(f: CitizenContactFilter): Promise<KetQua<number>> {
@@ -190,8 +295,8 @@ function withId(template: string, id: string): string {
 }
 
 /** `GET /api/v1/citizen-contacts/{id}` — the edit dialog's detail (address, note, groups); the number still masked. */
-export function getCitizenContact(id: string): Promise<KetQua<identity_citizenContactDetailOut>> {
-  return docJSON<identity_citizenContactDetailOut>(withId(DETAIL_PATH, id));
+export function getCitizenContact(id: string): Promise<KetQua<CitizenContactDetail>> {
+  return docJSON<CitizenContactDetail>(withId(DETAIL_PATH, id));
 }
 
 /* ---- writes ---------------------------------------------------------------------------------- */
@@ -207,7 +312,7 @@ export function getCitizenContact(id: string): Promise<KetQua<identity_citizenCo
  * server's sentence for everything else — one documented branch (`KetQua.code`).
  */
 export function createCitizenContact(
-  body: identity_citizenContactIn,
+  body: CitizenContactBody,
   idempotencyKey: string,
 ): Promise<KetQua<identity_citizenContactCreatedOut>> {
   return docThanLoiGoi<identity_citizenContactCreatedOut>(
@@ -222,7 +327,7 @@ export function createCitizenContact(
  * ⚠ `phone` MUST BE THE FULL NUMBER: the server normalises it as typed (`domain.NormalizeCitizenPhone`)
  * and a mask (`09****0001`) is refused with 400. The dialog therefore saves only after "Xem số đầy đủ".
  */
-export async function updateCitizenContact(id: string, body: identity_citizenContactIn): Promise<KetQua<null>> {
+export async function updateCitizenContact(id: string, body: CitizenContactBody): Promise<KetQua<null>> {
   const kq = await goiGhi(withId(UPDATE_PATH, id), "PATCH", body, 204, undefined, { withCode: true });
   return kq.ok ? { ok: true, duLieu: null } : kq;
 }

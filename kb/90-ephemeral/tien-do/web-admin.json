@@ -1669,6 +1669,23 @@
       "bang_chung": "e1675e6d: app/gui-thong-bao, features/notice-send (màn, form, thẻ OA). ef373c78 tab Kênh SMS; 0b864dbc nhiều OA. TASK D-6c (17/10/2026): màn gọi 5 tuyến thật notice-templates, notice-campaign-previews, notice-campaigns (GET/POST), notice-campaigns/{id} qua lib/api/notice-campaigns.ts; chọn OA / tài khoản SMS khi gửi, xem trước (người nhận, bỏ qua, chi phí), lịch sử + tự đọc lại đợt dang-gui; bỏ khối UNTIL REGEN ở zalo-oa.ts, sms-accounts.ts. tsc + eslint + check:api sạch, vitest 121 tệp / 2121 ca xanh (17/10/2026).",
       "no_confirm": [],
       "tiep_theo": "(1) CHƯA xem ảnh render cạnh prototype. (2) Giả định chờ chủ dự án xác nhận: khoá nút Gửi khi nội dung đổi sau Xem trước; Idempotency-Key theo nội dung soạn — gửi lại y hệt là phát lại đợt cũ, muốn đợt mới phải đổi tiêu đề (prototype tạo đợt mới). (3) lib/api/zalo.ts còn khối UNTIL REGEN (nhóm Zalo) và DueSoonDaysUntilRegen — việc riêng. (4) Chưa có PHAN_CHUA_DUNG // @screens /gui-thong-bao cho tien_do_san_pham."
+    },
+    {
+      "id": "gui-tin-nhap-so-nhap-tep-17-10",
+      "viec": "Gửi tin: người nhận nhập số / nhập tệp, SMS cột nội dung hoặc nội dung chung {{variable_N}}, ZNS tham số theo cột, chi tiết đợt + Thông tin map biến + lịch sử từng số (ADR 0099 §Sửa đổi)",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "bang_chung": "f3be1daf (TASK D-7w) + 633f0d1d (D-7r kiểu sinh). tsc + eslint sạch, vitest notice-send xanh (17/10/2026). Phụ thuộc read-excel-file 9.3.10.",
+      "tiep_theo": "CHƯA xem ảnh render. Ô tài khoản SMS cho nguồn nhập chỉ hiện tài khoản đã có mẫu (chưa có tuyến liệt kê tài khoản cho notice.send)."
+    },
+    {
+      "id": "thuoc-tinh-dong-danh-ba-web-17-10",
+      "menu": "nguoi-dan",
+      "viec": "Cấu hình → Thuộc tính danh bạ (admin.citizen_field, kéo-thả thứ tự) + ô động/email/cột/bộ lọc ở /nguoi-dan (ADR 0101)",
+      "trang_thai": "dang_lam",
+      "no_confirm": [],
+      "bang_chung": "TASK E-1w (17/10/2026): lib/api/citizen-fields.ts, features/cau-hinh/citizen-field-*, features/citizen-directory/citizen-attribute*, citizen-contact-filters. tsc + eslint sạch, vitest 130 tệp / 2204 ca xanh.",
+      "tiep_theo": "Kiểu API viết tay trong khối UNTIL REGEN (TASK E-1) ở citizen-contacts.ts và citizen-fields.ts — thay sau khi backend E-1 lên + make kb. CHƯA xem ảnh render."
     }
   ]
 }

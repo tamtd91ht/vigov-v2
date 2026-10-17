@@ -9,17 +9,22 @@ import { Field } from "@/components/ui/field";
 import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 import { pickableResidentialUnits } from "@/features/cau-hinh/nhan-thon";
 import {
+  contactEmailMasked,
   createCitizenContact,
   getCitizenContact,
   revealCitizenContactPhone,
   updateCitizenContact,
+  type CitizenAttributes,
   type CitizenContact,
   type CitizenContactBody,
 } from "@/lib/api/citizen-contacts";
+import type { CitizenField } from "@/lib/api/citizen-fields";
 import type { CitizenGroup } from "@/lib/api/citizen-groups";
 import type { identity_thonToDanPhoRa } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
 
+import { CitizenAttributeInputs } from "./citizen-attribute-inputs";
+import { attributesFromInputs, inputsFromAttributes, type AttributeInputs } from "./citizen-attributes";
 import {
   ADDED_TOAST,
   CANCEL_BUTTON,
@@ -27,9 +32,12 @@ import {
   CONTACT_DIALOG_DESCRIPTION,
   CONTACT_EDIT_TITLE,
   DETAIL_LOADING,
+  EDIT_EMAIL_BUTTON,
+  EMAIL_REPLACE_HINT,
   EMPTY_CONTACT_DRAFT,
   FIELD_ACTIVE,
   FIELD_ADDRESS,
+  FIELD_EMAIL,
   FIELD_FULL_NAME,
   FIELD_GROUPS,
   FIELD_NOTE,
@@ -46,7 +54,9 @@ import {
   TAGS_HINT,
   TAGS_WARNING,
   UNIT_UNKNOWN,
+  KEEP_EMAIL_BUTTON,
   canSubmitContact,
+  emailProblem,
   parseTags,
   saveFailureToast,
   toggleGroup,
@@ -90,17 +100,26 @@ const SELECT_CLASS =
  *
  * The refusals of a save are toasts, as the prototype: `phone_taken` → the chapter's sentence, anything
  * else → its other sentence (`saveFailureToast`). Nothing typed here is logged.
+ *
+ * ADR 0101 ADDS two things. `Email` (optional, #6) after the number — on edit the stored address arrives
+ * MASKED, so it is drawn read-only and replaced only through "Nhập email mới"; until then the body carries
+ * no `email` at all, never the mask. And the commune's live attributes (#3) after the static fields, in the
+ * configured order (`CitizenAttributeInputs`), checked here as the server checks them before anything is
+ * sent. The values of retired fields are carried over untouched (`attributesFromInputs`).
  */
 export function CitizenContactDialog({
   mode,
   groups,
   units,
+  fields = [],
   canReveal,
   onClose,
   onSaved,
 }: {
   mode: ContactDialogMode;
   groups: readonly CitizenGroup[];
+  /** The commune's LIVE attribute definitions, in sort order (`GET /citizen-fields`). Empty = none drawn. */
+  fields?: readonly CitizenField[];
   units: readonly identity_thonToDanPhoRa[];
   /** Session holds `citizen.update` — draws the reveal button. Convenience only; the route checks. */
   canReveal: boolean;
@@ -115,6 +134,15 @@ export function CitizenContactDialog({
   const [detailError, setDetailError] = useState("");
   const [phone, setPhone] = useState<PhoneState>(editing ? { kind: "masked", error: null } : { kind: "shown" });
   const [saving, setSaving] = useState(false);
+  /** The contact's saved attributes (edit) — the base the body is built on, so retired values survive. */
+  const [stored, setStored] = useState<CitizenAttributes | undefined>(undefined);
+  const [attrInputs, setAttrInputs] = useState<AttributeInputs>(() => inputsFromAttributes(fields, undefined));
+  const [attrErrors, setAttrErrors] = useState<Readonly<Record<string, string>>>({});
+  /** The masked address the detail answered (edit). */
+  const [emailMasked, setEmailMasked] = useState("");
+  /** Adding: the box is the address. Editing: `false` until "Nhập email mới" — the mask is never sent back. */
+  const [emailEdited, setEmailEdited] = useState(!editing);
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   const contactId = mode.kind === "edit" ? mode.contact.id : null;
   const masked = mode.kind === "edit" ? mode.contact.phone_masked : "";
@@ -134,6 +162,7 @@ export function CitizenContactDialog({
         // The masked number is NOT put in the field: the field holds what will be SENT, and a mask is
         // refused. The mask is drawn beside the button until the reveal fills the field.
         phone: "",
+        email: "",
         residentialUnitId: d.residential_unit_id,
         address: d.address,
         tagText: d.tags.join(", "),
@@ -141,11 +170,17 @@ export function CitizenContactDialog({
         note: d.note,
         isActive: d.is_active,
       });
+      setStored(d.attributes);
+      setAttrInputs(inputsFromAttributes(fields, d.attributes));
+      setEmailMasked(contactEmailMasked(d));
       setReady(true);
     });
     return () => {
       dropped = true;
     };
+    // `fields` is read once, when the detail arrives: re-reading the detail because the definitions were
+    // re-read would throw away what the officer is typing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contactId]);
 
   function reveal() {
@@ -166,6 +201,11 @@ export function CitizenContactDialog({
 
   async function submit() {
     if (!submittable) return;
+    const emailWrong = emailEdited ? emailProblem(draft.email) : null;
+    const attrs = attributesFromInputs(fields, attrInputs, stored);
+    setEmailError(emailWrong);
+    setAttrErrors(attrs.ok ? {} : attrs.errors);
+    if (emailWrong !== null || !attrs.ok) return;
     const body: CitizenContactBody = {
       full_name: draft.fullName.trim(),
       phone: draft.phone.trim(),
@@ -175,7 +215,9 @@ export function CitizenContactDialog({
       tags: parseTags(draft.tagText),
       group_ids: [...draft.groupIds],
       is_active: draft.isActive,
+      attributes: attrs.attributes,
     };
+    if (emailEdited) body.email = draft.email.trim();
     setSaving(true);
     const kq = mode.kind === "add" ? await createCitizenContact(body, mode.idempotencyKey) : await updateCitizenContact(mode.contact.id, body);
     setSaving(false);
@@ -272,6 +314,52 @@ export function CitizenContactDialog({
             )}
           </Field>
 
+          <Field
+            label={FIELD_EMAIL}
+            htmlFor="nguoi-dan-email"
+            grow="auto"
+            error={emailError ?? undefined}
+            hint={editing && emailEdited && emailMasked !== "" ? EMAIL_REPLACE_HINT : undefined}
+            className="sm:col-span-2"
+          >
+            {emailEdited ? (
+              <div className="flex items-center gap-2">
+                <input
+                  id="nguoi-dan-email"
+                  type="email"
+                  value={draft.email}
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-invalid={emailError !== null}
+                  onChange={(e) => setDraft({ ...draft, email: e.target.value })}
+                />
+                {editing && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="md"
+                    className="shrink-0"
+                    onClick={() => {
+                      setEmailEdited(false);
+                      setEmailError(null);
+                      setDraft({ ...draft, email: "" });
+                    }}
+                  >
+                    {KEEP_EMAIL_BUTTON}
+                  </Button>
+                )}
+              </div>
+            ) : (
+              // The stored address, masked and read-only; replacing it is one explicit press.
+              <div className="flex items-center gap-2">
+                <input id="nguoi-dan-email" value={emailMasked} readOnly aria-readonly="true" placeholder="—" />
+                <Button type="button" variant="secondary" size="md" className="shrink-0" onClick={() => setEmailEdited(true)}>
+                  {EDIT_EMAIL_BUTTON}
+                </Button>
+              </div>
+            )}
+          </Field>
+
           <Field label={FIELD_UNIT} htmlFor="nguoi-dan-thon" kind="select" grow="auto">
             <select
               id="nguoi-dan-thon"
@@ -342,6 +430,17 @@ export function CitizenContactDialog({
           <Field label={FIELD_NOTE} htmlFor="nguoi-dan-ghi-chu" grow="auto" className="sm:col-span-2">
             <textarea id="nguoi-dan-ghi-chu" rows={2} value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} />
           </Field>
+
+          <CitizenAttributeInputs
+            fields={fields}
+            inputs={attrInputs}
+            stored={stored}
+            errors={attrErrors}
+            onChange={(code, value) => {
+              setAttrInputs((cur) => ({ ...cur, [code]: value }));
+              if (attrErrors[code] !== undefined) setAttrErrors(({ [code]: _gone, ...rest }) => rest);
+            }}
+          />
         </fieldset>
 
         <div className="flex flex-wrap justify-end gap-2">

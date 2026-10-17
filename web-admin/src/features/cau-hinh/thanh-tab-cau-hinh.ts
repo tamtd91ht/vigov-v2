@@ -30,6 +30,7 @@ import {
   auditLogTabDecision,
   automationTabDecision,
   brandingTabDecision,
+  citizenFieldTabDecision,
   mailServerTabDecision,
   mapFieldTabDecision,
   slaTabDecision,
@@ -49,7 +50,8 @@ export type MaTabCauHinh =
   | "tu-dong-hoa"
   | "may-chu-thu"
   | "kenh-zalo"
-  | "kenh-sms";
+  | "kenh-sms"
+  | "thuoc-tinh-danh-ba";
 
 /** Tabs of `/he-thong` — the three that left `/cau-hinh` on 12/10/2026 (see `SYSTEM_TABS`). */
 export type SystemTabId = "lich-lam-viec" | "nhat-ky-he-thong" | "nhan-dien-xa";
@@ -81,6 +83,9 @@ export type MoTaTab<M extends string = MaTabCauHinh> = {
  * "Kênh Zalo" — the commune's third outbound channel — gated on its own key, `admin.sms`. So the bar is
  * the prototype's nine plus this one.
  *
+ * "Thuộc tính danh bạ" (ADR 0101 #5, owner 17/10/2026) is not in the prototype either; it comes last,
+ * gated on its own key, `admin.citizen_field`. The bar is the prototype's nine plus these two.
+ *
  * USER DECISION 09/10/2026 put the prototype's nine tabs first, in its order, and the three it lacks —
  * "Lịch làm việc", "Nhật ký hệ thống", "Nhận diện xã" — after them on this bar.
  *
@@ -103,6 +108,7 @@ export const TAB_CAU_HINH: readonly MoTaTab<MaTabCauHinh>[] = [
   { ma: "may-chu-thu", nhan: "Máy chủ thư", cong: mailServerTabDecision },
   { ma: "kenh-zalo", nhan: "Kênh Zalo", cong: zaloChannelTabDecision },
   { ma: "kenh-sms", nhan: "Kênh SMS", cong: smsChannelTabDecision },
+  { ma: "thuoc-tinh-danh-ba", nhan: "Thuộc tính danh bạ", cong: citizenFieldTabDecision },
 ];
 
 /**

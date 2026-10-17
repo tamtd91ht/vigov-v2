@@ -49,8 +49,11 @@ const PROTOTYPE_NINE = [
   "Kênh Zalo",
 ];
 
-/** The bar: the prototype's nine, then "Kênh SMS" (ADR 0099 #2 #3, owner 17/10/2026) right after "Kênh Zalo". */
-const CONFIG_TABS = [...PROTOTYPE_NINE, "Kênh SMS"];
+/**
+ * The bar: the prototype's nine, then "Kênh SMS" (ADR 0099 #2 #3, owner 17/10/2026) right after "Kênh Zalo",
+ * then "Thuộc tính danh bạ" (ADR 0101 #5, owner 17/10/2026).
+ */
+const CONFIG_TABS = [...PROTOTYPE_NINE, "Kênh SMS", "Thuộc tính danh bạ"];
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -58,7 +61,7 @@ afterEach(() => {
 });
 
 describe("tab nào của màn Cấu hình được hiện", () => {
-  it("mọi khoá → chín tab của prototype rồi Kênh SMS, đúng thứ tự — không còn ba tab dư (chủ dự án 12/10/2026, S27)", async () => {
+  it("mọi khoá → chín tab của prototype rồi Kênh SMS, Thuộc tính danh bạ, đúng thứ tự — không còn ba tab dư (chủ dự án 12/10/2026, S27)", async () => {
     const phien = await phienVoi(
       phanHoiPhien([
         "admin.user",
@@ -72,6 +75,7 @@ describe("tab nào của màn Cấu hình được hiện", () => {
         "admin.mail",
         "admin.zalo",
         "admin.sms",
+        "admin.citizen_field",
       ]),
     );
     const hien = cacTabHien(TAB_CAU_HINH, phien);
@@ -125,6 +129,15 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     expect(nhan(cacTabHien(TAB_CAU_HINH, denied))).not.toContain("Kênh SMS");
     const holder = await phienVoi(phanHoiPhien(["admin.sms"]));
     expect(nhan(cacTabHien(TAB_CAU_HINH, holder))).toEqual(["Sơ đồ tổ chức", "Thôn / Tổ dân phố", "Danh mục", "Kênh SMS"]);
+  });
+
+  it("Thuộc tính danh bạ đi theo `admin.citizen_field` (ADR 0101 #5) — ca bị từ chối trước: `citizen.read`, `admin.zalo` không mở", async () => {
+    const denied = await phienVoi(
+      phanHoiPhien(["citizen.read", "citizen.update", "admin.zalo", "admin.sms", "admin.lookup", "admin.citizen_fields", "ADMIN.CITIZEN_FIELD"]),
+    );
+    expect(nhan(cacTabHien(TAB_CAU_HINH, denied))).not.toContain("Thuộc tính danh bạ");
+    const holder = await phienVoi(phanHoiPhien(["admin.citizen_field"]));
+    expect(nhan(cacTabHien(TAB_CAU_HINH, holder))).toEqual(["Sơ đồ tổ chức", "Thôn / Tổ dân phố", "Danh mục", "Thuộc tính danh bạ"]);
   });
 
   it("Tự động hoá đi theo `admin.sla` — khoá của cả ba tuyến automation-jobs; ca bị từ chối", async () => {
@@ -207,6 +220,7 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     expect(hien).not.toContain("Máy chủ thư");
     expect(hien).not.toContain("Kênh Zalo");
     expect(hien).not.toContain("Kênh SMS");
+    expect(hien).not.toContain("Thuộc tính danh bạ");
     expect(hien).not.toContain("Lời hệ thống");
     expect(hien).not.toContain("Tự động hoá");
     expect(hien).not.toContain("Thời hạn xử lý");
