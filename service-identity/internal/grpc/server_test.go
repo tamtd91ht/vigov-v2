@@ -162,7 +162,9 @@ func may(t *testing.T, sua func(*Deps)) (*Server, *bytes.Buffer) {
 		// The contact-phone disclosure — fake in citizen_contact_phone_test.go. It answers "no phone"
 		// by default, so a test has to say out loud that a number was disclosed.
 		ContactPhones: &contactPhoneFake{},
-		Log:           slog.New(slog.NewTextHandler(nhatKy, nil)),
+		// The notice audience — fake in notice_audience_test.go. It answers nobody by default.
+		NoticeAudience: &noticeAudienceFake{},
+		Log:            slog.New(slog.NewTextHandler(nhatKy, nil)),
 	}
 	if sua != nil {
 		sua(&d)
@@ -616,6 +618,7 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 			PermissionKeys:       &keysFake{},
 			Automation:           &automationFake{},
 			ContactPhones:        &contactPhoneFake{},
+			NoticeAudience:       &noticeAudienceFake{},
 			Log:                  slog.New(slog.NewTextHandler(io.Discard, nil)),
 		}
 	}
@@ -668,6 +671,8 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 		"missing automation":      func(d *Deps) { d.Automation = nil },
 		// Missing it is every petition from a phone-verified session with an empty phone box refused.
 		"missing contact-phone reveal": func(d *Deps) { d.ContactPhones = nil },
+		// Missing it is the notice screen unable to preview or send (ADR 0099).
+		"missing notice audience": func(d *Deps) { d.NoticeAudience = nil },
 	}
 	for ten, sua := range ca {
 		t.Run(ten, func(t *testing.T) {

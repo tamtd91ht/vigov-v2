@@ -271,6 +271,11 @@ type Deps struct {
 	// transaction), *app.CitizenContactPhoneReveal in production. Declared in citizen_contact_phone.go.
 	ContactPhones CitizenContactPhoneReveal
 
+	// The notice-campaign audience and its disclosure (ADR 0099 #5) — a USE CASE, *app.NoticeAudience
+	// in production: ResolveNoticeAudience reads and masks; RevealNoticeRecipientPhones reads full
+	// numbers and writes one audit entry in the read's transaction. Declared in notice_audience.go.
+	NoticeAudience NoticeAudienceService
+
 	Log *slog.Logger
 }
 
@@ -341,6 +346,8 @@ func NewServer(d Deps) *Server {
 		panic("identity/grpc: thiếu use case tự động hoá — ClaimDueAutomationRuns và RecordAutomationRunOutcome sẽ panic, và không việc nền nào chạy được")
 	case d.ContactPhones == nil:
 		panic("identity/grpc: thiếu use case mở số điện thoại công dân — ResolveCitizenContactPhone sẽ panic, và mọi phản ánh gửi từ phiên đã xác thực số mà để trống ô điện thoại không tiếp nhận được")
+	case d.NoticeAudience == nil:
+		panic("identity/grpc: thiếu use case đối tượng gửi tin — ResolveNoticeAudience và RevealNoticeRecipientPhones sẽ panic, và màn Gửi tin ZNS / SMS không xem trước, không gửi được")
 	}
 	if d.Log == nil {
 		d.Log = slog.Default()

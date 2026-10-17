@@ -40,6 +40,7 @@ import (
 	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/core/token"
+	"github.com/vihat/vigov/service-identity/internal/app"
 	"github.com/vihat/vigov/service-identity/internal/domain"
 	svcgrpc "github.com/vihat/vigov/service-identity/internal/grpc"
 	idstore "github.com/vihat/vigov/service-identity/internal/store"
@@ -214,8 +215,22 @@ func noiDayGia(t *testing.T) svcgrpc.Deps {
 		Automation:     automationWiringFake{},
 		// Required, or NewServer refuses to build (svcgrpc.Deps.ContactPhones).
 		ContactPhones: contactPhoneWiringFake{},
-		Log:           slog.New(slog.NewTextHandler(io.Discard, nil)),
+		// Required, or NewServer refuses to build (svcgrpc.Deps.NoticeAudience).
+		NoticeAudience: noticeAudienceWiringFake{},
+		Log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
+}
+
+// noticeAudienceWiringFake answers nobody — these wiring tests never resolve an audience; the handler
+// is defended in internal/grpc, the transaction in internal/app.
+type noticeAudienceWiringFake struct{}
+
+func (noticeAudienceWiringFake) Resolve(context.Context, domain.NoticeAudience, string, bool) (app.NoticeAudiencePage, error) {
+	return app.NoticeAudiencePage{}, nil
+}
+
+func (noticeAudienceWiringFake) Reveal(context.Context, domain.NoticeRecipientKind, []string, string, string) ([]domain.NoticeRecipient, error) {
+	return nil, nil
 }
 
 // contactPhoneWiringFake discloses nothing — these wiring tests never resolve a contact phone; the

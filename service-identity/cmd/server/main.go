@@ -757,7 +757,11 @@ func run(log *slog.Logger) error {
 		// phone runs on the SAME citizen session registry ResolveCitizenSession reads, through a use
 		// case that writes the disclosure's audit entry in the read's transaction.
 		ContactPhones: app.NewCitizenContactPhoneReveal(kho, phienCongDan),
-		Log:           log,
+		// ResolveNoticeAudience / RevealNoticeRecipientPhones (ADR 0099 #5): the SAME citizen directory
+		// and staff stores the HTTP routes read, so a preview counts exactly what the directory screens
+		// show; Reveal writes its one audit entry in the read's transaction.
+		NoticeAudience: app.NewNoticeAudience(kho, citizenContacts, canBo),
+		Log:            log,
 	}, log)
 
 	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr())
