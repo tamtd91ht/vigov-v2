@@ -35,7 +35,7 @@ thuộc tính thì gửi tin zns, sms có thể map nội dung theo thuộc tín
 | 1b | Sinh mã | Chủ dự án 17/10/2026 (sửa lại cùng ngày): mã là id / `fieldCode` của thuộc tính và là khoá ghép biến ở luồng ZNS/SMS; web **sinh ngẫu nhiên** 8–12 ký tự `[a-z][a-z0-9]` (có nút Sửa, nút Sinh mã khác); lưu thì máy chủ kiểm trùng trong xã (409). Mã mới 8–12 ký tự; CSDL nhận 6–12 để mã tạo theo quy tắc 6–8 trước đó vẫn hợp lệ (migration 0037). Sau khi tạo không đổi được (#1). Lựa chọn của combobox/singleBox khai ngay trong hộp khi chọn loại |
 | 2 | Loại | Đúng tên chủ dự án viết: `singleText` (một dòng), `multiText` (nhiều dòng), `combobox` (chọn **nhiều**, lưu mảng), `singleBox` (chọn **một**), `number`, `dateTime`. Lệch ADR 0011 (enum tiếng Việt) có chủ ý: chủ dự án đặt tên |
 | 3 | Thứ tự | Kéo-thả trong màn cấu hình; form Thêm/Sửa hiện thuộc tính động ngay sau phần tĩnh theo thứ tự ấy |
-| 4 | Ngừng dùng | Ẩn khỏi form và lọc, **giữ** giá trị đã nhập (luật 7) |
+| 4 | Xoá thuộc tính | Chủ dự án 17/10/2026: màn có nút **Xoá** kèm cảnh báo + xác nhận + lý do. Xoá = **xoá mềm cấu hình** (định nghĩa ẩn khỏi màn cấu hình, form, danh sách, lọc, ghép biến gửi tin); **giá trị đã nhập không đụng tới** (luật 7). Mã của thuộc tính đã xoá **không dùng lại được**: kiểm trùng gồm cả thuộc tính đã xoá |
 | 5 | Quyền | Khoá mới `admin.citizen_field`, tab Cấu hình → "Thuộc tính danh bạ"; migration identity gieo và cấp cho vai trò đang có `admin.zalo`. Đọc định nghĩa: `citizen.read`; nhập giá trị: `citizen.update` |
 | 6 | Email | Cột tĩnh mới `email` (tuỳ chọn), che khi trả ra như số điện thoại |
 | 7 | Tìm kiếm | Từ khoá + lọc chạy trên ES; ES trả **mã dòng**, identity đọc lại PostgreSQL (đã che) để trả web. Từ khoá vẫn đi trong thân yêu cầu (D11) |
