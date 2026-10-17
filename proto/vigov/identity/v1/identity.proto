@@ -2134,6 +2134,228 @@ service IdentityService {
   //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor.
   //   UNAVAILABLE etc.    not recorded. Retrying is safe and expected.
   rpc RecordAutomationRunOutcome(RecordAutomationRunOutcomeRequest) returns (RecordAutomationRunOutcomeResponse);
+
+  // ResolveNoticeAudience answers WHO a notice campaign (`Gửi tin ZNS / SMS`, ADR 0099) would reach in
+  // the commune named by "x-tenant-id": one row per recipient, keyed by an opaque ref, carrying the
+  // MASKED number only — plus the counts the preview screen shows.
+  //
+  // WHY IT EXISTS (owner, 17/10/2026, ADR 0099 #5). The recipients live in two directories this service
+  // owns — `citizen_contact` (ADR 0097) and `nguoi_dung.di_dong_ca_nhan` (migration 0009) — and the
+  // campaign lives in service-comms, which rule 2 forbids from reading either. comms needs, at preview,
+  // HOW MANY; at `POST notice-campaigns`, ONE ROW PER RECIPIENT to write into `notice_recipient`
+  // (ref + masked number, never the full one — ADR 0099 #5).
+  //
+  // # TWO RPCs, NOT ONE WITH A FLAG — the decision this pair records
+  //
+  // The work order proposed one `ResolveNoticeRecipients` returning FULL numbers for an audience, with a
+  // `count_only` switch. It is split in two, by what each answer DISCLOSES:
+  //
+  //   ResolveNoticeAudience        an AUDIENCE in, refs + masked numbers out. Discloses no full number,
+  //                                writes nothing, is not audited. Called at preview and at POST.
+  //   RevealNoticeRecipientPhones  REFS THE CALLER ALREADY HOLDS in, full numbers out. Discloses, and
+  //                                writes ONE audit entry per call. Called by comms' send job, per batch.
+  //
+  // Why the full number is NOT handed out per audience at POST: POST writes the campaign and returns; the
+  // send happens later in a background job. Numbers fetched at POST would have to survive that gap —
+  // in memory across a restart (they do not) or on disk (rule 3, ADR 0099 #5 forbid it). Fetching them
+  // per batch at send time keeps each number in comms' memory for exactly the provider call it serves,
+  // ≤ 500 at a time instead of a whole commune's directory at once.
+  //
+  // Why the send job does NOT re-resolve the audience: the set fixed at POST is the set the sender saw
+  // counted in the preview and pressed send for. A contact added an hour later was not in it. Revealing
+  // by the stored refs sends to exactly the rows `notice_recipient` already holds — the history screen
+  // and the provider calls describe the same people.
+  //
+  // Why not a flag on one RPC: the flag would make one response mean "masked" or "full" depending on a
+  // request field, and a caller setting it "to be safe" would pull a whole commune's numbers with nothing
+  // turning red. Two RPCs let a reviewer tell the disclosing call site from the counting one — the
+  // argument ResolveStaffNames records against `include_deleted`.
+  //
+  // # THE PREDICATE — who is in an audience
+  //
+  //   CITIZEN_ALL     every `citizen_contact` of this commune, `deleted_at IS NULL`.
+  //   CITIZEN_GROUP   ... with a LIVE membership (`citizen_contact_group.deleted_at IS NULL`) in ANY of
+  //                   `group_ids`, the group itself live. Union, not intersection.
+  //   CITIZEN_TAG     ... carrying ANY of `tags`, compared in the form NormalizeCitizenContactTags stores.
+  //   STAFF_ALL       every `nguoi_dung` of this commune, `deleted_at IS NULL`.
+  //   STAFF_UNIT      ... whose `bo_phan_id` is one of `org_unit_ids` — DIRECT members only, sub-units
+  //                   (`bo_phan.cha_id`) are not walked. The reference system does the same
+  //                   (../vigov-require/apps/api/app/modules/citizens/repository.py:212-219).
+  //
+  // Of those, SKIPPED and COUNTED, never returned:
+  //
+  //   skipped_inactive_count   a citizen contact with `is_active = false` ("ngừng liên hệ", ADR 0097 D6),
+  //                            or a staff row whose ACCOUNT is locked (`co_tai_khoan AND NOT
+  //                            dang_hoat_dong` — somebody retired, moved or suspended, open question
+  //                            #10). A directory-only staff row (`co_tai_khoan = false`) is NOT inactive:
+  //                            `dang_hoat_dong` says nothing there (migration 0009:100-101).
+  //   skipped_no_phone_count   a staff row whose `di_dong_ca_nhan` is empty or does not normalise to a
+  //                            national number (it is stored as typed, migration 0009 §2). A citizen
+  //                            contact always has one (`citizen_contact_phone_digits`).
+  //
+  // An id in `group_ids` / `org_unit_ids` that is not a live group / unit OF THIS COMMUNE matches nobody.
+  // It is not an error: answering INVALID_ARGUMENT for "another commune's id" and OK for "unknown id"
+  // would tell a caller which ids exist elsewhere (rule 1). The preview then shows 0 recipients, which is
+  // the answer a person can act on.
+  //
+  // # ONE NUMBER, ONE MESSAGE — deduplicated here, by the normalised number
+  //
+  // A person in two selected groups, or carrying two selected tags, is ONE recipient. Identity removes
+  // duplicates by the number in its national form (domain.NormalizeCitizenPhone), keeping the SMALLEST
+  // ref. Among live citizen contacts a number is already unique per commune
+  // (`citizen_contact_phone_live_unique`, ADR 0097 D5), so the dedup there is by contact; among staff it
+  // is real — two rows may hold
+  // one typed mobile — and is done over the whole staff audience before paging. `recipient_count` is
+  // AFTER deduplication: it is the number of messages that will be sent, which is what the cost estimate
+  // multiplies (ADR 0099 #7). Duplicates merged are not a skip and are not counted as one.
+  //
+  // WHAT IS NOT GUARANTEED, STATED: a directory edited WHILE a caller walks the pages (a number moved
+  // from one contact to another between page 1 and page 2) can put one number under two refs. The
+  // window is the walk itself, milliseconds at POST; RevealNoticeRecipientPhones deduplicates again
+  // inside each batch, which closes it whenever both refs fall in one batch.
+  //
+  // # PAGED, AT MOST 10 000 RECIPIENTS A PAGE
+  //
+  // A commune's directory is "thousands" after one Excel import (migration 0033 §5) and has no upper
+  // bound; one unbounded response is a message size nobody tested. The server answers at most 10 000
+  // recipients per page, ordered by ref ascending, with an opaque `next_page_token` (a keyset position —
+  // a ref, never a number). The caller walks every page before writing (ADR 0099 #8: the campaign and
+  // ALL its rows are one comms transaction). The COUNTS are those of the WHOLE audience on every page.
+  //
+  // # It reaches no full number, and is not audited
+  //
+  // A masked number (`privacy.MaskPhone`, "09****0000") and an opaque ref are what every list screen of
+  // the directory already shows a `citizen.read` holder (ADR 0097 D2). Rule 6, invariant 7 audits FULL
+  // personal data; this RPC returns none. The audited act at preview is nothing; at POST it is comms'
+  // write of the campaign, in comms' own transaction.
+  //
+  // # Which caller
+  //
+  // ONE INTENDED CALLER: service-comms, behind `notice.send` (the preview route and POST
+  // notice-campaigns). As for ResolveCitizenContactPhone, nothing in the wiring enforces it: the one
+  // shared caller key (ADR 0025) names no service. A second caller is a sentence written here first.
+  //
+  // # The commune travels in metadata, and is never exempt
+  //
+  // "x-tenant-id" is the whole scope: another commune's contacts, groups, staff and units are
+  // unreachable. Not a candidate for core/grpcx.methodsWithoutTenant (ADR 0012, decision 1).
+  //
+  // # Never log either message
+  //
+  // The masked number is still a fragment of personal data, and a ref turns into a person for anyone
+  // holding the directory. Log the commune and the counts.
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  zero or more recipients. ZERO IS ORDINARY — an empty group, a unit nobody
+  //                       sits in. The caller shows it; it never widens the audience to "everyone".
+  //   INVALID_ARGUMENT    no "x-tenant-id"; `audience.kind` unspecified; a list required by the kind
+  //                       empty (CITIZEN_GROUP without `group_ids`, CITIZEN_TAG without `tags`, STAFF_UNIT
+  //                       without `org_unit_ids`) or a list the kind does not use non-empty; more than 50
+  //                       entries in any list; `count_only` together with a `page_token`; a `page_token`
+  //                       this server did not issue.
+  //   NOT_FOUND           NEVER produced.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor.
+  //   UNIMPLEMENTED       an identity older than this RPC (rolling deploy): deploy identity FIRST.
+  //   UNAVAILABLE etc.    the call did not happen. NOT "nobody": the preview says the count could not be
+  //                       loaded, and POST answers 503 and writes NOTHING — never a campaign with zero
+  //                       rows that then "sends" successfully to nobody.
+  //
+  // RETRYING IS SAFE: it writes nothing and leaves no audit entry. NEVER cached: a contact switched to
+  // "ngừng liên hệ" a second ago must not be counted.
+  //
+  // Declared in kb/30-indexes/transaction-boundaries.json, `gui_dot_tin_zns_sms`.
+  rpc ResolveNoticeAudience(ResolveNoticeAudienceRequest) returns (ResolveNoticeAudienceResponse);
+
+  // RevealNoticeRecipientPhones hands the FULL number of each recipient ref a notice campaign already
+  // holds to the job sending that campaign — and writes ONE audit entry for the disclosure.
+  //
+  // WHY IT EXISTS: ADR 0099 #5 and #6 (owner, 17/10/2026). comms' send job calls Zalo ZNS or eSMS once
+  // per `notice_recipient` row; the provider needs the number; `notice_recipient` holds only the ref and
+  // the masked number. The owner approved sending the number to eSMS (rule 3, stop condition #2) and
+  // keeping it in comms' MEMORY for the provider call only. This RPC is that one path.
+  //
+  // THIS LIFTS ADR 0097 STOP CONDITION #2 ("a full number over gRPC to another service") FOR THIS ONE
+  // PURPOSE, on the owner's 17/10/2026 decision recorded in ADR 0099 #5. A second purpose is a new
+  // decision, not a second caller of this RPC.
+  //
+  // # A LOOKUP BY REFS THE CALLER ALREADY HOLDS — never an audience
+  //
+  // The refs are the ones ResolveNoticeAudience issued and comms stored at POST. An empty `refs` answers
+  // empty, never "everyone". The response never carries a ref that was not requested. Refs are contact
+  // ULIDs (80 random bits, unwalkable) or staff codes, scoped by "x-tenant-id".
+  //
+  // WHAT BOUNDS IT, SAID HONESTLY: the shared caller key (ADR 0025) cannot tell comms from another
+  // in-cluster process, so this is a ref→number lookup for whoever holds the key — the shape
+  // ResolveCitizenContactPhone REJECTED for `citizen_id`. It is accepted here because (1) contact refs
+  // are stored nowhere but `citizen_contact` and `notice_recipient`, unlike a citizen id that every
+  // petition row carries; (2) EVERY answer is audited with a named staff actor and campaign; and (3) the
+  // owner decided this flow needs full numbers outside identity. Per-service caller identity (mTLS, owed:
+  // service-identity/internal/grpc/server.go, #3) is what would restrict it to comms; when it exists this
+  // is among the first RPCs to restrict.
+  //
+  // # The predicate is re-applied at send time
+  //
+  // A ref answers a number only if, NOW, it would still pass ResolveNoticeAudience's predicate for its
+  // kind: contact live and `is_active`; staff row live, account not locked, mobile normalises. A person
+  // who asked to stop between POST and send is NOT messaged. Membership of the original group or tag is
+  // NOT re-checked — the audience was fixed at POST (see ResolveNoticeAudience). Any ref that fails, or
+  // whose number duplicates another ref's in the same call (the smallest ref keeps it), is ABSENT. comms
+  // records an absent ref as `bo-qua`.
+  //
+  // # The number's form
+  //
+  // NATIONAL form, digits only, leading 0 — "0900000000" (domain.NormalizeCitizenPhone; the form
+  // `citizen_contact.phone` stores and the form eSMS's `Phone` accepts). ZNS addresses "84…": the comms
+  // Zalo adapter converts at the call, the same fold domain.CitizenPhoneIdentityForm does. One form in
+  // the contract; the conversion lives with the provider that needs it.
+  //
+  // # Every call that discloses is audited, in identity, in one transaction with the read
+  //
+  // Rule 6, invariant 7. ONE entry PER CALL — not per recipient: a 10 000-person campaign is twenty
+  // entries, not ten thousand that bury the ones carrying legal weight. Written in the SAME transaction
+  // as the read; the numbers leave only after it commits (the ordering of staff_email_reveal.go, ADR
+  // 0082). A call that disclosed nothing writes nothing. The entry, in the commune of metadata:
+  //
+  //   actor    kind "staff", id = `actor_code` — the CB- code of the person who pressed send (rule 6,
+  //            invariant 8). The send is a background job, but the ACT is theirs; a system actor would
+  //            answer "who sent this to the whole commune" with nobody.
+  //   ip       EMPTY. identity observes no browser on this hop; the sender's observed IP is on comms'
+  //            POST entry (the argument on ResolveStaffPrincipalRequest.client_ip).
+  //   action   one Vietnamese snake_case verb (ADR 0011 convention, like `xem_email_can_bo`); the
+  //            implementer names it in code — "mở số cho đợt gửi".
+  //   subject  `campaign_ref` — the notice_campaign the disclosure served.
+  //   delta    the FIELD opened (`phone`), the recipient kind and the COUNT disclosed. NEVER a number,
+  //            never a ref list (rule 6, forbidden #4).
+  //
+  // A disclosure whose provider call then fails still has its entry — the numbers did leave. A retry of
+  // the same batch writes a second entry, and that too is true. Audit entries are never compensated.
+  //
+  // # Never logged, never stored, at either end
+  //
+  // Generated String() prints `phone` in full; `debug_redact` is a no-op in protobuf-go v1.36.12. NEVER
+  // log the response, never put a number in an error, a metric label, a span attribute, an outbox row or
+  // a dead-letter payload. comms holds each number only for the provider call and never writes it to
+  // disk (ADR 0099 #5); its row keeps the masked number from ResolveNoticeAudience.
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  zero or more items. FEWER THAN REQUESTED IS ORDINARY — removed, switched off,
+  //                       no usable number, or a duplicate. Indistinguishable on purpose.
+  //   INVALID_ARGUMENT    no "x-tenant-id"; `kind` unspecified; more than 500 refs; `campaign_ref` empty
+  //                       or over 64 characters; `actor_code` empty or not a `nguoi_dung.ma` of this
+  //                       commune (soft-deleted included: the person who pressed send stays the actor).
+  //   NOT_FOUND           NEVER produced. An unknown ref is an ABSENT item.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor.
+  //   UNIMPLEMENTED       an identity older than this RPC: deploy identity FIRST.
+  //   UNAVAILABLE etc.    the call did not happen. NOT "nobody deliverable": the batch stays `cho-gui`
+  //                       and the job retries it; never marks its rows `bo-qua`.
+  //
+  // RETRYING IS SAFE FOR THE DATA, NOT FREE FOR THE TRAIL: a retry writes another audit entry. Not
+  // batched further, not cached — a cached number outlives the switch-off that should have stopped it.
+  //
+  // Declared in kb/30-indexes/transaction-boundaries.json, `gui_dot_tin_zns_sms`.
+  rpc RevealNoticeRecipientPhones(RevealNoticeRecipientPhonesRequest) returns (RevealNoticeRecipientPhonesResponse);
 }
 
 message Staff {
@@ -3899,3 +4121,118 @@ message RecordAutomationRunOutcomeRequest {
 
 // Wrapped: adding a field later must not change the RPC signature.
 message RecordAutomationRunOutcomeResponse {}
+
+// Who a notice campaign is addressed to — the five choices of the `Gửi cho ai` step
+// (../vigov-require/apps/admin/src/components/citizens/NoticeWorkspace.tsx:30-35, ADR 0099 #5). The
+// predicate of each is on ResolveNoticeAudience. ENGLISH VALUES: these are keys of the software's
+// choice list, not values written into an archival record; comms stores its own spelling.
+enum NoticeAudienceKind {
+  NOTICE_AUDIENCE_KIND_UNSPECIFIED = 0;
+  // "Toàn bộ người dân" — every live citizen contact.
+  NOTICE_AUDIENCE_KIND_CITIZEN_ALL = 1;
+  // "Người dân theo nhóm" — members of any of NoticeAudience.group_ids.
+  NOTICE_AUDIENCE_KIND_CITIZEN_GROUP = 2;
+  // "Người dân theo nhãn" — contacts carrying any of NoticeAudience.tags.
+  NOTICE_AUDIENCE_KIND_CITIZEN_TAG = 3;
+  // "Toàn bộ cán bộ" — every live staff row.
+  NOTICE_AUDIENCE_KIND_STAFF_ALL = 4;
+  // "Cán bộ theo bộ phận" — direct members of any of NoticeAudience.org_unit_ids.
+  NOTICE_AUDIENCE_KIND_STAFF_UNIT = 5;
+}
+
+// Which directory a recipient ref points into. Fixed by the audience: CITIZEN_* audiences answer
+// CITIZEN, STAFF_* answer STAFF; one audience never mixes the two.
+enum NoticeRecipientKind {
+  NOTICE_RECIPIENT_KIND_UNSPECIFIED = 0;
+  // The ref is `citizen_contact.id` (ULID). A contact has no business code, so the opaque id is the ref.
+  NOTICE_RECIPIENT_KIND_CITIZEN = 1;
+  // The ref is `nguoi_dung.ma` (CB-…), the staff business code — never the internal id.
+  NOTICE_RECIPIENT_KIND_STAFF = 2;
+}
+
+// One audience. Exactly the list its `kind` uses is non-empty; any other combination is
+// INVALID_ARGUMENT (see ResolveNoticeAudience). Each list: at most 50 entries, duplicates collapsed,
+// blank strings ignored.
+message NoticeAudience {
+  NoticeAudienceKind kind = 1;
+  // CITIZEN_GROUP only. `citizen_group.id` values.
+  repeated string group_ids = 2;
+  // CITIZEN_TAG only. Free labels as the commune typed them (ADR 0097 D4). NOT personal data by
+  // design, though a commune may break that — never log them either.
+  repeated string tags = 3;
+  // STAFF_UNIT only. `bo_phan.id` values.
+  repeated string org_unit_ids = 4;
+}
+
+message ResolveNoticeAudienceRequest {
+  NoticeAudience audience = 1;
+
+  // Preview: answer the three counts only — `recipients` empty, no `next_page_token`. Must not be
+  // combined with `page_token`.
+  bool count_only = 2;
+
+  // "" for the first page; otherwise the `next_page_token` of the previous answer for the SAME audience.
+  // Opaque; a token this server did not issue is INVALID_ARGUMENT.
+  string page_token = 3;
+}
+
+// Wrapped: adding a field later must not change the RPC signature.
+message ResolveNoticeAudienceResponse {
+  // At most 10 000, ordered by ref ascending. Empty when `count_only`. NEVER LOG.
+  repeated NoticeAudienceMember recipients = 1;
+
+  // The THREE COUNTS ARE FOR THE WHOLE AUDIENCE, identical on every page — not for this page.
+  // Recipients after deduplication by number: the messages that will be sent.
+  uint32 recipient_count = 2;
+  // Skipped because switched off / account locked (see the RPC's predicate).
+  uint32 skipped_inactive_count = 3;
+  // Skipped because there is no usable number (staff only today).
+  uint32 skipped_no_phone_count = 4;
+
+  // "" on the last page and on a `count_only` answer. Otherwise pass it back to read the next page.
+  string next_page_token = 5;
+}
+
+// One recipient of an audience, as comms stores it in `notice_recipient`.
+message NoticeAudienceMember {
+  NoticeRecipientKind kind = 1;
+  // `citizen_contact.id` or `nguoi_dung.ma` per `kind`. The key RevealNoticeRecipientPhones takes.
+  string ref = 2;
+  // privacy.MaskPhone of the national-form number ("09****0000") — the ONLY form of the number comms
+  // may store (ADR 0099 #5). Never empty: a recipient without a usable number is skipped, not returned.
+  string masked_phone = 3;
+}
+
+message RevealNoticeRecipientPhonesRequest {
+  // Which directory `refs` point into. UNSPECIFIED is INVALID_ARGUMENT. One kind per call.
+  NoticeRecipientKind kind = 1;
+
+  // Refs from NoticeAudienceMember.ref, as stored in comms' `notice_recipient`. At most 500; duplicates
+  // collapsed; blank ignored; empty answers empty.
+  repeated string refs = 2;
+
+  // The comms `notice_campaign` id this disclosure serves — the audit entry's subject. Required, at
+  // most 64 characters. Not checked against comms (identity cannot see comms' data); it is the caller's
+  // statement, recorded as such.
+  string campaign_ref = 3;
+
+  // The CB- business code of the staff member who created the campaign — `authz.Principal.Ma` captured
+  // at POST and stored on the campaign (rule 6, invariant 8). The audit entry's actor. Required; must be
+  // a `nguoi_dung.ma` of this commune.
+  string actor_code = 4;
+}
+
+// Wrapped: adding a field later must not change the RPC signature.
+message RevealNoticeRecipientPhonesResponse {
+  // One item per requested ref that is deliverable now — see the RPC. A SUBSET of `refs`; map by ref.
+  // NEVER LOG THIS MESSAGE.
+  repeated NoticeRecipientPhone items = 1;
+}
+
+message NoticeRecipientPhone {
+  // Echoed from the request — the key the caller maps by.
+  string ref = 1;
+  // THE FULL NUMBER, UNMASKED, national form "0…" — personal data (rule 3). Already disclosed and
+  // audited when this arrives. Held in memory for the provider call only; never stored, never logged.
+  string phone = 2;
+}
