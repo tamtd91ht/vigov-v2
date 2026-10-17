@@ -207,13 +207,16 @@ func dungMayChuGhiUuTien(t *testing.T) *mayChuGhiUuTien {
 		DuplicateCandidates: &duplicateCandidatesFake{},
 		// The staff-recorded rating — present because Register refuses a nil.
 		StaffRecordedRatings: &staffRatingsFake{},
-		TaskFilterIdentity:   taskFilterIdentitySample(),
-		TaskRegisterExport:   &registerExportFake{},
-		TaskImport:           &taskImportFake{},
-		AuditLog:             &auditLogFake{},
-		SystemMessages:       &systemMessagesFake{},
-		UploadSlots:          uploadSlotsThu(),
-		Log:                  im,
+		// The petition ↔ directory link (ADR 0102) — Register refuses nil; own suite contact_petition_test.go.
+		SenderDirectory:    &senderDirectoryFake{},
+		ContactPetitions:   newContactPetitionsFake(),
+		TaskFilterIdentity: taskFilterIdentitySample(),
+		TaskRegisterExport: &registerExportFake{},
+		TaskImport:         &taskImportFake{},
+		AuditLog:           &auditLogFake{},
+		SystemMessages:     &systemMessagesFake{},
+		UploadSlots:        uploadSlotsThu(),
+		Log:                im,
 	})
 
 	var h http.Handler = mux

@@ -4259,6 +4259,20 @@ export type petitions_citizenReportUnmergeIn = {
   "reason": string;
 };
 
+export type petitions_contactPetitionOut = {
+  "lookup_code": string;
+  "title": string;
+  "status": string;
+  "received_at": string;
+};
+
+export type petitions_contactPetitionPageOut = {
+  "items": Array<petitions_contactPetitionOut>;
+  "total": number;
+  "page": number;
+  "page_size": number;
+};
+
 export type petitions_createCustomMessageIn = {
   "group_code": string;
   "code": string;
@@ -4309,6 +4323,12 @@ export type petitions_deNghiLuiHanVao = {
 
 export type petitions_deleteCustomMessageIn = {
   "reason": string;
+};
+
+export type petitions_directoryMatchOut = {
+  "status": string;
+  "contact_id": string | null;
+  "phone_unverified": boolean;
 };
 
 export type petitions_doiTrangThaiVao = {
@@ -6781,6 +6801,32 @@ export type petitions_get_citizen_report_intake_fields = {
   };
 };
 
+/** GET /api/v1/citizen-report-lists/by-contact/{contactId} — Danh sách phản ánh của một người trong danh bạ người dân — theo mã dòng danh bạ, phân trang; không kèm người gửi */
+export type petitions_get_citizen_report_lists_by_contact_by_contactId = {
+  duongDan: "/api/v1/citizen-report-lists/by-contact/{contactId}";
+  phuongThuc: "GET";
+  thamSo: {
+    "contactId": string;
+  };
+  truyVan: {
+    "page"?: string;
+    "page_size"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_contactPetitionPageOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_page";
+    503: "citizen_directory_unavailable";
+  };
+};
+
 /** GET /api/v1/citizen-report-points — Điểm phản ánh trên bản đồ nhiệt theo bộ lọc của danh sách — chỉ vĩ độ, kinh độ, trạng thái */
 export type petitions_get_citizen_report_points = {
   duongDan: "/api/v1/citizen-report-points";
@@ -6972,6 +7018,29 @@ export type petitions_post_citizen_reports_by_maTraCuu_closure = {
     404: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/citizen-reports/{maTraCuu}/directory-match — Đối chiếu người gửi của một phiếu phản ánh với danh bạ người dân của xã — có / chưa có / không áp dụng (ẩn danh hoặc không có số) */
+export type petitions_get_citizen_reports_by_maTraCuu_directory_match = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/directory-match";
+  phuongThuc: "GET";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_directoryMatchOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    503: "citizen_directory_unavailable";
   };
 };
 

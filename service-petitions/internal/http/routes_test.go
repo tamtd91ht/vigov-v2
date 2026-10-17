@@ -267,6 +267,10 @@ type mayChu struct {
 
 	// The staff-recorded rating — petition_staff_recorded_rating_test.go.
 	staffRatings *staffRatingsFake
+
+	// The petition ↔ directory link — contact_petition_test.go.
+	directory *senderDirectoryFake
+	contacts  *contactPetitionsFake
 }
 
 func dungMayChu(t *testing.T) *mayChu {
@@ -334,6 +338,8 @@ func dungMayChu(t *testing.T) *mayChu {
 	merge, links, dups := &mergeActsFake{}, &mergeLinksFake{}, &duplicateCandidatesFake{}
 	// The staff-recorded rating — petition_staff_recorded_rating_test.go.
 	staffRatings := &staffRatingsFake{}
+	// The petition ↔ directory link — contact_petition_test.go.
+	directory, contacts := &senderDirectoryFake{}, newContactPetitionsFake()
 
 	m := &mayChu{
 		d: Deps{
@@ -407,6 +413,9 @@ func dungMayChu(t *testing.T) *mayChu {
 			DuplicateCandidates: dups,
 			// The staff-recorded rating — petition_staff_recorded_rating_test.go.
 			StaffRecordedRatings: staffRatings,
+			// The petition ↔ directory link — contact_petition_test.go.
+			SenderDirectory:  directory,
+			ContactPetitions: contacts,
 			// The audit-log reader: present because Register refuses a nil one; its suite is
 			// audit_entries_test.go.
 			AuditLog: &auditLogFake{},
@@ -462,6 +471,9 @@ func dungMayChu(t *testing.T) *mayChu {
 		dups:  dups,
 
 		staffRatings: staffRatings,
+
+		directory: directory,
+		contacts:  contacts,
 	}
 	m.dungLai(t, nil)
 	return m
@@ -587,6 +599,9 @@ func depsDay() Deps {
 		DuplicateCandidates: &duplicateCandidatesFake{},
 		// The staff-recorded rating.
 		StaffRecordedRatings: &staffRatingsFake{},
+		// The petition ↔ directory link (ADR 0102).
+		SenderDirectory:  &senderDirectoryFake{},
+		ContactPetitions: newContactPetitionsFake(),
 	}
 }
 
@@ -661,6 +676,9 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		"missing upload slots": func(d *Deps) { d.UploadSlots = nil },
 		// The staff-recorded rating: the petition DETAIL reads it, so a nil here is every drawer.
 		"missing staff-recorded rating": func(d *Deps) { d.StaffRecordedRatings = nil },
+		// The petition ↔ directory link (ADR 0102): both routes ask identity and read the register's key.
+		"missing citizen-directory lookup": func(d *Deps) { d.SenderDirectory = nil },
+		"missing contact petition reader":  func(d *Deps) { d.ContactPetitions = nil },
 	} {
 		t.Run(ten, func(t *testing.T) {
 			defer func() {

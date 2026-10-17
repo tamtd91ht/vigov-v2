@@ -55,12 +55,13 @@ func TestCreateBindsLocationCitizenAdjusted(t *testing.T) {
 			row.LocationCitizenAdjusted = c
 			st := runCreate(t, row)
 
-			if !strings.Contains(st.sql, "zalo_account_id, location_citizen_adjusted)") ||
-				!strings.Contains(st.sql, "$22,$23)") {
+			// sender_phone_normalized ($24, migration 0046) follows it — sender_phone_key_test.go pins that one.
+			if !strings.Contains(st.sql, "zalo_account_id, location_citizen_adjusted, sender_phone_normalized)") ||
+				!strings.Contains(st.sql, "$22,$23,$24)") {
 				t.Fatalf("column list moved; $23 no longer means location_citizen_adjusted: %s", st.sql)
 			}
-			if len(st.args) != 23 {
-				t.Fatalf("%d args, want 23", len(st.args))
+			if len(st.args) != 24 {
+				t.Fatalf("%d args, want 24", len(st.args))
 			}
 			got, ok := st.args[22].(*bool)
 			if !ok {

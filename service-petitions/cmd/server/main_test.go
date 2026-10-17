@@ -487,6 +487,10 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		// internal/app and internal/http petition_staff_recorded_rating_test.go.
 		StaffRecordedRatings: app.NewStaffRecordedRatings(nil, petstore.NewPhieuPhanAnhStore(nil),
 			petstore.NewPetitionStaffRatingStore(nil)),
+		// The petition ↔ directory link (ADR 0102) — never invoked here; the route file refuses a nil. Own
+		// suite: internal/http/contact_petition_test.go.
+		SenderDirectory:  (*identityclient.Client)(nil),
+		ContactPetitions: petstore.NewPhieuPhanAnhStore(nil),
 		// Never invoked here; Register refuses a nil. Built exactly as main() builds it, so the
 		// real restricted-field subquery passes WithHiddenSubjects' wiring-time check in this test
 		// too. Own suite: internal/http/audit_entries_test.go.

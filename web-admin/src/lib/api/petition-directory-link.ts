@@ -1,7 +1,7 @@
 /**
  * Petition ↔ citizen-directory link (ADR 0102) — two `service-petitions` routes, both READS:
  *
- *   GET /api/v1/citizen-reports/{lookupCode}/directory-match           feedback.read + citizen.read
+ *   GET /api/v1/citizen-reports/{lookupCode}/directory-match           feedback.unmask + citizen.update
  *       200 `{status, contact_id, phone_unverified}` · 503 = identity unreachable
  *   GET /api/v1/citizen-report-lists/by-contact/{contactId}?page=&page_size=   citizen.read + feedback.read
  *       200 `{items:[{lookup_code, title, status, received_at}], total, page, page_size}`

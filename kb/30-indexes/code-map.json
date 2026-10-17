@@ -166,6 +166,10 @@
       "kind": "type",
       "at": "service-identity/internal/app/automation.go:175"
     },
+    "app.BackfillCommunes": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/sender_phone_backfill.go:56"
+    },
     "app.BatGieoQuanTri": {
       "kind": "func",
       "at": "service-identity/internal/app/gieo_quan_tri.go:70"
@@ -597,6 +601,10 @@
     "app.CloseBudgetPeriod": {
       "kind": "func",
       "at": "service-finance/internal/app/budget_period_close.go:83"
+    },
+    "app.Commune": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/sender_phone_backfill.go:159"
     },
     "app.CommuneAccountStore": {
       "kind": "type",
@@ -2210,6 +2218,10 @@
       "kind": "func",
       "at": "service-identity/internal/app/sla.go:112"
     },
+    "app.NewSenderPhoneBackfill": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/sender_phone_backfill.go:78"
+    },
     "app.NewSessionIdleExpiry": {
       "kind": "func",
       "at": "service-identity/internal/app/session_idle.go:36"
@@ -2645,6 +2657,10 @@
     "app.PairingCodeView": {
       "kind": "type",
       "at": "service-comms/internal/app/zalo_links.go:68"
+    },
+    "app.Pass": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/sender_phone_backfill.go:121"
     },
     "app.PendingEventCommunes": {
       "kind": "type",
@@ -3193,6 +3209,18 @@
     "app.SenderCorrection": {
       "kind": "type",
       "at": "service-documents/internal/app/citizen_letter.go:184"
+    },
+    "app.SenderPhoneBackfill": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/sender_phone_backfill.go:67"
+    },
+    "app.SenderPhoneBackfillCounts": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/sender_phone_backfill.go:91"
+    },
+    "app.SenderPhoneBackfillStore": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/sender_phone_backfill.go:61"
     },
     "app.SessionIdleExpiry": {
       "kind": "type",
@@ -6321,6 +6349,14 @@
     "domain.ConfirmsCommuneHost": {
       "kind": "func",
       "at": "service-platform/internal/domain/operator_commune.go:67"
+    },
+    "domain.ContactPetition": {
+      "kind": "type",
+      "at": "service-petitions/internal/domain/contact_petition.go:15"
+    },
+    "domain.ContactPetitionTitle": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/contact_petition.go:36"
     },
     "domain.ContactUnverified": {
       "kind": "func",
@@ -11334,6 +11370,14 @@
       "kind": "func",
       "at": "service-comms/internal/http/zalo_oa_authorizations.go:130"
     },
+    "http.ContactPetitionReader": {
+      "kind": "type",
+      "at": "service-petitions/internal/http/contact_petition.go:37"
+    },
+    "http.ContactPetitionsOf": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/contact_petition.go:178"
+    },
     "http.ContentAudioActs": {
       "kind": "type",
       "at": "service-comms/internal/http/content_audio.go:33"
@@ -11657,6 +11701,10 @@
     "http.DepsCongKhai": {
       "kind": "type",
       "at": "service-identity/internal/http/routes_cong_dan.go:30"
+    },
+    "http.DirectoryMatch": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/contact_petition.go:100"
     },
     "http.DisasterAlertDeps": {
       "kind": "type",
@@ -13042,6 +13090,10 @@
       "kind": "func",
       "at": "service-comms/internal/http/zalo_links.go:357"
     },
+    "http.SenderDirectoryLookup": {
+      "kind": "type",
+      "at": "service-petitions/internal/http/contact_petition.go:31"
+    },
     "http.SetCitizenFieldOrder": {
       "kind": "func",
       "at": "service-identity/internal/http/citizen_field.go:285"
@@ -13965,6 +14017,14 @@
     "identityclient.EscalationInstants": {
       "kind": "func",
       "at": "core/identityclient/automation.go:123"
+    },
+    "identityclient.FindCitizenContactByPhone": {
+      "kind": "func",
+      "at": "core/identityclient/citizen_contact_match.go:34"
+    },
+    "identityclient.GetCitizenContactMatchPhone": {
+      "kind": "func",
+      "at": "core/identityclient/citizen_contact_match.go:73"
     },
     "identityclient.HanXuLy": {
       "kind": "func",
@@ -16312,7 +16372,7 @@
     },
     "store.ChotLinhVuc": {
       "kind": "func",
-      "at": "service-petitions/internal/store/phieu_phan_anh.go:498"
+      "at": "service-petitions/internal/store/phieu_phan_anh.go:503"
     },
     "store.ChungTuGiaiNganStore": {
       "kind": "type",
@@ -16494,6 +16554,10 @@
       "kind": "func",
       "at": "service-comms/internal/store/noi_dung_cong_khai.go:157"
     },
+    "store.ContactPetitions": {
+      "kind": "func",
+      "at": "service-petitions/internal/store/contact_petition.go:62"
+    },
     "store.ContactPhoneForReveal": {
       "kind": "func",
       "at": "service-identity/internal/store/citizen_contact_phone.go:50"
@@ -16525,6 +16589,10 @@
     "store.CountCitizenReports": {
       "kind": "func",
       "at": "service-petitions/internal/store/citizen_report_figures.go:47"
+    },
+    "store.CountContactPetitions": {
+      "kind": "func",
+      "at": "service-petitions/internal/store/contact_petition.go:99"
     },
     "store.CountForSubject": {
       "kind": "func",
@@ -16620,7 +16688,7 @@
     },
     "store.CuaCongDanTheoMaTraCuu": {
       "kind": "func",
-      "at": "service-petitions/internal/store/phieu_phan_anh.go:139"
+      "at": "service-petitions/internal/store/phieu_phan_anh.go:140"
     },
     "store.CustomForUpdate": {
       "kind": "func",
@@ -16660,7 +16728,7 @@
     },
     "store.DanhSachCuaCongDan": {
       "kind": "func",
-      "at": "service-petitions/internal/store/phieu_phan_anh.go:259"
+      "at": "service-petitions/internal/store/phieu_phan_anh.go:260"
     },
     "store.DanhSachDeGhi": {
       "kind": "func",
@@ -18056,7 +18124,7 @@
     },
     "store.NewPhieuPhanAnhStore": {
       "kind": "func",
-      "at": "service-petitions/internal/store/phieu_phan_anh.go:31"
+      "at": "service-petitions/internal/store/phieu_phan_anh.go:32"
     },
     "store.NewPortalSyncStore": {
       "kind": "func",
@@ -18352,7 +18420,7 @@
     },
     "store.OwnedByCode": {
       "kind": "func",
-      "at": "service-petitions/internal/store/phieu_phan_anh.go:182"
+      "at": "service-petitions/internal/store/phieu_phan_anh.go:183"
     },
     "store.OwnedForUpdate": {
       "kind": "func",
@@ -18444,7 +18512,7 @@
     },
     "store.PhieuPhanAnhStore": {
       "kind": "type",
-      "at": "service-petitions/internal/store/phieu_phan_anh.go:27"
+      "at": "service-petitions/internal/store/phieu_phan_anh.go:28"
     },
     "store.PhoneTaken": {
       "kind": "func",
@@ -18754,6 +18822,22 @@
       "kind": "func",
       "at": "service-comms/internal/store/zalo_commune_oa.go:135"
     },
+    "store.SenderMatchKey": {
+      "kind": "func",
+      "at": "service-petitions/internal/store/contact_petition.go:28"
+    },
+    "store.SenderPhoneBackfillBatch": {
+      "kind": "func",
+      "at": "service-petitions/internal/store/contact_petition.go:135"
+    },
+    "store.SenderPhoneBackfillRow": {
+      "kind": "type",
+      "at": "service-petitions/internal/store/contact_petition.go:123"
+    },
+    "store.SenderPhoneMatchKey": {
+      "kind": "func",
+      "at": "service-petitions/internal/store/phieu_phan_anh.go:560"
+    },
     "store.Set": {
       "kind": "func",
       "at": "service-comms/internal/store/citizen_notification_preference.go:93"
@@ -18824,7 +18908,11 @@
     },
     "store.SetResidentialUnit": {
       "kind": "func",
-      "at": "service-petitions/internal/store/phieu_phan_anh.go:534"
+      "at": "service-petitions/internal/store/phieu_phan_anh.go:539"
+    },
+    "store.SetSenderPhoneMatchKey": {
+      "kind": "func",
+      "at": "service-petitions/internal/store/contact_petition.go:168"
     },
     "store.SetSignInLock": {
       "kind": "func",
@@ -19040,7 +19128,7 @@
     },
     "store.Tao": {
       "kind": "func",
-      "at": "service-petitions/internal/store/phieu_phan_anh.go:433"
+      "at": "service-petitions/internal/store/phieu_phan_anh.go:434"
     },
     "store.TaoBienBan": {
       "kind": "func",
@@ -19144,7 +19232,7 @@
     },
     "store.TheoMaTraCuu": {
       "kind": "func",
-      "at": "service-petitions/internal/store/phieu_phan_anh.go:70"
+      "at": "service-petitions/internal/store/phieu_phan_anh.go:71"
     },
     "store.TheoMaTraCuuDeSua": {
       "kind": "func",

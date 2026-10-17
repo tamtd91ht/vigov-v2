@@ -884,7 +884,15 @@
       "trang_thai": "dang_lam",
       "bang_chung": "service-petitions/migrations/0046_petition_sender_phone_normalized.sql + petition_sender_phone_normalized_test.go; go test ./migrations/... xanh; check_khoa_duy_nhat PASS (17/10/2026).",
       "no_confirm": [],
-      "tiep_theo": "(1) CHƯA chạy trên PostgreSQL 16 (schema-smoke: không DSN, Docker tắt). (2) TASK-04: ghi cột khi nhận phản ánh + job điền lại theo xã bằng core/phone; đọc phải viết đúng vị từ an_danh = false AND deleted_at IS NULL và sắp vao_so_luc DESC, id DESC để dùng chỉ mục. (3) Đường ẩn danh hoá theo NĐ 13 (chưa có) phải đặt cột này về NULL cùng lúc với nguoi_gui_dien_thoai."
+      "tiep_theo": "(1) CHƯA chạy trên PostgreSQL 16 (schema-smoke: không DSN, Docker tắt). (2) ĐÃ LÀM ở lien-ket-danh-ba-routes-17-10 — TASK-04: ghi cột khi nhận phản ánh + job điền lại theo xã bằng core/phone; đọc phải viết đúng vị từ an_danh = false AND deleted_at IS NULL và sắp vao_so_luc DESC, id DESC để dùng chỉ mục. (3) Đường ẩn danh hoá theo NĐ 13 (chưa có) phải đặt cột này về NULL cùng lúc với nguoi_gui_dien_thoai."
+    },
+    {
+      "id": "lien-ket-danh-ba-routes-17-10",
+      "viec": "petitions: ghi sender_phone_normalized khi nhận phản ánh + job điền lại theo xã; GET /citizen-reports/{mã}/directory-match (feedback.unmask + citizen.update) và GET /citizen-report-lists/by-contact/{id} (citizen.read + feedback.read) (ADR 0102, TASK-04)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "internal/http/contact_petition.go + routes_contact_petition.go, internal/store/contact_petition.go, internal/app/sender_phone_backfill.go (khoá tư vấn, lô 200, một vết kiểm toán mỗi dòng, chạy lại tới khi xong), core/identityclient/citizen_contact_match.go; go build/vet/test petitions + identityclient xanh, check_quyen/check_audit_actor/check_security PASS (17/10/2026).",
+      "no_confirm": [],
+      "tiep_theo": "(1) CHƯA chạy trên PostgreSQL 16 + identity thật (cần deploy dev). (2) Thứ tự deploy: identity TRƯỚC petitions (petitions gọi RPC mới của identity). (3) Trang dùng OFFSET vì web đánh số trang; giới hạn page ≤ 10000, page_size ≤ 50."
     }
   ]
 }

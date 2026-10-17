@@ -1829,6 +1829,27 @@
     {
       "service": "petitions",
       "method": "GET",
+      "path": "/api/v1/citizen-report-lists/by-contact/{contactId}",
+      "operation_id": "petitions_get_citizen_report_lists_by_contact_by_contactId",
+      "task_id": "4889a2e1f883",
+      "summary": "Danh sách phản ánh của một người trong danh bạ người dân — theo mã dòng danh bạ, phân trang; không kèm người gửi",
+      "screen": "16-danh-ba-nguoi-dan (Xem phản ánh, ADR 0102)",
+      "permission_kind": "permission",
+      "permission": "feedback.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "petitions.contactPetitionPageOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes_contact_petition.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
       "path": "/api/v1/citizen-report-points",
       "operation_id": "petitions_get_citizen_report_points",
       "task_id": "1e71292a545d",
@@ -2005,6 +2026,27 @@
         "500": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/citizen-reports/{maTraCuu}/directory-match",
+      "operation_id": "petitions_get_citizen_reports_by_maTraCuu_directory_match",
+      "task_id": "e6b14b8e0094",
+      "summary": "Đối chiếu người gửi của một phiếu phản ánh với danh bạ người dân của xã — có / chưa có / không áp dụng (ẩn danh hoặc không có số)",
+      "screen": "09-phan-anh-nguoi-dan §8",
+      "permission_kind": "permission",
+      "permission": "citizen.update",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "petitions.directoryMatchOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes_contact_petition.go"
     },
     {
       "service": "petitions",

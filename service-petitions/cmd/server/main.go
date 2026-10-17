@@ -409,6 +409,10 @@ func chay(log *slog.Logger) error {
 		// The staff-recorded rating (owner rule 11/10/2026, migration 0042): the SAME register store locks the
 		// petition the citizen's own rating locks; the record lives in its own table.
 		StaffRecordedRatings: app.NewStaffRecordedRatings(kho, phieu, petstore.NewPetitionStaffRatingStore(kho)),
+		// The petition ↔ citizen-directory link (ADR 0102): identity's two RPCs over the SAME client, and the
+		// SAME register store the intake writes `sender_phone_normalized` through.
+		SenderDirectory:  dinhDanh,
+		ContactPetitions: phieu,
 		// "Nhập hộ phản ánh" (§11): the SAME petition store, outbox store and identity client as the
 		// citizen intake, and the SAME field catalogue — under the staff rule (CheckStaffIntakeField).
 		// The SAME client checks the officer's residential unit (ADR 0088).
@@ -680,6 +684,22 @@ func chay(log *slog.Logger) error {
 		close(relayDone)
 	}
 
+	// THE sender_phone_normalized BACKFILL (migration 0046, ADR 0102 #3) — once per process start, behind
+	// its own advisory lock, commune by commune, until a pass completes (app/sender_phone_backfill.go).
+	// NOT behind COMMS_GRPC_ADDR: it needs only this service's own database. Until it has run for a
+	// commune, that commune's older petitions are missing from "Xem phản ánh" — a short list, never a
+	// wrong one (0046 §4).
+	backfillDone := make(chan struct{})
+	backfillLocks := crosstenant.NewAutomation(db)
+	backfill, err := app.NewSenderPhoneBackfill(kho, phieu, backfillLocks, backfillLocks, log)
+	if err != nil {
+		return err
+	}
+	go func() {
+		defer close(backfillDone)
+		backfill.Run(runnerCtx)
+	}()
+
 	dungLai := make(chan os.Signal, 1)
 	signal.Notify(dungLai, os.Interrupt, syscall.SIGTERM)
 
@@ -737,6 +757,12 @@ func chay(log *slog.Logger) error {
 		case <-relayDone:
 		case <-ctx.Done():
 			log.Warn("bộ chuyển thông báo cán bộ không dừng kịp hạn", "service", "petitions")
+		}
+		// The backfill stops at the next batch boundary; a committed batch stays, the next start resumes.
+		select {
+		case <-backfillDone:
+		case <-ctx.Done():
+			log.Warn("việc điền khoá đối chiếu số người gửi không dừng kịp hạn", "service", "petitions")
 		}
 		return errHTTP
 	}

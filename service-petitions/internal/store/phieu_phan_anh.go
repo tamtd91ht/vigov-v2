@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/vihat/vigov/core/page"
+	"github.com/vihat/vigov/core/phone"
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 )
@@ -444,8 +445,8 @@ func (s *PhieuPhanAnhStore) Tao(ctx context.Context, tx *store.ScopedTx, p domai
 		tenant_id, id, ma_tra_cuu, kenh_tiep_nhan, cong_dan_id, noi_dung, linh_vuc,
 		dia_chi, thon_id, lat, lng, nguoi_gui_ho_ten, nguoi_gui_dien_thoai, an_danh,
 		trang_thai, goc_dem_han, vao_so_luc, han_tiep_nhan, han_xu_ly_xong, han_phan_loai,
-		publication_status, zalo_account_id, location_citizen_adjusted)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`
+		publication_status, zalo_account_id, location_citizen_adjusted, sender_phone_normalized)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`
 
 	_, err := tx.Exec(ctx, stmt,
 		string(tx.TenantID()), p.ID, p.MaTraCuu, string(p.Kenh), rongThanhNull(p.CongDanID),
@@ -464,7 +465,11 @@ func (s *PhieuPhanAnhStore) Tao(ctx context.Context, tx *store.ScopedTx, p domai
 		string(p.PublicationStatus), rongThanhNull(p.ZaloAccountID),
 		// Migration 0044: a nil pointer binds as NULL ("not recorded"), never false — as p.Lat does.
 		// Only the citizen intake sets it.
-		p.LocationCitizenAdjusted)
+		p.LocationCitizenAdjusted,
+		// Migration 0046 — the directory link's match key, derived HERE from the number this very
+		// statement stores, so no intake path (citizen, verified-phone attach, staff, accountless) can
+		// store one without the other. Written for anonymous rows too; the read excludes them.
+		senderPhoneMatchKeyArg(p.NguoiGuiDienThoai))
 	if err != nil {
 		// NOT the content, NOT the reporter, NOT the lookup code — an INSERT error message can
 		// carry the whole row on some drivers, and this row is citizen personal data (rule 3).
@@ -540,6 +545,32 @@ func (s *PhieuPhanAnhStore) SetResidentialUnit(ctx context.Context, tx *store.Sc
 		return fmt.Errorf("phieu_phan_anh: đổi thôn / tổ dân phố: %w", err)
 	}
 	return doiMotDongPhieu(kq, "đổi thôn / tổ dân phố")
+}
+
+// SenderPhoneMatchKey is `sender_phone_normalized` for one typed sender number (migration 0046, ADR 0102
+// #3): core's NormalizeNational — the ONE fold identity also stores `citizen_contact.phone` in — or
+// false (SQL NULL) when the number is empty or does not normalise.
+//
+// IN THE STORE, NOT THE DOMAIN: internal/domain imports the standard library only, and the column must
+// be written by the one INSERT every intake path goes through and by the backfill, with one rule.
+//
+// NULL, NEVER THE EMPTY STRING (0046's CHECK): an empty key would link every sender who left the box blank to each
+// other. The error is dropped on purpose and is not a swallowed failure — "no usable number" IS the
+// answer, and the refusal's text would only describe the citizen's number (rule 3).
+func SenderPhoneMatchKey(raw string) (string, bool) {
+	n, err := phone.NormalizeNational(raw)
+	if err != nil {
+		return "", false
+	}
+	return n, true
+}
+
+// senderPhoneMatchKeyArg is SenderPhoneMatchKey as a bind argument: the key, or SQL NULL.
+func senderPhoneMatchKeyArg(raw string) any {
+	if n, ok := SenderPhoneMatchKey(raw); ok {
+		return n
+	}
+	return nil
 }
 
 // rongThanhNull turns an empty Go string into SQL NULL.

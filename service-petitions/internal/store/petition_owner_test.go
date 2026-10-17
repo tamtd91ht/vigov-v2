@@ -36,14 +36,15 @@ func TestCreateBindsZaloAccountOwner(t *testing.T) {
 	p.CongDanID, p.ZaloAccountID = "", zaloThu
 	st := runCreate(t, p)
 
-	// $22 is the 22nd column: publication_status ($21) then zalo_account_id, followed only by
-	// location_citizen_adjusted ($23, migration 0044 — location_citizen_adjusted_test.go pins that one).
-	if !strings.Contains(st.sql, "publication_status, zalo_account_id, location_citizen_adjusted)") ||
-		!strings.Contains(st.sql, "$21,$22,$23)") {
+	// $22 is the 22nd column: publication_status ($21) then zalo_account_id, followed by
+	// location_citizen_adjusted ($23, migration 0044 — location_citizen_adjusted_test.go pins that one) and
+	// sender_phone_normalized ($24, migration 0046 — sender_phone_key_test.go).
+	if !strings.Contains(st.sql, "publication_status, zalo_account_id, location_citizen_adjusted, sender_phone_normalized)") ||
+		!strings.Contains(st.sql, "$21,$22,$23,$24)") {
 		t.Fatalf("column list moved; $22 no longer means zalo_account_id: %s", st.sql)
 	}
-	if len(st.args) != 23 {
-		t.Fatalf("%d arguments, want 23", len(st.args))
+	if len(st.args) != 24 {
+		t.Fatalf("%d arguments, want 24", len(st.args))
 	}
 	if st.args[21] != zaloThu {
 		t.Errorf("$22 = %#v, want the account id", st.args[21])

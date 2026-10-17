@@ -645,6 +645,12 @@ type Deps struct {
 	// detail's read. routes_staff_recorded_rating.go refuses it nil, because GET …/{maTraCuu} reads it too.
 	StaffRecordedRatings StaffRecordedRatingActs
 
+	// THE PETITION ↔ CITIZEN-DIRECTORY LINK (ADR 0102) — routes_contact_petition.go refuses both nil.
+	// SenderDirectory is identity's two answers (*identityclient.Client); ContactPetitions is the register's
+	// key reads (*petstore.PhieuPhanAnhStore).
+	SenderDirectory  SenderDirectoryLookup
+	ContactPetitions ContactPetitionReader
+
 	// ResidentialUnitNames names the thôn / tổ dân phố a petition carries (ADR 0088) on the staff detail,
 	// list and write responses — *identityclient.Client in production. nil is NOT refused at construction
 	// (most routes never need it); a read that needs a name then answers 503, never a blank name.
@@ -802,6 +808,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	registerCitizenReportMergeRoutes(mux, d, h)
 	// The staff-recorded rating (owner rule 11/10/2026) — one route (routes_staff_recorded_rating.go).
 	registerStaffRecordedRatingRoutes(mux, d, h)
+	// The petition ↔ citizen-directory link (ADR 0102) — two routes (routes_contact_petition.go).
+	registerContactPetitionRoutes(mux, d, h)
 
 	// --- the commune's task catalogues. TWO READ ROUTES, AND DELIBERATELY NO WRITE ROUTE --------
 	//

@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 0e55b674
+derived_from_commit: ba22ad72
 expires: 2027-01-15
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -37,16 +37,16 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **06** Theo dõi giải ngân | 27 | 27/27 | ✓ |
 | **07** Thu – Chi ngân sách xã | 17 | 14/17 | ✓ |
 | **08** Thông báo | 2 | 2/2 | ✓ |
-| **09** Phản ánh của người dân | 39 | 27/28 +11 ngoài web | ✓ |
+| **09** Phản ánh của người dân | 40 | 27/29 +11 ngoài web | ✓ |
 | **10** Bản đồ phát triển kinh tế số | 13 | 13/13 | ✓ |
 | **11** Quản trị nội dung Mini App | 28 | 19/25 +3 ngoài web | ✓ |
 | **12** Danh bạ cán bộ | 14 | 6/12 +2 ngoài web | ✓ |
 | **13** Báo cáo điều hành | 1 | 1/1 | ✓ |
 | **14** Cấu hình hệ thống | 147 | 145/147 | ✓ |
 | **15** Phụ lục: giao diện dùng chung & xác thực | 9 | 9/9 | ✓ |
-| **16** Danh bạ người dân | 17 | 16/17 | ✓ |
+| **16** Danh bạ người dân | 18 | 17/18 | ✓ |
 
-Tổng **442 tuyến** trong hợp đồng. **22** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
+Tổng **444 tuyến** trong hợp đồng. **22** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
 
 ## 2 · web-admin, theo từng mục menu
 
@@ -132,7 +132,7 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `service-documents` | 14 | 6 | 3 | 0 |
 | `service-finance` | 36 | 6 | 2 | 0 |
 | `service-identity` | 71 | 16 | 3 | 1 |
-| `service-petitions` | 66 | 26 | 7 | 0 |
+| `service-petitions` | 66 | 27 | 7 | 0 |
 | `service-platform` | 23 | 22 | 5 | 1 |
 | `service-reporting` | 6 | 0 | 1 | 0 |
 | `tools` | 24 | 0 | 0 | 0 |

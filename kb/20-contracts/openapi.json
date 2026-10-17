@@ -7860,6 +7860,117 @@
         }
       }
     },
+    "/api/v1/citizen-report-lists/by-contact/{contactId}": {
+      "parameters": [
+        {
+          "name": "contactId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Danh sách phản ánh của một người trong danh bạ người dân — theo mã dòng danh bạ, phân trang; không kèm người gửi",
+        "operationId": "petitions_get_citizen_report_lists_by_contact_by_contactId",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "16-danh-ba-nguoi-dan (Xem phản ánh, ADR 0102)",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "feedback.read"
+        },
+        "x-vigov-task": "4889a2e1f883",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.contactPetitionPageOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_page"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "citizen_directory_unavailable"
+            ]
+          }
+        }
+      }
+    },
     "/api/v1/citizen-report-points": {
       "get": {
         "summary": "Điểm phản ánh trên bản đồ nhiệt theo bộ lọc của danh sách — chỉ vĩ độ, kinh độ, trạng thái",
@@ -8874,6 +8985,96 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-reports/{maTraCuu}/directory-match": {
+      "parameters": [
+        {
+          "name": "maTraCuu",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Đối chiếu người gửi của một phiếu phản ánh với danh bạ người dân của xã — có / chưa có / không áp dụng (ẩn danh hoặc không có số)",
+        "operationId": "petitions_get_citizen_reports_by_maTraCuu_directory_match",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "citizen.update"
+        },
+        "x-vigov-task": "e6b14b8e0094",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.directoryMatchOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "citizen_directory_unavailable"
+            ]
           }
         }
       }
@@ -58783,6 +58984,58 @@
         ],
         "additionalProperties": false
       },
+      "petitions.contactPetitionOut": {
+        "type": "object",
+        "properties": {
+          "lookup_code": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "lookup_code",
+          "received_at",
+          "status",
+          "title"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.contactPetitionPageOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/petitions.contactPetitionOut"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "total"
+        ],
+        "additionalProperties": false
+      },
       "petitions.createCustomMessageIn": {
         "type": "object",
         "properties": {
@@ -58982,6 +59235,29 @@
         },
         "required": [
           "reason"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.directoryMatchOut": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "contact_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone_unverified": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "contact_id",
+          "phone_unverified",
+          "status"
         ],
         "additionalProperties": false
       },
