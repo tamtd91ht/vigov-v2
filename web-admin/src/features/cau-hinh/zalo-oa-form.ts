@@ -1,5 +1,6 @@
 /**
- * "OA Zalo của xã" and "Mẫu tin ZBS" in Cấu hình → Kênh Zalo (ADR 0098 khối A) — the pure half: the
+ * "OA Zalo của xã" and "Mẫu tin ZBS" in Cấu hình → Kênh Zalo (ADR 0098 khối A; several OAs per commune
+ * since ADR 0099 #1) — the pure half: the
  * words, the milestone table, the outcome sentences, the row checks. Every check here is a HINT: comms
  * re-checks each rule (one template one milestone, ENABLE only, the three parameter names) and its
  * sentence still reaches the screen.
@@ -7,12 +8,17 @@
  * NO PROTOTYPE FOR THIS PART (ADR 0098 §Xung đột): built on the shape of "Con bot của xã" and ADR 0068 §14.
  */
 
-import type { comms_communeZaloOACurrentOut, comms_zaloOATemplateOut, ZaloOAReauthorizationReason } from "@/lib/api/zalo-oa";
+import type { comms_communeZaloOAOut, comms_zaloOATemplateOut, ZaloOAReauthorizationReason } from "@/lib/api/zalo-oa";
 
 // ---- "OA Zalo của xã" -----------------------------------------------------------------------------
 
 export const OA_DESCRIPTION =
-  "OA của xã là người gửi tin ZBS/ZNS cho người dân về hồ sơ của họ. Uỷ quyền OA cho ứng dụng của nền tảng để xã gửi được tin.";
+  "OA của xã là người gửi tin ZBS/ZNS cho người dân. Xã có thể nối nhiều OA; mỗi OA phải được uỷ quyền cho ứng dụng của nền tảng thì xã mới gửi được tin từ OA ấy.";
+
+/** The section's button: the first OA, or one more beside those already connected (ADR 0099 #1). */
+export const CONNECT_FIRST_LABEL = "Kết nối OA";
+export const CONNECT_MORE_LABEL = "Kết nối thêm OA";
+export const REAUTHORIZE_LABEL = "Uỷ quyền lại";
 
 /** GET says `configured: false`: the platform's ZALO_OA_* variables are not set (ADR 0098 #2). */
 export const OA_NOT_CONFIGURED = "Nền tảng chưa khai ứng dụng Zalo dùng chung — liên hệ ViHAT.";
@@ -33,17 +39,28 @@ export const OA_CHECK_FAILED_TOAST = "Không kiểm tra được.";
 
 export const DISCONNECT_REASON_MAX = 200;
 
-/** The consequence named in the disconnect confirmation (ADR 0098 #11). */
+/**
+ * The consequence named in the disconnect confirmation (ADR 0098 #11, ADR 0099 #1): only the milestones
+ * attached to a template of THIS OA are detached; the commune's other OAs keep theirs.
+ */
 export const DISCONNECT_CONSEQUENCE =
-  "Mọi mốc đã gắn mẫu sẽ bị gỡ, và tin cho người dân về hồ sơ của họ sẽ dừng tới khi xã nối lại một OA.";
+  "Mọi mốc đã gắn mẫu của OA này sẽ bị gỡ, và tin cho người dân theo các mốc ấy sẽ dừng tới khi xã gắn mẫu khác. Các OA khác của xã giữ nguyên.";
 
 export const DISCONNECTED_TOAST = "Đã ngắt OA.";
 
-/** Pill next to the title. */
-export function oaPill(current: comms_communeZaloOACurrentOut): string {
-  if (!current.has_oa || current.oa === null) return "Chưa nối";
-  if (current.oa.needs_reauthorization !== null) return `Cần uỷ quyền lại · ${current.oa.oa_name}`;
-  return `Đã nối · ${current.oa.oa_name}`;
+/** Pill next to the section title: how many OAs are connected. */
+export function oaListPill(items: readonly unknown[]): string {
+  return items.length === 0 ? "Chưa nối" : `Đã nối ${items.length} OA`;
+}
+
+/** Pill on one OA's card. */
+export function oaPill(oa: Pick<comms_communeZaloOAOut, "needs_reauthorization">): string {
+  return oa.needs_reauthorization !== null ? "Cần uỷ quyền lại" : "Đã nối";
+}
+
+/** "{n} mẫu đã nạp · {m} mốc đã gắn" — comms' own counts for that OA, never computed here. */
+export function templateCountText(oa: Pick<comms_communeZaloOAOut, "template_count" | "attached_count">): string {
+  return `${oa.template_count} mẫu đã nạp · ${oa.attached_count} mốc đã gắn`;
 }
 
 /** "Nối lúc {at} · bởi {name} ({code})" — `at` already formatted by the caller. */
@@ -186,7 +203,10 @@ export function searchWithoutOutcome(search: string): string {
 // ---- "Mẫu tin ZBS" -----------------------------------------------------------------------------------
 
 export const TEMPLATES_DESCRIPTION =
-  "Mẫu tin do xã đăng ký và được Zalo duyệt trên OA. Nạp mẫu về rồi gắn mỗi mốc xử lý phản ánh với một mẫu; tin cho người dân đi bằng mẫu ấy.";
+  "Mẫu tin do xã đăng ký và được Zalo duyệt trên từng OA. Nạp mẫu về rồi gắn mỗi mốc xử lý phản ánh với một mẫu — một mốc chỉ một mẫu trong cả xã, dù xã có nhiều OA; tin cho người dân đi từ OA của mẫu ấy.";
+
+/** The OA picker above the templates table, drawn only when the commune has more than one OA. */
+export const PICK_OA_LABEL = "OA";
 
 /** ADR 0098 #9: no mapping table — the template's parameter NAMES must be exactly these. */
 export const REQUIRED_PARAMS: readonly string[] = ["ma_tra_cuu", "moc_nhan", "viec_tiep_theo"];
@@ -270,7 +290,7 @@ export function attachBlockedReason(t: Pick<comms_zaloOATemplateOut, "zalo_statu
   return null;
 }
 
-/** Milestones no template is attached to, in display order. */
+/** Milestones no template is attached to, in display order. Pass the templates of EVERY OA: one milestone, one template in the whole commune. */
 export function unattachedMilestones(items: readonly Pick<comms_zaloOATemplateOut, "milestone">[]): string[] {
   const attached = new Set(items.map((t) => t.milestone).filter((m): m is string => m !== null));
   return MILESTONES.filter((m) => !attached.has(m.code)).map((m) => m.code);
@@ -288,9 +308,12 @@ export function unattachedText(codes: readonly string[]): string {
   return `Chưa có mẫu cho: ${codes.map(milestoneLabel).join(", ")}.`;
 }
 
-/** "Mẫu đã gắn cho mốc X không còn dùng được — …" (ADR 0098 #10: that milestone's notices will not go out). */
-export function staleText(milestone: string): string {
-  return `Mẫu đã gắn cho mốc “${milestoneLabel(milestone)}” không còn dùng được — tin cho mốc này sẽ không gửi được.`;
+/**
+ * "Mẫu đã gắn cho mốc X (OA “Y”) không còn dùng được — …" (ADR 0098 #10: that milestone's notices will not
+ * go out). The OA is named: with several OAs the template may sit on one not shown in the table.
+ */
+export function staleText(milestone: string, oaName: string): string {
+  return `Mẫu đã gắn cho mốc “${milestoneLabel(milestone)}” (OA “${oaName}”) không còn dùng được — tin cho mốc này sẽ không gửi được.`;
 }
 
 /** The "Nạp mẫu từ OA" toast: the server's three counts, never estimated here. */

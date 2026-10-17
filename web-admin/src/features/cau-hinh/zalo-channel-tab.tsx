@@ -171,7 +171,7 @@ export function ZaloChannelTab() {
   const [platformReady, setPlatformReady] = useState<boolean | null>(null);
   /** Bumped after a bot switch: comms ended every group link with it (ADR 0092), so the list is read again. */
   const [groupsVersion, setGroupsVersion] = useState(0);
-  /** The commune's OA (ADR 0098), shared by its two sections; also reads the callback's `?oa=` once. */
+  /** The commune's OAs (ADR 0098, ADR 0099 #1), shared by its two sections; also reads the callback's `?oa=` once. */
   const oa = useZaloOA(allowed);
 
   const readPlatformReady = useCallback(() => {
@@ -295,9 +295,14 @@ export function ZaloChannelTab() {
       }
       oaSection={<CommuneZaloOASection state={oa} />}
       templateSection={
-        // Only with a live OA (ADR 0098): keyed on the OA so a reconnect reads the templates afresh.
-        oa.current !== null && oa.current.ok && oa.current.duLieu.has_oa && oa.current.duLieu.oa !== null ? (
-          <ZaloOATemplatesSection key={oa.current.duLieu.oa.oa_id} />
+        // Only with at least one live OA (ADR 0098, ADR 0099 #1): keyed on the OA ids so connecting or
+        // disconnecting an OA reads every OA's templates afresh; `reload` keeps each card's counts current.
+        oa.current !== null && oa.current.ok && oa.current.duLieu.items.length > 0 ? (
+          <ZaloOATemplatesSection
+            key={oa.current.duLieu.items.map((o) => o.id).join(",")}
+            oas={oa.current.duLieu.items}
+            onChanged={oa.reload}
+          />
         ) : null
       }
       groupSection={
@@ -498,7 +503,7 @@ export function ZaloChannelView({
   botSection: ReactNode;
   /** "OA Zalo của xã" (ADR 0098), stateful (`CommuneZaloOASection`) — a slot for the same reason. */
   oaSection?: ReactNode;
-  /** "Mẫu tin ZBS" (ADR 0098), stateful (`ZaloOATemplatesSection`), only with a live OA — a slot for the same reason. */
+  /** "Mẫu tin ZBS" (ADR 0098), stateful (`ZaloOATemplatesSection`), only with at least one live OA — a slot for the same reason. */
   templateSection?: ReactNode;
   /** "Nhóm Zalo" (ADR 0092), stateful (`ZaloGroupsSection`) — a slot for the same reason. */
   groupSection?: ReactNode;

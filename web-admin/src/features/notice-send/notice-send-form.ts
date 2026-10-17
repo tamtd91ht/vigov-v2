@@ -229,7 +229,10 @@ export const OA_CARD_TITLE = "OA Zalo của xã";
 export const OA_NOT_LINKED = "Xã chưa nối OA Zalo. Tin ZNS chỉ gửi được sau khi nối.";
 export const OA_MANAGE = "Quản lý OA";
 
-/** "Gửi từ OA: <tên OA> · nối lúc <lúc>" — `at` already formatted by the caller. An OA's name is an authority's, not personal data. */
-export function oaSenderText(oaName: string, at: string): string {
-  return `Gửi từ OA: ${oaName} · nối lúc ${at}`;
+/**
+ * "Gửi từ OA: <tên>, <tên>" — every OA of the commune that can send now (ADR 0099 #1; which one a campaign
+ * leaves from is picked at send time, D-6c). An OA's name is an authority's, not personal data.
+ */
+export function oaSenderText(oaNames: readonly string[]): string {
+  return `Gửi từ OA: ${oaNames.join(", ")}`;
 }

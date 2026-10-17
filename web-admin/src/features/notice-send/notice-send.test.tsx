@@ -54,6 +54,7 @@ function session(permissions: string[]): PhienDaDoc {
 const ALL = ["notice.send", "citizen.read", "admin.zalo"];
 
 const OA_ROW = {
+  id: "01JOA1",
   oa_id: "1234567890",
   oa_name: "UBND xã Tân Phú",
   authorized_at: "2026-10-16T01:00:00Z",
@@ -63,12 +64,17 @@ const OA_ROW = {
   token_refreshed_at: "2026-10-16T01:00:00Z",
   needs_reauthorization: null as null | { since: string; reason: string },
   last_check: null,
+  template_count: 2,
+  attached_count: 0,
 };
+const OA_ROW_2 = { ...OA_ROW, id: "01JOA2", oa_id: "2222222222", oa_name: "Đoàn thanh niên xã Tân Phú" };
+const REAUTH = { since: "2026-10-16T01:00:00Z", reason: "refresh-token-het-han" };
 
-type OAAnswer = { configured: boolean; has_oa: boolean; oa: typeof OA_ROW | null };
+/** GET zalo-oas (ADR 0099 #1: several OAs per commune). */
+type OAAnswer = { configured: boolean; items: (typeof OA_ROW)[] };
 
-const LINKED: OAAnswer = { configured: true, has_oa: true, oa: OA_ROW };
-const NOT_LINKED: OAAnswer = { configured: true, has_oa: false, oa: null };
+const LINKED: OAAnswer = { configured: true, items: [OA_ROW] };
+const NOT_LINKED: OAAnswer = { configured: true, items: [] };
 
 const template = (id: string, name: string, status: string, params: string[]) => ({
   id,
@@ -96,7 +102,8 @@ const calls: Call[] = [];
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
 let oaAnswer: OAAnswer = LINKED;
-let templateItems: unknown[] = TEMPLATES;
+/** GET zalo-oas/{id}/templates, per OA row id; an id absent here answers an empty list. */
+let templateItems: Record<string, unknown[]> = { "01JOA1": TEMPLATES };
 
 function serve() {
   vi.stubGlobal(
@@ -126,9 +133,10 @@ function serve() {
           ],
         });
       }
-      if (url === "/api/v1/zalo-oas/current") return json({ ...oaAnswer, template_count: 2, attached_count: 0 });
-      if (url === "/api/v1/zalo-oas/current/templates") return json({ items: templateItems, synced_at: "2026-10-16T01:00:00Z" });
-      if (url === "/api/v1/zalo-oas/current/authorization-links") {
+      if (url === "/api/v1/zalo-oas") return json(oaAnswer);
+      const templatesOf = /^\/api\/v1\/zalo-oas\/([^/]+)\/templates$/.exec(url);
+      if (templatesOf) return json({ items: templateItems[templatesOf[1]!] ?? [], synced_at: "2026-10-16T01:00:00Z" });
+      if (url === "/api/v1/zalo-oas/authorization-links") {
         return json({ url: "https://oauth.zaloapp.com/v4/oa/permission?state=SECRET-STATE", expires_at: "2026-10-17T01:10:00Z" }, 201);
       }
       return json({ code: "not_found", message: "Không có tuyến này.", trace_id: "" }, 404);
@@ -142,7 +150,7 @@ let host: HTMLDivElement | null = null;
 beforeEach(() => {
   calls.length = 0;
   oaAnswer = LINKED;
-  templateItems = TEMPLATES;
+  templateItems = { "01JOA1": TEMPLATES };
   serve();
 });
 
@@ -260,7 +268,7 @@ describe("the three steps open one after another (prototype StepCard)", () => {
   });
 
   it("no template on the OA: the prototype's sentence and the way to Cấu hình → Kênh Zalo", async () => {
-    templateItems = [];
+    templateItems = {};
     const el = await mount(session(ALL));
     await toTemplateStep(el);
     expect(step(el, 2).textContent).toContain(NO_TEMPLATES);
@@ -366,12 +374,44 @@ describe("the send button is a '?' — no route exists", () => {
   });
 });
 
-describe("the OA card (ADR 0098)", () => {
+describe("the OA card (ADR 0098, several OAs since ADR 0099 #1)", () => {
   it("linked: which OA sends, and the way to manage it", async () => {
     const el = await mount(session(ALL));
     const card = el.querySelector('[data-oa-card="linked"]')!;
-    expect(card.textContent).toContain("Gửi từ OA: UBND xã Tân Phú · nối lúc");
+    expect(card.querySelector("[data-oa-sender]")!.textContent).toBe("Gửi từ OA: UBND xã Tân Phú");
     expect(card.querySelector("a")?.textContent).toBe("Quản lý OA");
+    expect(card.querySelector('[role="alert"]')).toBeNull();
+    expect(calls.map((c) => c.url)).toContain("/api/v1/zalo-oas/01JOA1/templates");
+  });
+
+  it("two OAs, one needing re-authorisation: the card lists the one that can send, warns naming the other; step 2 reads only the sending OA's templates", async () => {
+    oaAnswer = { configured: true, items: [OA_ROW, { ...OA_ROW_2, needs_reauthorization: REAUTH }] };
+    const el = await mount(session(ALL));
+    const card = el.querySelector('[data-oa-card="linked"]')!;
+    expect(card.querySelector("[data-oa-sender]")!.textContent).toBe("Gửi từ OA: UBND xã Tân Phú");
+    const warning = card.querySelector('[role="alert"]')!.textContent;
+    expect(warning).toContain("Đoàn thanh niên xã Tân Phú:");
+    expect(warning).toContain("quá 3 tháng");
+    expect(warning).not.toContain("UBND xã Tân Phú:");
+    expect(card.querySelector("button")!.textContent).toBe("Uỷ quyền lại");
+    expect(card.querySelector("a")?.textContent).toBe("Quản lý OA");
+    await toTemplateStep(el);
+    expect(calls.filter((c) => c.url.endsWith("/templates")).map((c) => c.url)).toEqual(["/api/v1/zalo-oas/01JOA1/templates"]);
+  });
+
+  it("two OAs that can send: both named; step 2 lists the templates of both", async () => {
+    oaAnswer = { configured: true, items: [OA_ROW, OA_ROW_2] };
+    templateItems = { "01JOA1": TEMPLATES, "01JOA2": [template("01JT3", "Mời họp đoàn", "ENABLE", ["ngay"])] };
+    const el = await mount(session(ALL));
+    expect(el.querySelector('[data-oa-card="linked"] [data-oa-sender]')!.textContent).toBe(
+      "Gửi từ OA: UBND xã Tân Phú, Đoàn thanh niên xã Tân Phú",
+    );
+    await toTemplateStep(el);
+    expect([...step(el, 2).querySelectorAll("[data-template-id]")].map((b) => b.getAttribute("data-template-id"))).toEqual([
+      "01JT1",
+      "01JT2",
+      "01JT3",
+    ]);
   });
 
   it("not linked: the sentence, Kết nối OA opens the link in a new tab and never puts it in the DOM; step 2 shows the card, no templates read", async () => {
@@ -382,27 +422,29 @@ describe("the OA card (ADR 0098)", () => {
     expect(el.querySelector('[data-oa-card="not-linked"]')!.textContent).toContain(OA_NOT_LINKED);
     await toTemplateStep(el);
     expect(step(el, 2).querySelector('[data-oa-card="not-linked"]')).not.toBeNull();
-    expect(calls.find((c) => c.url === "/api/v1/zalo-oas/current/templates")).toBeUndefined();
+    expect(calls.find((c) => c.url.endsWith("/templates"))).toBeUndefined();
 
     const connect = el.querySelector<HTMLButtonElement>('[data-oa-card="not-linked"] button')!;
     expect(connect.textContent).toBe("Kết nối OA");
     await act(async () => connect.click());
     await settle();
-    expect(calls.find((c) => c.url === "/api/v1/zalo-oas/current/authorization-links")?.init?.method).toBe("POST");
+    expect(calls.find((c) => c.url === "/api/v1/zalo-oas/authorization-links")?.init?.method).toBe("POST");
     expect(open).toHaveBeenCalledWith(expect.stringContaining("oauth.zaloapp.com"), "_blank", "noopener");
     expect(el.innerHTML).not.toContain("SECRET-STATE");
   });
 
-  it("needs re-authorisation: the warning and Uỷ quyền lại", async () => {
-    oaAnswer = { ...LINKED, oa: { ...OA_ROW, needs_reauthorization: { since: "2026-10-16T01:00:00Z", reason: "refresh-token-het-han" } } };
+  it("the only OA needs re-authorisation: the warning naming it and Uỷ quyền lại; no templates read", async () => {
+    oaAnswer = { configured: true, items: [{ ...OA_ROW, needs_reauthorization: REAUTH }] };
     const el = await mount(session(ALL));
     const card = el.querySelector('[data-oa-card="reauthorize"]')!;
+    expect(card.querySelector('[role="alert"]')!.textContent).toContain("UBND xã Tân Phú:");
     expect(card.querySelector('[role="alert"]')!.textContent).toContain("quá 3 tháng");
     expect(card.querySelector("button")!.textContent).toBe("Uỷ quyền lại");
+    expect(calls.find((c) => c.url.endsWith("/templates"))).toBeUndefined();
   });
 
   it("platform app not declared (configured=false): the platform sentence, no connect button", async () => {
-    oaAnswer = { configured: false, has_oa: false, oa: null };
+    oaAnswer = { configured: false, items: [] };
     const el = await mount(session(ALL));
     const card = el.querySelector('[data-oa-card="not-configured"]')!;
     expect(card.textContent).toContain("Nền tảng chưa khai ứng dụng Zalo dùng chung");

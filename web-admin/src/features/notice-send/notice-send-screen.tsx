@@ -74,7 +74,7 @@ import {
   type AudienceKind,
   type Channel,
 } from "./notice-send-form";
-import { OAStatusCard, useCommuneOA } from "./oa-status-card";
+import { OAStatusCard, sendingOAs, useCommuneOA } from "./oa-status-card";
 
 /**
  * `/gui-thong-bao` — "Gửi tin ZNS / SMS", the prototype's `NoticeWorkspace` (owner, 17/10/2026: the
@@ -83,7 +83,7 @@ import { OAStatusCard, useCommuneOA } from "./oa-status-card";
  * THE GATE is `notice.send` (`CongQuyen`), with the title drawn in every state as `/nguoi-dan` does. The
  * parts behind the gate read with OTHER keys, and say so when the session lacks them instead of failing:
  *   citizen.read  groups, tags and the citizen recipient count
- *   admin.zalo    the OA card and the OA's ZBS templates (`zalo-oas/current*`)
+ *   admin.zalo    the OA card and the OAs' ZBS templates (`zalo-oas`, `zalo-oas/{id}/templates`)
  * A route the session surely lacks the key for is NOT called (the `CongQuyen` rule: no certain 403).
  *
  * The order is the prototype's on purpose: audience first, then template — a template written for staff
@@ -137,7 +137,10 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
   const [templates, setTemplates] = useState<KetQua<comms_zaloOATemplateList> | null>(null);
 
   const oa = useCommuneOA(canManageZalo);
-  const oaUsable = oa !== null && oa.ok && oa.duLieu.configured && oa.duLieu.has_oa && oa.duLieu.oa !== null && oa.duLieu.oa.needs_reauthorization === null;
+  // The OAs that can send now (ADR 0099 #1). Picking one at send time is D-6c; until then step 2 lists the
+  // templates of all of them.
+  const sendingOAIds = oa !== null && oa.ok ? sendingOAs(oa.duLieu).map((o) => o.id).join(",") : "";
+  const oaUsable = sendingOAIds !== "";
 
   // Groups and tags: only with citizen.read — every directory read route declares it.
   useEffect(() => {
@@ -179,17 +182,20 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
     };
   }, [wantStaff]);
 
-  // The OA's templates: only with admin.zalo, and only once the OA can send.
+  // The OAs' templates: only with admin.zalo, and only from OAs that can send. One refusal is shown as is
+  // rather than a partial list that looks complete.
   useEffect(() => {
-    if (!canManageZalo || !oaUsable) return;
+    if (!canManageZalo || sendingOAIds === "") return;
     let gone = false;
-    listZaloOATemplates().then((r) => {
-      if (!gone) setTemplates(r);
+    Promise.all(sendingOAIds.split(",").map((id) => listZaloOATemplates(id))).then((rs) => {
+      if (gone) return;
+      const refused = rs.find((r) => !r.ok);
+      setTemplates(refused ?? { ok: true, duLieu: { items: rs.flatMap((r) => (r.ok ? r.duLieu.items : [])), synced_at: null } });
     });
     return () => {
       gone = true;
     };
-  }, [canManageZalo, oaUsable]);
+  }, [canManageZalo, sendingOAIds]);
 
   const tagRows = tagList !== null && tagList.ok ? tagList.duLieu.items : [];
   const source = recipientSource(kind, ids, tags, tagRows, canReadCitizens);

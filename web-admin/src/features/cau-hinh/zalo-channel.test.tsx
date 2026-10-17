@@ -200,9 +200,9 @@ beforeEach(() => {
       if (url === "/api/v1/staff-directory") return json(directoryAnswer.status, directoryAnswer.body);
       if (url === "/api/v1/org-units") return json(200, { items: UNITS });
       if (url === "/api/v1/commune-launch-link") return json(200, { url: "https://zalo.me/s/1000/?src=qr", source: "rieng" });
-      // ADR 0098: the OA section reads its row; no OA here, so "Mẫu tin ZBS" is not mounted (zalo-oa.test.tsx covers both).
-      if (url === "/api/v1/zalo-oas/current" && method === "GET") {
-        return json(200, { configured: true, has_oa: false, oa: null, template_count: 0, attached_count: 0 });
+      // ADR 0098/0099: the OA section reads the commune's OAs; none here, so "Mẫu tin ZBS" is not mounted (zalo-oa.test.tsx covers both).
+      if (url === "/api/v1/zalo-oas" && method === "GET") {
+        return json(200, { configured: true, items: [] });
       }
       if (url.startsWith("/api/v1/zalo-group")) {
         if (method === "GET" && url === "/api/v1/zalo-groups") return json(groupsNow.status, groupsNow.body);
@@ -676,7 +676,7 @@ describe("ZaloChannelTab — admin.zalo, denied case first", () => {
       "/api/v1/zalo-channel-settings",
       "/api/v1/zalo-groups",
       "/api/v1/zalo-links",
-      "/api/v1/zalo-oas/current",
+      "/api/v1/zalo-oas",
     ]);
     // ADR 0070 §13/10: the commune's launch QR, one code, inside the same admin.zalo gate.
     expect(el.querySelectorAll('[data-launch-qr] svg[role="img"]')).toHaveLength(1);
