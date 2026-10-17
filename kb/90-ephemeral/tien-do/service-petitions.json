@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-petitions",
-  "cap_nhat": "2026-10-15",
+  "cap_nhat": "2026-10-17",
   "muc": [
     {
       "id": "mau-nhap-nhiem-vu-dropdown-14-10",
@@ -877,6 +877,14 @@
       "viec": "7 tuyến /api/v1/petitions-system-messages → admin.message (trước admin.lookup), kể cả đọc (chủ dự án 15/10/2026, bảng lỗi web-admin-141026 dòng 22, ADR 0090 §Sửa đổi 15/10/2026 — Bốn khoá cấu hình riêng).",
       "bang_chung": "f81168fe · internal/http/routes.go, system_messages_test.go, system_messages_custom_test.go. 95c4f50c đổi tên khoá. Commit ghi: go vet + go test -p 1 ./... xanh ở 6 dịch vụ; check_quyen PASS (f81168fe, 95c4f50c).",
       "tiep_theo": "Migration identity 0032 CHƯA chạy trên PostgreSQL thật. Mã lên cụm trước 0032 thì khoá chưa có trong quyen, tuyến này 403 với mọi tài khoản (suy theo luật 5 bất biến 3c, chưa chạy) — chạy 0032 cùng lần triển khai."
+    },
+    {
+      "id": "lien-ket-danh-ba-migration-0046-17-10",
+      "viec": "Migration 0046: cột sender_phone_normalized + chỉ mục bộ phận (tenant_id, số, vao_so_luc DESC, id DESC) trừ ẩn danh / đã xoá — cho liên kết phản ánh ↔ danh bạ (ADR 0102 #3, TASK-03)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "service-petitions/migrations/0046_petition_sender_phone_normalized.sql + petition_sender_phone_normalized_test.go; go test ./migrations/... xanh; check_khoa_duy_nhat PASS (17/10/2026).",
+      "no_confirm": [],
+      "tiep_theo": "(1) CHƯA chạy trên PostgreSQL 16 (schema-smoke: không DSN, Docker tắt). (2) TASK-04: ghi cột khi nhận phản ánh + job điền lại theo xã bằng core/phone; đọc phải viết đúng vị từ an_danh = false AND deleted_at IS NULL và sắp vao_so_luc DESC, id DESC để dùng chỉ mục. (3) Đường ẩn danh hoá theo NĐ 13 (chưa có) phải đặt cột này về NULL cùng lúc với nguoi_gui_dien_thoai."
     }
   ]
 }
