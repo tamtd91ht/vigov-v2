@@ -24,7 +24,6 @@ import { Field } from "@/components/ui/field";
 import { Segmented } from "@/components/ui/segmented";
 import { CitizenAttributeInputs } from "@/features/citizen-directory/citizen-attribute-inputs";
 import {
-  CANCEL_BUTTON,
   CONTACT_ADD_TITLE,
   CONTACT_DIALOG_DESCRIPTION,
   FIELD_ACTIVE,
@@ -269,11 +268,11 @@ export function FormDesigner({
             </DndContext>
           </div>
 
-          {/* The dialog's footer, as a picture of where the form ends. */}
-          <div className="border-line flex justify-end gap-2 border-0 border-t border-solid pt-3" inert aria-hidden="true">
-            <span className="border-line text-ink-muted rounded-md border border-solid px-3 py-1.5 text-[12.5px]">{CANCEL_BUTTON}</span>
-            <span className="bg-brand rounded-md px-3 py-1.5 text-[12.5px] font-semibold text-white">Lưu</span>
-          </div>
+          {/* No pictured Huỷ / Lưu here: drawn buttons that do nothing were read as broken (owner 17/10/2026).
+              Every change on this preview is saved the moment it is made — say so instead. */}
+          <p className="border-line text-ink-muted m-0 border-0 border-t border-solid pt-3 text-[12.5px]" data-autosave-note="">
+            Thay đổi vị trí và độ rộng được lưu ngay khi kéo-thả hoặc bấm Nửa hàng / Cả hàng.
+          </p>
         </div>
 
         <aside
