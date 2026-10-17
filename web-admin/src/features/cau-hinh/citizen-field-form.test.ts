@@ -28,10 +28,12 @@ import {
   buildUpdateBody,
   checkRetireReason,
   draftFromField,
+  draftIndexAfterDrop,
   fieldTypeLabel,
   insertCode,
   moveCode,
   newFieldDraft,
+  orderAfterDesignerDrop,
   orderAfterDrop,
   previewField,
   restoreOption,
@@ -250,6 +252,31 @@ describe("order", () => {
     expect(insertCode(["a", "b", "c"], "n", 99)).toEqual(["a", "b", "c", "n"]);
     // After the POST the server lists it LAST: it is moved, never doubled.
     expect(insertCode(["a", "b", "c", "n"], "n", 1)).toEqual(["a", "n", "b", "c"]);
+  });
+
+  it("orderAfterDesignerDrop: on a card it takes its place; on a lone half's empty slot it pairs after it; on the end it goes last", () => {
+    const codes = ["a", "b", "c", "d"];
+    expect(orderAfterDesignerDrop(codes, "d", "b")).toEqual(["a", "d", "b", "c"]);
+    // d sits in a full 2-column row below; a above it is alone on its row → dropped in a's empty slot: right after a.
+    expect(orderAfterDesignerDrop(codes, "d", "slot:a")).toEqual(["a", "d", "b", "c"]);
+    expect(orderAfterDesignerDrop(codes, "a", "slot:c")).toEqual(["b", "c", "a", "d"]);
+    expect(orderAfterDesignerDrop(codes, "b", "end")).toEqual(["a", "c", "d", "b"]);
+    // Nothing moves → the SAME list, so no PUT is sent.
+    expect(orderAfterDesignerDrop(codes, "b", "slot:a")).toBe(codes);
+    expect(orderAfterDesignerDrop(codes, "d", "end")).toBe(codes);
+    expect(orderAfterDesignerDrop(codes, "b", null)).toBe(codes);
+    expect(orderAfterDesignerDrop(codes, "b", "slot:zz")).toBe(codes);
+    expect(orderAfterDesignerDrop(codes, "new", "a")).toBe(codes);
+  });
+
+  it("draftIndexAfterDrop: the unsaved field moves its insert index the same way, writing nothing", () => {
+    const codes = ["a", "b", "c"];
+    expect(draftIndexAfterDrop(codes, 3, "a")).toBe(0); // up onto a: before a
+    expect(draftIndexAfterDrop(codes, 0, "b")).toBe(2); // down onto b: after b (takes its place)
+    expect(draftIndexAfterDrop(codes, 3, "slot:a")).toBe(1);
+    expect(draftIndexAfterDrop(codes, 0, "end")).toBe(3);
+    expect(draftIndexAfterDrop(codes, 1, null)).toBe(1);
+    expect(draftIndexAfterDrop(codes, 1, "new")).toBe(1);
   });
 
   it("previewField: what the form will draw — fallback label, type default width, no retired or blank options", () => {

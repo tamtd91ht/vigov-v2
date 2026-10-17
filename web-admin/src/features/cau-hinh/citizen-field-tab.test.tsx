@@ -772,6 +772,20 @@ describe("Biểu mẫu — the designer: the contact form's 2-column grid (ADR 0
     expect(liveOrder(el).at(-1)).toBe(created.code);
   });
 
+  it("an unsaved new field can be thrown away from its card: gone from the form, panel closed, nothing written", async () => {
+    const el = await openLayout();
+    act(() => byLabel(el, form.insertBeforeLabel("C")).click());
+    typeInto(labelOf(el.querySelector<HTMLFormElement>("[data-field-panel] form")!), "Tạm");
+    const draftCard = el.querySelector<HTMLElement>("[data-new-field-card]")!;
+    // Draggable before it is saved: it carries its own grip.
+    expect(draftCard.querySelector(`button[aria-label^="${form.NEW_FIELD_LABEL}"]`)).not.toBeNull();
+    act(() => byLabel(draftCard, form.DISCARD_NEW_FIELD).click());
+    expect(el.querySelector("[data-new-field-card]")).toBeNull();
+    expect(el.querySelector("[data-field-panel] form")).toBeNull();
+    expect(el.querySelector("[data-panel-empty]")).not.toBeNull();
+    expect(writes()).toHaveLength(0);
+  });
+
   it("the empty right slot is a +: it adds right after its lone half", async () => {
     const el = await openLayout();
     act(() => el.querySelector<HTMLElement>("[data-empty-slot='aaaaaaa1'] button")!.click());

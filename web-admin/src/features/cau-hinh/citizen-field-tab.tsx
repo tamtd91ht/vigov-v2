@@ -87,6 +87,7 @@ import {
   manualCodeError,
   moveCode,
   newFieldDraft,
+  orderAfterDesignerDrop,
   orderAfterDrop,
   positionText,
   restoreOption,
@@ -367,10 +368,12 @@ export function CitizenFieldTab() {
             draft={draft}
             panel={editor}
             onInsert={startAdd}
+            onMoveDraft={(at) => setDialog((d) => (d?.mode === "add" ? { ...d, insertAt: at } : d))}
+            onDiscardDraft={() => closeEditor(false)}
             onEdit={(f) => open({ mode: "edit", field: f })}
             onDelete={setDeleting}
             onMove={(from, to) => void saveOrder(moveCode(codes, from, to))}
-            onDrop={(active, over) => void saveOrder(orderAfterDrop(codes, active, over))}
+            onDrop={(active, over) => void saveOrder(orderAfterDesignerDrop(codes, active, over))}
             onWidth={(f, w) => void saveWidth(f, w)}
           />
         ) : (

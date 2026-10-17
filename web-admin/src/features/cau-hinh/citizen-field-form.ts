@@ -114,6 +114,8 @@ export const LAYOUT_DYNAMIC_TITLE = "Thuộc tính của xã";
 export const LAYOUT_NARROW_NOTE = "Màn hình hẹp (dưới 640px): biểu mẫu thật cũng xếp mỗi thuộc tính một hàng như dưới đây.";
 export const EMPTY_SLOT_HINT = "Ô bên phải còn trống";
 export const NEW_FIELD_LABEL = "Thuộc tính mới";
+export const DISCARD_NEW_FIELD = "Bỏ thuộc tính mới";
+export const DROP_HERE = "Thả vào đây";
 export const PANEL_EMPTY = "Chọn một thuộc tính trên biểu mẫu để sửa, hoặc bấm + ở chỗ muốn thêm thuộc tính mới.";
 export const PLACE_FAILED_TOAST =
   "Đã thêm thuộc tính nhưng chưa đặt được vào chỗ đã chọn — thuộc tính đang ở cuối biểu mẫu. Kéo hoặc dùng Lên / Xuống để đưa về chỗ muốn.";
@@ -572,6 +574,43 @@ export function moveCode(codes: readonly string[], from: number, to: number): re
 export function orderAfterDrop(codes: readonly string[], active: string, over: string | null): readonly string[] {
   if (over === null) return codes;
   return moveCode(codes, codes.indexOf(active), codes.indexOf(over));
+}
+
+/*
+ * The designer's drop targets besides the cards: the empty right slot a lone half leaves (`slot:<its code>`)
+ * and the end of the grid. Dropping on a slot puts the field right after that lone half — the way to pull a
+ * field from a full 2-column row up into a row above that has one (user, 17/10/2026).
+ */
+export const DROP_END = "end";
+export const DROP_SLOT_PREFIX = "slot:";
+/** The draggable id of the field being added, not saved yet. */
+export const DRAFT_DRAG_ID = "new";
+
+/** The designer's order after `active` (a stored field) is dropped on `over`; the SAME list when nothing moves. */
+export function orderAfterDesignerDrop(codes: readonly string[], active: string, over: string | null): readonly string[] {
+  if (over === null || !codes.includes(active)) return codes;
+  let next: readonly string[];
+  if (over === DROP_END) next = insertCode(codes, active, codes.length);
+  else if (over.startsWith(DROP_SLOT_PREFIX)) {
+    const rest = codes.filter((c) => c !== active);
+    const anchor = rest.indexOf(over.slice(DROP_SLOT_PREFIX.length));
+    if (anchor < 0) return codes;
+    next = insertCode(codes, active, anchor + 1);
+  } else next = orderAfterDrop(codes, active, over);
+  return next.join() === codes.join() ? codes : next;
+}
+
+/** Where the unsaved field goes when its card is dropped on `over`: like a stored one, it takes the target's place. */
+export function draftIndexAfterDrop(codes: readonly string[], at: number, over: string | null): number {
+  if (over === null || over === DRAFT_DRAG_ID) return at;
+  if (over === DROP_END) return codes.length;
+  if (over.startsWith(DROP_SLOT_PREFIX)) {
+    const anchor = codes.indexOf(over.slice(DROP_SLOT_PREFIX.length));
+    return anchor < 0 ? at : anchor + 1;
+  }
+  const i = codes.indexOf(over);
+  if (i < 0) return at;
+  return at <= i ? i + 1 : i;
 }
 
 /** `Thuộc tính Hộ nghèo, vị trí 2 trên 5` — what a screen reader hears on a row's handle. */

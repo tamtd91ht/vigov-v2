@@ -48,6 +48,11 @@ import {
   ADD_FIELD_BUTTON,
   ADD_FIELD_TITLE,
   DELETE_FIELD_BUTTON,
+  DISCARD_NEW_FIELD,
+  DRAFT_DRAG_ID,
+  DROP_END,
+  DROP_HERE,
+  DROP_SLOT_PREFIX,
   EDIT_FIELD_TITLE,
   EMPTY_SLOT_HINT,
   LAYOUT_DYNAMIC_TITLE,
@@ -58,6 +63,7 @@ import {
   LAYOUT_WIDTHS,
   NEW_FIELD_LABEL,
   PANEL_EMPTY,
+  draftIndexAfterDrop,
   fieldTypeLabel,
   insertBeforeLabel,
   loneHalfCodes,
@@ -115,6 +121,8 @@ export function FormDesigner({
   draft,
   panel,
   onInsert,
+  onMoveDraft,
+  onDiscardDraft,
   onEdit,
   onDelete,
   onMove,
@@ -134,6 +142,10 @@ export function FormDesigner({
   /** The add / edit form, drawn in the side panel. */
   panel: ReactNode;
   onInsert: (at: number) => void;
+  /** The unsaved field's card was dragged: it is to go at `at` instead. */
+  onMoveDraft: (at: number) => void;
+  /** The unsaved field is dropped — nothing was written for it. */
+  onDiscardDraft: () => void;
   onEdit: (f: CitizenField) => void;
   onDelete: (f: CitizenField) => void;
   onMove: (from: number, to: number) => void;
@@ -141,7 +153,16 @@ export function FormDesigner({
   onWidth: (f: CitizenField, width: CitizenFieldLayoutWidth) => void;
 }) {
   const sensors = useOrderSensors();
-  const labelOf = (code: string) => fields.find((f) => f.code === code)?.label ?? code;
+  const labelOf = (id: string) => {
+    if (id === DRAFT_DRAG_ID) return draft?.label.trim() || NEW_FIELD_LABEL;
+    if (id === DROP_END) return "cuối biểu mẫu";
+    if (id.startsWith(DROP_SLOT_PREFIX)) {
+      const code = id.slice(DROP_SLOT_PREFIX.length);
+      return `ô trống bên phải ${fields.find((f) => f.code === code)?.label ?? code}`;
+    }
+    return fields.find((f) => f.code === id)?.label ?? id;
+  };
+  const codes = fields.map((f) => f.code);
   const panelRef = useRef<HTMLElement>(null);
   const selectionKey = selection === null ? "" : selection.kind === "add" ? `add:${selection.at}` : `edit:${selection.code}`;
 
@@ -197,28 +218,30 @@ export function FormDesigner({
               collisionDetection={closestCenter}
               accessibility={{ announcements: orderAnnouncements(labelOf), screenReaderInstructions: DRAG_INSTRUCTIONS }}
               onDragEnd={(e) => {
+                const active = String(e.active.id);
+                const over = e.over === null ? null : String(e.over.id);
+                if (active === DRAFT_DRAG_ID) {
+                  if (selection?.kind === "add") onMoveDraft(draftIndexAfterDrop(codes, selection.at, over));
+                  return;
+                }
                 if (busy) return;
-                onDrop(String(e.active.id), e.over === null ? null : String(e.over.id));
+                onDrop(active, over);
               }}
             >
               <ol className="m-0 grid list-none grid-cols-1 gap-3 p-0 sm:grid-cols-2" aria-label="Thuộc tính trên biểu mẫu" data-layout-grid="">
                 {cells.map((c) => {
                   const slot = lone.has(c.field.code) && (
-                    <li key={`slot-${c.field.code}`} className="hidden sm:flex" data-empty-slot={c.field.code}>
-                      {/* A lone half's right slot: the next field index is where a new one fills it. */}
-                      <button
-                        type="button"
-                        className={SLOT_BUTTON}
-                        disabled={full || c.kind === "new"}
-                        onClick={() => onInsert(c.kind === "field" ? c.index + 1 : 0)}
-                      >
-                        <Plus aria-hidden="true" focusable="false" className="size-4" />
-                        {EMPTY_SLOT_HINT}
-                      </button>
-                    </li>
+                    <EmptySlot
+                      key={`slot-${c.field.code}`}
+                      code={c.field.code}
+                      // The draft's own slot is no drop target: the draft is not in the stored order yet.
+                      droppable={c.kind === "field"}
+                      disabled={full || c.kind === "new"}
+                      onAdd={() => onInsert(c.kind === "field" ? c.index + 1 : 0)}
+                    />
                   );
                   if (c.kind === "new") {
-                    return [<NewFieldCard key="new" field={c.field} />, slot];
+                    return [<NewFieldCard key="new" field={c.field} onDiscard={onDiscardDraft} />, slot];
                   }
                   return [
                     <FieldCard
@@ -241,18 +264,7 @@ export function FormDesigner({
                     slot,
                   ];
                 })}
-                <li className="sm:col-span-2">
-                  <button
-                    type="button"
-                    className={cn(SLOT_BUTTON, "min-h-14")}
-                    disabled={full || selection?.kind === "add"}
-                    data-add-at-end=""
-                    onClick={() => onInsert(fields.length)}
-                  >
-                    <Plus aria-hidden="true" focusable="false" className="size-4" />
-                    {ADD_FIELD_BUTTON}
-                  </button>
-                </li>
+                <EndSlot disabled={full || selection?.kind === "add"} onAdd={() => onInsert(fields.length)} />
               </ol>
             </DndContext>
           </div>
@@ -286,6 +298,41 @@ export function FormDesigner({
     </section>
   );
 }
+
+/**
+ * A lone half's empty right slot: a "+" that adds a field there, and a DROP TARGET (`slot:<code>`) — dropping
+ * a field on it puts that field right after the lone half, pairing them (e.g. pulling a field up from a full
+ * 2-column row below). Only from `sm`, where two columns exist.
+ */
+function EmptySlot({ code, droppable, disabled, onAdd }: { code: string; droppable: boolean; disabled: boolean; onAdd: () => void }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `${DROP_SLOT_PREFIX}${code}`, disabled: !droppable });
+  const setRef = useCallback((node: HTMLElement | null) => setNodeRef(node), [setNodeRef]);
+  return (
+    <li ref={setRef} className="hidden sm:flex" data-empty-slot={code}>
+      <button type="button" className={cn(SLOT_BUTTON, isOver && DROP_OVER)} disabled={disabled} onClick={onAdd}>
+        <Plus aria-hidden="true" focusable="false" className="size-4" />
+        {isOver ? DROP_HERE : EMPTY_SLOT_HINT}
+      </button>
+    </li>
+  );
+}
+
+/** "+ Thêm thuộc tính" at the end of the grid — also the drop target that sends a field to the end. */
+function EndSlot({ disabled, onAdd }: { disabled: boolean; onAdd: () => void }) {
+  const { setNodeRef, isOver } = useDroppable({ id: DROP_END });
+  const setRef = useCallback((node: HTMLElement | null) => setNodeRef(node), [setNodeRef]);
+  return (
+    <li ref={setRef} className="sm:col-span-2" data-drop-end="">
+      <button type="button" className={cn(SLOT_BUTTON, "min-h-14", isOver && DROP_OVER)} disabled={disabled} data-add-at-end="" onClick={onAdd}>
+        <Plus aria-hidden="true" focusable="false" className="size-4" />
+        {isOver ? DROP_HERE : ADD_FIELD_BUTTON}
+      </button>
+    </li>
+  );
+}
+
+/** A drop target under the dragged card: drawn as the brand's dashed outline, whatever its own disabled state. */
+const DROP_OVER = "border-brand text-brand bg-brand/5 opacity-100";
 
 const SLOT_BUTTON =
   "border-line text-ink-muted hover:not-disabled:border-brand hover:not-disabled:text-brand hover:not-disabled:bg-brand/5 flex min-h-16 w-full cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border border-dashed bg-transparent px-3 text-center [font-family:inherit] text-[12.5px] font-medium disabled:cursor-not-allowed disabled:opacity-50";
@@ -376,21 +423,56 @@ function TypeTag({ type }: { type: CitizenFieldType }) {
   );
 }
 
-/** The draft of the field being added, where it will land; the panel's form redraws it as it is typed. */
-function NewFieldCard({ field }: { field: CitizenField }) {
+/**
+ * The draft of the field being added, where it will land; the panel's form redraws it as it is typed. It can
+ * be DRAGGED to another place before it is saved (its id is `DRAFT_DRAG_ID`, outside the stored order, so a
+ * drop only moves the insert index — nothing is written), and DISCARDED with the trash button: nothing was
+ * saved, so nothing is asked.
+ */
+function NewFieldCard({ field, onDiscard }: { field: CitizenField; onDiscard: () => void }) {
+  const drag = useDraggable({ id: DRAFT_DRAG_ID });
+  const { setNodeRef, setActivatorNodeRef } = drag;
+  const setBodyRef = useCallback((node: HTMLElement | null) => setNodeRef(node), [setNodeRef]);
+  const setHandleRef = useCallback((node: HTMLElement | null) => setActivatorNodeRef(node), [setActivatorNodeRef]);
+  const t = drag.transform;
   return (
     <li
+      ref={setBodyRef}
+      style={t === null ? undefined : { transform: `translate3d(${t.x}px, ${t.y}px, 0)` }}
       className={cn(
         "border-brand bg-brand/5 ring-brand/20 flex min-w-0 flex-col gap-2 rounded-[10px] border border-dashed p-3 ring-2",
         layoutWidthOf(field) === "full" && "sm:col-span-2",
+        drag.isDragging && "relative z-10 opacity-80",
       )}
       data-new-field-card=""
       data-width={layoutWidthOf(field)}
     >
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 items-center gap-1">
+        <button
+          ref={setHandleRef}
+          type="button"
+          className="text-brand flex size-7 shrink-0 cursor-grab touch-none items-center justify-center rounded-md border-0 bg-transparent p-0"
+          aria-label={`${NEW_FIELD_LABEL} — kéo để đổi chỗ`}
+          {...drag.listeners}
+          {...drag.attributes}
+        >
+          <GripVertical aria-hidden="true" focusable="false" className="size-4" />
+        </button>
         <span className="bg-brand rounded-full px-2 py-0.5 text-[11px] font-semibold text-white">{NEW_FIELD_LABEL}</span>
         <span className="flex-1" />
         <TypeTag type={field.field_type} />
+        <Button
+          type="button"
+          variant="icon"
+          size="sm"
+          className="text-danger min-h-0"
+          aria-label={DISCARD_NEW_FIELD}
+          title={DISCARD_NEW_FIELD}
+          data-discard-new=""
+          onClick={onDiscard}
+        >
+          <Trash2 aria-hidden="true" focusable="false" className="size-3.5" />
+        </Button>
       </div>
       <LiveControl field={field} />
     </li>
