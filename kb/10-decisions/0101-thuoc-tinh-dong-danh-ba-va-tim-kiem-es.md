@@ -38,7 +38,7 @@ thuộc tính thì gửi tin zns, sms có thể map nội dung theo thuộc tín
 | 5 | Quyền | Khoá mới `admin.citizen_field`, tab Cấu hình → "Thuộc tính danh bạ"; migration identity gieo và cấp cho vai trò đang có `admin.zalo`. Đọc định nghĩa: `citizen.read`; nhập giá trị: `citizen.update` |
 | 6 | Email | Cột tĩnh mới `email` (tuỳ chọn), che khi trả ra như số điện thoại |
 | 7 | Tìm kiếm | Từ khoá + lọc chạy trên ES; ES trả **mã dòng**, identity đọc lại PostgreSQL (đã che) để trả web. Từ khoá vẫn đi trong thân yêu cầu (D11) |
-| 8 | Số và email trên ES | Không lưu giá trị thật. Số 10 chữ số → mọi chuỗi con liền nhau dài 3…10 → **HMAC từng chuỗi** → một mảng (thứ tự vô nghĩa). Email: phần trước `@`, 10 ký tự đầu, cùng cách; chuỗi gõ dài hơn 10 → so khớp HMAC **nguyên email**. Khoá HMAC suy ra từ khoá dữ liệu của xã (giả định phiên chính, ADR 0009) — lộ chỉ mục ES không lộ số |
+| 8 | Số và email trên ES | Không lưu giá trị thật. Số 10 chữ số → mọi chuỗi con liền nhau dài 3…10 → **HMAC từng chuỗi** → một mảng (thứ tự vô nghĩa). Email: phần trước `@`, 10 ký tự đầu, cùng cách; chuỗi gõ dài hơn 10 → so khớp HMAC **nguyên email**. Khoá HMAC: **một khoá cho toàn hệ thống** (chủ dự án 17/10/2026), biến bí mật mới `SEARCH_HASH_KEY`; đổi khoá phải dựng lại chỉ mục mọi xã. Lộ chỉ mục ES mà không lộ khoá thì không lộ số |
 | 9 | Họ tên | Lưu nguyên văn trên ES để tìm toàn văn, có bỏ dấu |
 | 10 | Lọc | `number`, `dateTime`: khoảng, một cận là đủ (`from` hoặc `to`). `combobox`, `singleBox`: nhiều giá trị (`[ho-ngheo, can-ngheo]`). Ngày tạo lưu **millis** để lọc khoảng |
 | 11 | Đồng bộ | Ghi danh bạ → dòng outbox cùng giao dịch → Kafka `<ENV>.identity.citizen_contact_changed.v1` (chỉ `tenant_id` + mã dòng + thao tác, **không** dữ liệu cá nhân) → consumer của identity (group `<ENV>.identity.citizen-search`) đọc lại PostgreSQL và ghi ES. Có lệnh dựng lại chỉ mục từng xã. ES hỏng: tìm kiếm báo lỗi, dữ liệu không mất |
@@ -49,6 +49,8 @@ thuộc tính thì gửi tin zns, sms có thể map nội dung theo thuộc tín
 - **Rủi ro nhận:** ES chứa họ tên nguyên văn và giá trị thuộc tính (có thể là dữ liệu cá nhân, vd. phân loại hộ
   nghèo); số và email chỉ ở dạng băm. Thuộc tính động do xã tự đặt nên phần mềm không biết thuộc tính nào nhạy
   cảm. Gửi giá trị thuộc tính sang Zalo/eSMS là gửi dữ liệu cá nhân ra ngoài theo yêu cầu chủ dự án.
+- Một khoá chung nghĩa là cùng một số ở hai xã có cùng mã băm: chỉ mục ES nối được hai bản ghi của cùng một
+  người giữa hai xã. Mọi truy vấn ES vẫn lọc theo `tenant_id` (luật 1) — đó là thứ duy nhất tách hai xã.
 - Chuỗi con 3 chữ số chỉ có 1.000 giá trị: băm có khoá chặn đoán ngược, không chặn được thống kê tần suất
   trong một xã — chấp nhận theo thiết kế chủ dự án.
 - Cùng một cụm ES cho dev và prod thì tên chỉ mục phải khác nhau theo `ELASTICSEARCH_INDEX_PREFIX` (vận hành đặt).
