@@ -218,8 +218,8 @@ describe("add dialog — random code", () => {
 
   it("a random code the commune already holds (retired included) is redrawn silently at open", async () => {
     H.phien = session(["admin.citizen_field"]);
-    items = [BASE, NUMBER, DATE, RETIRED, { ...RETIRED, code: "aaaaaaaa", label: "Cũ" }];
-    // First code drawn: every byte 0 → "aaaaaaaa" (held, retired); then every byte 1 → "bbbbbbbb".
+    items = [BASE, NUMBER, DATE, RETIRED, { ...RETIRED, code: "aaaaaaaaaa", label: "Cũ" }];
+    // First code drawn: every byte 0 → "aaaaaaaaaa" (held, retired); then every byte 1 → "bbbbbbbbbb".
     let call = 0;
     vi.spyOn(crypto, "getRandomValues").mockImplementation(<T extends ArrayBufferView | null>(buf: T): T => {
       (buf as unknown as Uint8Array).fill(call++ < form.RANDOM_CODE_LENGTH ? 0 : 1);
@@ -227,7 +227,7 @@ describe("add dialog — random code", () => {
     });
     const el = await mount();
     const dlg = openAdd(el);
-    expect(codeOf(dlg).value).toBe("bbbbbbbb");
+    expect(codeOf(dlg).value).toBe("bbbbbbbbbb");
     expect(dlg.querySelector("[data-field-error]")).toBeNull();
   });
 
@@ -240,9 +240,9 @@ describe("add dialog — random code", () => {
     });
     const el = await mount();
     const dlg = openAdd(el);
-    expect(codeOf(dlg).value).toBe("cccccccc");
+    expect(codeOf(dlg).value).toBe("cccccccccc");
     act(() => button(dlg, form.CODE_REDRAW).click());
-    expect(codeOf(dlg).value).toBe("dddddddd");
+    expect(codeOf(dlg).value).toBe("dddddddddd");
     expect(codeOf(dlg).readOnly).toBe(true);
   });
 

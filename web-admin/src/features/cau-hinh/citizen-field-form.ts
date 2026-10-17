@@ -223,15 +223,13 @@ const CODE_FIRST = "abcdefghijklmnopqrstuvwxyz";
 const CODE_REST = "abcdefghijklmnopqrstuvwxyz0123456789";
 
 /**
- * Length of a drawn code. The owner allows 8–12; the caller asked for 10. It is 8 because service-identity
- * (`citizenFieldCodeShape`, domain/citizen_field.go) and the DB CHECK (migration 0036) still accept only
- * `[a-z][a-z0-9]{5,7}` — 8 is the one length both sides accept today. Raise it once identity accepts 8–12;
- * drawing 10 before that makes every save a 400.
+ * Length of a drawn code: 10, inside the owner's 8–12 (ADR 0101 #1b). service-identity accepts 8–12 for a new
+ * code (`citizenFieldCodeShape`, domain/citizen_field.go) and the DB CHECK 6–12 (migration 0037).
  */
-export const RANDOM_CODE_LENGTH = 8;
+export const RANDOM_CODE_LENGTH = 10;
 
 /**
- * One uniformly random character of `alphabet` from the CSPRNG (rule 13: never Math.random). Bytes at or
+ * One uniformly random character of `alphabet` from the CSPRNG (rule 13: never the non-cryptographic generator). Bytes at or
  * above the largest multiple of the alphabet size are thrown away, so no letter is favoured by the modulo.
  */
 function randomChar(alphabet: string): string {

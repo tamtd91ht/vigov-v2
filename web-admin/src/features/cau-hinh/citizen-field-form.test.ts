@@ -253,7 +253,7 @@ describe("random code (owner 17/10/2026: web tự gen random, chống trùng the
     expect(randomFieldCode(12)).toHaveLength(12);
   });
 
-  it("draws from crypto.getRandomValues, never Math.random; biased bytes are thrown away", () => {
+  it("draws from crypto.getRandomValues, never the Math generator; biased bytes are thrown away", () => {
     const math = vi.spyOn(Math, "random");
     // 255 ≥ 256-(256%26)=234 and ≥ 256-(256%36)=252: rejected. 0 → 'a', 25 → 'z', 26 → '0' (rest alphabet).
     const spy = feedBytes([255, 0, 25, 26, 35, 1, 2, 3, 4]);
@@ -265,19 +265,19 @@ describe("random code (owner 17/10/2026: web tự gen random, chống trùng the
   });
 
   it("a code the commune holds (live or retired) is redrawn silently", () => {
-    // First draw: all bytes 0 → "aaaaaaaa"; second draw: all bytes 1 → "bbbbbbbb".
+    // First draw: all bytes 0 → "aaaaaaaaaa"; second draw: all bytes 1 → "bbbbbbbbbb".
     let call = 0;
     vi.spyOn(crypto, "getRandomValues").mockImplementation(<T extends ArrayBufferView | null>(buf: T): T => {
       const a = buf as unknown as Uint8Array;
       a.fill(call++ < RANDOM_CODE_LENGTH ? 0 : 1);
       return buf;
     });
-    expect(freeRandomFieldCode(new Set(["aaaaaaaa"]))).toBe("bbbbbbbb");
+    expect(freeRandomFieldCode(new Set(["aaaaaaaaaa"]))).toBe("bbbbbbbbbb");
   });
 
   it("a source that only ever repeats a taken code gives null (the dialog then asks for a typed code)", () => {
     feedBytes([0]);
-    expect(freeRandomFieldCode(new Set(["aaaaaaaa"]))).toBeNull();
+    expect(freeRandomFieldCode(new Set(["aaaaaaaaaa"]))).toBeNull();
   });
 
   it("manual code: pattern 8–12, then live collision, then retired collision with its own sentence", () => {
