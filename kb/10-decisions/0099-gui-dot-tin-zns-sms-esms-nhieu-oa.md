@@ -13,6 +13,7 @@ owns_facts:
   - "người nhận: bỏ qua người 'ngừng liên hệ' (is_active=false) và hiện dòng Bỏ qua; giữ hai lựa chọn cán bộ như prototype, số lấy từ số di động trong danh bạ cán bộ (chủ dự án 17/10/2026)"
   - "chi phí: ước tính trong Xem trước (ZNS theo bảng giá ZBS theo loại mẫu, SMS theo hàm tạm tính giá của eSMS), không bước duyệt, không hạn mức (chủ dự án 17/10/2026)"
   - "'Đã gửi' của lượt này = nhà cung cấp đã nhận (eSMS CodeResult 100, Zalo msg_id); callback trạng thái giao của eSMS để lượt sau (chủ dự án 17/10/2026)"
+  - "người nhận nhập tay (≤ 1.000 số) hoặc từ tệp .xlsx/.csv (≤ 10.000 dòng, chọn cột số; SMS: cột nội dung hoặc nội dung chung có biến {{variable_i}} map cột; ZNS: tham số giá trị chung hoặc cột); tệp không lưu; lịch sử lưu cả số không hợp lệ, kết quả khong-hop-le / that-bai (kèm lỗi nhà cung cấp) / da-gui; số đầy đủ + nội dung riêng mã hoá khoá xã tới lúc có kết quả rồi xoá (chủ dự án 17/10/2026, §Sửa đổi)"
   - "tên: SmsAccount/sms_account/sms-accounts, SmsTemplate/sms_template, NoticeCampaign/notice_campaign/notice-campaigns, NoticeRecipient/notice_recipient, notice-templates, notice-campaign-previews (chủ dự án chốt 17/10/2026)"
 ---
 
@@ -72,6 +73,25 @@ dưới (luật 3 thắng prototype, ADR 0090).
 - **Mất:** tuyến `zalo-oas/current/*` và mã web đang gọi nó phải đổi; chưa có trạng thái "đã tới máy".
 - **Rủi ro nhận:** cán bộ có `notice.send` gửi được tới toàn xã mà không ai duyệt, tốn tiền thật — chủ dự án
   chọn "ước tính, không chặn". Ai trả phí vẫn là việc thương mại ngoài phần mềm.
+
+## Sửa đổi 17/10/2026 — người nhận nhập tay hoặc từ tệp
+
+**Người quyết:** chủ dự án, 17/10/2026, phiên chính (phiếu 4 câu) — *"luồng gửi zns, sms cho phép nhập số
+điện thoại trực tiếp hoặc import file nhé, nếu import file cho định nghĩa cột số điện thoại, cột nội dung (với
+sms)"*. Mở rộng #5, #6, #8; danh bạ (#5) vẫn là một nguồn như cũ.
+
+| # | Điểm | Chốt |
+|---|---|---|
+| S1 | Nguồn người nhận | Thêm hai: **nhập số** (gõ/dán, mỗi dòng hoặc dấu phẩy một số, ≤ 1.000) và **nhập tệp** (`.xlsx`/`.csv`, ≤ 10.000 dòng, ≤ 5 MB, sheet đầu, dòng 1 là tiêu đề; cán bộ chọn cột số điện thoại). Số chuẩn hoá về dạng Việt Nam (`0…`, `84…`, `+84…`), bỏ trùng. Người ngoài danh bạ **không** kiểm "ngừng liên hệ" |
+| S2 | Tệp | Tệp **không lưu** — chủ dự án: "file import thì có thể xoá sau khi import xong". Trình duyệt đọc tệp, gửi các dòng lên; máy chủ kiểm lại từng dòng |
+| S3 | Nội dung SMS (nguồn nhập) | Hai cách: (1) **cột nội dung** trong tệp — mỗi người một nội dung; (2) **nội dung chung** cho cả danh sách, có thể chèn biến `{{variable_1}}`…`{{variable_n}}` (tuỳ chọn); màn đếm các biến trong nội dung và với mỗi biến cho chọn cột tệp tương ứng; có dấu "?" giải thích khi rê chuột. Không kiểm khớp mẫu eSMS trước — dòng sai mẫu do eSMS từ chối, ghi lỗi trả về |
+| S4 | Tham số ZNS (nguồn tệp) | Như S3 cách (2): mỗi tham số mẫu ZBS gõ giá trị chung hoặc chọn một cột tệp. Nhập số tay: chỉ giá trị chung |
+| S5 | Lịch sử | Lưu lịch sử từng số **kể cả số không hợp lệ** và kết quả gửi. Lượt này 3 kết quả: **số không hợp lệ** (`khong-hop-le`), **gửi thất bại** (`that-bai`, kèm **thông báo lỗi nhà cung cấp trả về** nếu có), **đã gửi** (`da-gui`); "thành công tới máy" để lượt callback (#9). Giá trị enum theo ADR 0011 |
+| S6 | Giữ số | Số đầy đủ và nội dung riêng từng dòng chỉ cần tới lúc gửi: lưu **mã hoá bằng khoá của xã** (cùng cơ chế khoá eSMS, ADR 0009) trong dòng người nhận, **xoá bản mã hoá** khi dòng có kết quả cuối; lịch sử chỉ còn số đã che + kết quả + lỗi. Chủ dự án: "chỉ cần lưu lịch sử gửi và kết quả" |
+| S7 | Gửi ra ngoài | Nội dung/tham số riêng từng người (từ tệp của cán bộ) được gửi sang eSMS/Zalo — chủ dự án yêu cầu trực tiếp (luật 3 điều kiện dừng #2), thay câu "không tham số nào lấy từ hồ sơ của từng người" của #6 cho riêng hai nguồn nhập |
+
+`.xlsx` đọc ở trình duyệt bằng `read-excel-file` (cùng tác giả `write-excel-file` đang dùng) — giả định của phiên
+chính, đổi được.
 
 ## Còn mở
 
