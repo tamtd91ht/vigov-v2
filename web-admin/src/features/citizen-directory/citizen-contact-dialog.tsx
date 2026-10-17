@@ -23,6 +23,7 @@ import type { identity_thonToDanPhoRa } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
 
 import { CitizenAttributeInputs } from "./citizen-attribute-inputs";
+import { CitizenPetitionsDialog, VIEW_PETITIONS_BUTTON } from "./citizen-petitions-dialog";
 import { attributesFromInputs, inputsFromAttributes, type AttributeInputs } from "./citizen-attributes";
 import {
   ADDED_TOAST,
@@ -65,10 +66,28 @@ import {
 export const CONTACT_DIALOG_TITLE_ID = "tieu-de-nguoi-dan"; // vi-name-ok: DOM id, same convention as the app's other dialog ids
 export const REVEAL_PHONE_BUTTON_ID = "xem-so-day-du"; // vi-name-ok: DOM id, same convention
 
-/** What the dialog was opened for: adding (with the key of THIS opening) or editing one row. */
+export const PREFILL_UNVERIFIED_NOTE = "Số do người gửi tự khai, chưa xác thực.";
+
+/**
+ * Name and number carried over from a petition's UNMASKED detail (ADR 0102 #7) — never the hamlet or the
+ * address: on a petition those are the place of the incident, not where the person lives.
+ */
+export type ContactPrefill = { readonly fullName: string; readonly phone: string };
+
+/**
+ * What the dialog was opened for: adding (with the key of THIS opening, and — from a petition — a prefill
+ * and whether its number was self-declared, ADR 0080/0102 #6) or editing one row. An edit needs only the
+ * row id; the masked number is shown from the row when the caller has it, else from the detail read
+ * (the `/nguoi-dan?id=` deep link has no row).
+ */
 export type ContactDialogMode =
-  | { readonly kind: "add"; readonly idempotencyKey: string }
-  | { readonly kind: "edit"; readonly contact: CitizenContact };
+  | {
+      readonly kind: "add";
+      readonly idempotencyKey: string;
+      readonly prefill?: ContactPrefill;
+      readonly phoneUnverified?: boolean;
+    }
+  | { readonly kind: "edit"; readonly contact: Pick<CitizenContact, "id" | "phone_masked"> };
 
 /**
  * The number field's state in EDIT mode (ADR 0097 D2): masked until "Xem số đầy đủ" is pressed; ONE
@@ -112,6 +131,7 @@ export function CitizenContactDialog({
   units,
   fields = [],
   canReveal,
+  canViewPetitions = false,
   onClose,
   onSaved,
 }: {
@@ -122,12 +142,18 @@ export function CitizenContactDialog({
   units: readonly identity_thonToDanPhoRa[];
   /** Session holds `citizen.update` — draws the reveal button. Convenience only; the route checks. */
   canReveal: boolean;
+  /** Session holds `citizen.read` + `feedback.read` — draws "Xem phản ánh" on an edit (ADR 0102 #5). Convenience only. */
+  canViewPetitions?: boolean;
   onClose: () => void;
   /** A 201 / 204: the list, the count, the tags and the groups must be read again. */
   onSaved: () => void;
 }) {
   const editing = mode.kind === "edit";
-  const [draft, setDraft] = useState<ContactDraft>(EMPTY_CONTACT_DRAFT);
+  const [draft, setDraft] = useState<ContactDraft>(() =>
+    mode.kind === "add" && mode.prefill !== undefined
+      ? { ...EMPTY_CONTACT_DRAFT, fullName: mode.prefill.fullName, phone: mode.prefill.phone }
+      : EMPTY_CONTACT_DRAFT,
+  );
   /** `null` while the detail is being read (edit) or when reading it failed; adding starts ready. */
   const [ready, setReady] = useState(!editing);
   const [detailError, setDetailError] = useState("");
@@ -142,9 +168,13 @@ export function CitizenContactDialog({
   /** Adding: the box is the address. Editing: `false` until "Nhập email mới" — the mask is never sent back. */
   const [emailEdited, setEmailEdited] = useState(!editing);
   const [emailError, setEmailError] = useState<string | null>(null);
+  /** The masked number of the detail read — the one shown when the opener had no list row (deep link). */
+  const [detailMasked, setDetailMasked] = useState("");
+  const [petitionsOpen, setPetitionsOpen] = useState(false);
 
   const contactId = mode.kind === "edit" ? mode.contact.id : null;
-  const masked = mode.kind === "edit" ? mode.contact.phone_masked : "";
+  const masked = mode.kind === "edit" ? (mode.contact.phone_masked !== "" ? mode.contact.phone_masked : detailMasked) : "";
+  const phoneUnverified = mode.kind === "add" && mode.phoneUnverified === true;
 
   useEffect(() => {
     if (contactId === null) return;
@@ -172,6 +202,7 @@ export function CitizenContactDialog({
       setStored(d.attributes);
       setAttrInputs(inputsFromAttributes(fields, d.attributes));
       setEmailMasked(d.email_masked);
+      setDetailMasked(d.phone_masked);
       setReady(true);
     });
     return () => {
@@ -313,6 +344,12 @@ export function CitizenContactDialog({
               />
             )}
           </Field>
+          {/* ADR 0102 #6: a self-declared number may be saved — the officer decides — but never without this line. */}
+          {phoneUnverified && (
+            <p className="text-danger m-0 -mt-2 text-[12px] font-medium sm:col-span-2" data-prefill-unverified="">
+              {PREFILL_UNVERIFIED_NOTE}
+            </p>
+          )}
 
           <Field
             label={FIELD_EMAIL}
@@ -444,6 +481,11 @@ export function CitizenContactDialog({
         </fieldset>
 
         <div className="flex flex-wrap justify-end gap-2">
+          {editing && canViewPetitions && contactId !== null && (
+            <Button type="button" variant="outline" className="mr-auto" onClick={() => setPetitionsOpen(true)}>
+              {VIEW_PETITIONS_BUTTON}
+            </Button>
+          )}
           <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
             {CANCEL_BUTTON}
           </Button>
@@ -458,6 +500,9 @@ export function CitizenContactDialog({
           </Button>
         </div>
       </form>
+      {petitionsOpen && contactId !== null && (
+        <CitizenPetitionsDialog contactId={contactId} fullName={draft.fullName} onClose={() => setPetitionsOpen(false)} />
+      )}
     </ModalDialog>
   );
 }

@@ -176,6 +176,7 @@ import { usePetitionLogAttachments } from "./petition-log-attachments";
 import { PetitionHeatMap, PetitionMiniMap } from "./petition-map";
 import { PetitionReports } from "./petition-reports";
 import { PetitionMergeSection } from "./petition-merge";
+import { PetitionDirectoryLink } from "./petition-directory-link";
 import {
   buttonClass,
   Glyph,
@@ -1699,6 +1700,8 @@ export function ChiTietPhieu({
             {isContactUnverified(phieu) && <UnverifiedContactBadge />}
           </p>
           {isContactUnverified(phieu) && <p className="mt-1 text-[11px] text-ink-muted">{UNVERIFIED_CONTACT_NOTE}</p>}
+          {/* ADR 0102 — a child component (it reads the network); draws and requests nothing without its four keys. */}
+          <PetitionDirectoryLink petition={phieu} permissions={permissions} units={thon} />
         </div>
         <IconButton label="Đóng chi tiết phiếu" type="button" variant="secondary" onClick={dong}>
           <Glyph icon={X} />

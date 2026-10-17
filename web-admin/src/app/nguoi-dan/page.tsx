@@ -1,6 +1,7 @@
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
+import { citizenContactDeepLinkId } from "@/features/citizen-directory/citizen-contact-deep-link";
 import { CitizenDirectoryScreen } from "@/features/citizen-directory/citizen-directory-screen";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { parseOpenCreate } from "@/lib/create-link";
@@ -34,7 +35,10 @@ export default async function CitizenDirectoryPage({
 }) {
   const xa = await layCauHinhXa(); // vi-name-ok: existing export of tenant.server.ts, the shell every page copies
   // `?create=1` — the Hướng dẫn sử dụng link to `Thêm người dân`, read here and passed down.
-  const openCreateOnLoad = parseOpenCreate(await searchParams);
+  const params = await searchParams;
+  const openCreateOnLoad = parseOpenCreate(params);
+  // `?id=<row id>` — the petition drawer's "Xem trong danh bạ" (ADR 0102): a ULID or nothing, never a number.
+  const openContactId = citizenContactDeepLinkId(params.id);
 
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
@@ -42,7 +46,7 @@ export default async function CitizenDirectoryPage({
         <div className="khung-trang">
           <DauTrang />
           <main className="than-trang">
-            <CitizenDirectoryScreen openCreateOnLoad={openCreateOnLoad} />
+            <CitizenDirectoryScreen openCreateOnLoad={openCreateOnLoad} openContactId={openContactId} />
           </main>
         </div>
       </PhienProvider>

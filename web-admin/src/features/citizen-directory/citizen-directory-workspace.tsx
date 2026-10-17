@@ -34,6 +34,7 @@ import { CitizenContactDeleteDialog } from "./citizen-contact-delete-dialog";
 import { CitizenContactDialog, type ContactDialogMode } from "./citizen-contact-dialog";
 import { CitizenContactImportDialog } from "./citizen-contact-import-dialog";
 import { CitizenContactList, type ContactPageState } from "./citizen-contact-list";
+import { CitizenPetitionsDialog } from "./citizen-petitions-dialog";
 import {
   ADD_CONTACT_BUTTON,
   CITIZEN_DIRECTORY_SUBTITLE,
@@ -85,11 +86,21 @@ type ListQuery = { readonly filter: CitizenContactFilter; readonly stack: NganXe
  */
 export function CitizenDirectoryWorkspace({
   canEdit,
+  canViewPetitions = false,
   openCreateOnLoad = false,
+  openContactId = null,
 }: {
   canEdit: boolean;
+  /** Session holds `citizen.read` + `feedback.read` — "Xem phản ánh" on rows and in the edit dialog (ADR 0102 #5). */
+  canViewPetitions?: boolean;
   /** `?create=1` (`create-link.ts`), read on the server: open `Thêm người dân` once, for an editor. */
   openCreateOnLoad?: boolean;
+  /**
+   * `?id=<row id>` (`citizenContactDeepLinkId`, read on the server) — the petition drawer's "Xem trong danh bạ":
+   * open that row's edit dialog once, for an editor (the same condition as a row click). A ULID only, so
+   * the address bar never holds a number; the detail route still decides whether this commune has the row.
+   */
+  openContactId?: string | null;
 }) {
   const [tab, setTab] = useState<TabId>("contacts");
   const [query, setQuery] = useState<ListQuery>({ filter: NO_CITIZEN_CONTACT_FILTER, stack: TRANG_DAU });
@@ -101,7 +112,12 @@ export function CitizenDirectoryWorkspace({
   const [fields, setFields] = useState<readonly CitizenField[]>([]);
   const [reads, setReads] = useState(0);
 
-  const [contactDialog, setContactDialog] = useState<ContactDialogMode | null>(null);
+  // Mounted only behind the `citizen.read` gate, so `canEdit` is final at the first render: the deep link
+  // opens through the initial state, never an effect. `phone_masked: ""` — the dialog shows the detail's mask.
+  const [contactDialog, setContactDialog] = useState<ContactDialogMode | null>(() =>
+    openContactId !== null && canEdit ? { kind: "edit", contact: { id: openContactId, phone_masked: "" } } : null,
+  );
+  const [petitionsOf, setPetitionsOf] = useState<CitizenContact | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [deleting, setDeleting] = useState<CitizenContact | null>(null);
   const [deleteReason, setDeleteReason] = useState("");
@@ -304,6 +320,8 @@ export function CitizenDirectoryWorkspace({
             }}
             onEdit={(row) => setContactDialog({ kind: "edit", contact: row })}
             onDelete={openDelete}
+            canViewPetitions={canViewPetitions}
+            onViewPetitions={setPetitionsOf}
             confirm={
               deleting !== null ? (
                 <CitizenContactDeleteDialog
@@ -336,8 +354,17 @@ export function CitizenDirectoryWorkspace({
           units={units}
           fields={fields}
           canReveal={canEdit}
+          canViewPetitions={canViewPetitions}
           onClose={() => setContactDialog(null)}
           onSaved={reread}
+        />
+      )}
+      {petitionsOf !== null && (
+        <CitizenPetitionsDialog
+          key={petitionsOf.id}
+          contactId={petitionsOf.id}
+          fullName={petitionsOf.full_name}
+          onClose={() => setPetitionsOf(null)}
         />
       )}
       {importOpen && <CitizenContactImportDialog onClose={() => setImportOpen(false)} onImported={reread} />}

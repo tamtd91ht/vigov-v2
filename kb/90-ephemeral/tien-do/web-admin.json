@@ -1742,6 +1742,14 @@
       "bang_chung": "muc-menu.ts KHOA_MO_CAU_HINH thêm CITIZEN_FIELD_PERMISSION (khoá có thật, lib/quyen.ts:496, cổng tab quyen-tab.ts:139). muc-menu.test.ts: ca được phép admin.citizen_field + ca chuỗi gần giống (admin.citizen_fields, ADMIN.CITIZEN_FIELD) không mở. vitest components + user-guide + cau-hinh 93 tệp / 1665 ca xanh; tsc + eslint xanh (17/10/2026).",
       "no_confirm": [],
       "tiep_theo": "Không còn gì."
+    },
+    {
+      "id": "lien-ket-phan-anh-danh-ba-web-17-10",
+      "viec": "Liên kết phản ánh ↔ danh bạ trên web: Đồng bộ danh bạ ở ngăn phản ánh (Thêm vào danh bạ điền sẵn / Xem trong danh bạ), Xem phản ánh ở danh bạ (hộp phân trang, bấm dòng sang /phan-anh?id=), deep link /nguoi-dan?id=<ULID> (ADR 0102, TASK-05)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "lib/api/petition-directory-link.ts (UNTIL REGEN), features/phan-anh/petition-directory-link.tsx, features/citizen-directory/citizen-petitions-dialog.tsx + citizen-contact-deep-link.ts, citizen-contact-dialog prefill + câu số chưa xác thực; tsc sạch; vitest phan-anh + citizen-directory + lib/api + dashboard 97 tệp / 1678 ca xanh (17/10/2026).",
+      "no_confirm": [],
+      "tiep_theo": "(1) Backend TASK-04 chưa có: tới khi petitions lên, khối hiện \"Chưa đối chiếu được với danh bạ.\" (2) Sau TASK-04: regen schema.gen, bỏ khối UNTIL REGEN, đối chiếu page đếm từ 1. (3) CHƯA xem ảnh render. (4) Khối Đồng bộ danh bạ cũng hiện ở ngăn phản ánh của trang Tổng quan (record-detail dùng chung ChiTietPhieu) — chưa ai quyết có giữ không."
     }
   ]
 }

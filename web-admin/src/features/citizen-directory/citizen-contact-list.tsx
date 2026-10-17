@@ -1,6 +1,6 @@
 "use client";
 
-import { Filter, SearchX, Search, Tag, Trash2 } from "lucide-react";
+import { Filter, MessageSquareText, SearchX, Search, Tag, Trash2 } from "lucide-react";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import { cn } from "@/lib/cn";
 
 import { advancedFilterCount, displayAttribute, EMPTY_FILTER_DRAFT, filtersFromDraft, type FilterDraft } from "./citizen-attributes";
 import { CitizenContactFilters, FILTER_PANEL_ID } from "./citizen-contact-filters";
+import { viewPetitionsLabel } from "./citizen-petitions-dialog";
 import { PHAN_CHUA_DUNG } from "./citizen-directory-pending";
 import {
   ALL_GROUPS,
@@ -101,6 +102,8 @@ export function CitizenContactList({
   onNext,
   onEdit,
   onDelete,
+  canViewPetitions = false,
+  onViewPetitions,
   confirm,
 }: {
   filter: CitizenContactFilter;
@@ -118,6 +121,12 @@ export function CitizenContactList({
   onNext: () => void;
   onEdit: (row: CitizenContact) => void;
   onDelete: (row: CitizenContact) => void;
+  /**
+   * Session holds `citizen.read` + `feedback.read` (ADR 0102 #5): each row gets a "Xem phản ánh" icon. On the
+   * row, not only in the edit dialog, because a `citizen.read`-only account cannot open that dialog.
+   */
+  canViewPetitions?: boolean;
+  onViewPetitions?: (row: CitizenContact) => void;
   /** The delete confirm box, drawn above the table when open. */
   confirm?: ReactNode;
 }) {
@@ -145,6 +154,7 @@ export function CitizenContactList({
   }
 
   const listColumns = fields.filter((f) => f.show_in_list);
+  const hasActions = canEdit || (canViewPetitions && onViewPetitions !== undefined);
   const appliedCount = advancedFilterCount(filter.createdFrom, filter.createdTo, filter.attributeFilters);
 
   function apply(text: string) {
@@ -327,7 +337,7 @@ export function CitizenContactList({
                       </span>
                     </Tooltip>
                   </th>
-                  {canEdit && <th scope="col" className="px-4 py-2.5" />}
+                  {hasActions && <th scope="col" className="px-4 py-2.5" />}
                 </tr>
               </thead>
               <tbody>
@@ -357,19 +367,34 @@ export function CitizenContactList({
                     <td className="px-4 py-2.5">
                       {row.has_own_app_session ? <span className="text-leaf font-semibold">{ZALO_YES}</span> : <span className="text-ink-muted">{EMPTY_CELL}</span>}
                     </td>
-                    {canEdit && (
-                      <td className="px-4 py-2.5 text-right">
-                        <IconButton
-                          label={deleteContactLabel(row.full_name)}
-                          variant="ghost"
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDelete(row);
-                          }}
-                        >
-                          <Trash2 aria-hidden="true" className="size-4" />
-                        </IconButton>
+                    {hasActions && (
+                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                        {canViewPetitions && onViewPetitions !== undefined && (
+                          <IconButton
+                            label={viewPetitionsLabel(row.full_name)}
+                            variant="ghost"
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onViewPetitions(row);
+                            }}
+                          >
+                            <MessageSquareText aria-hidden="true" className="size-4" />
+                          </IconButton>
+                        )}
+                        {canEdit && (
+                          <IconButton
+                            label={deleteContactLabel(row.full_name)}
+                            variant="ghost"
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDelete(row);
+                            }}
+                          >
+                            <Trash2 aria-hidden="true" className="size-4" />
+                          </IconButton>
+                        )}
                       </td>
                     )}
                   </tr>
