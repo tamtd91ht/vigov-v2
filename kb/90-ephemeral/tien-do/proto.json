@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "proto",
-  "cap_nhat": "2026-10-09",
+  "cap_nhat": "2026-10-17",
   "muc": [
     {
       "id": "operator-mini-app-secret",
@@ -193,6 +193,14 @@
       "bang_chung": "proto/vigov/comms/v1/comms.proto — StaffNotification thêm holding_org_unit_id = 8 (string, ULID bo_phan ĐANG GIỮ hồ sơ, lấy từ cột bộ phận của chính hồ sơ; rỗng = chỉ nhóm cả xã) và group_posting = 9 (enum mới GroupPosting: GROUP_POSTING_UNSPECIFIED = 0 → không nhóm nào, đóng kín cho nơi phát cũ; GROUP_POSTING_ALLOWED = 1; GROUP_POSTING_RESTRICTED = 2). Hạn chế KHÔNG suy được từ kind (cùng một kind cho phiếu thường và phiếu can-bo) nên nơi phát khai. transaction-boundaries: gan_nhom_zalo_bang_ma (manh), gui_tin_nhom_zalo (cuoi_cung). TỰ CHẠY 11/10/2026: buf lint rc=0 · buf breaking --against '.git#ref=HEAD' rc=0 · buf generate rc=0 · go build ./... core và 7 service rc=0.",
       "no_confirm": [],
       "tiep_theo": "Chưa có cài đặt. data-ownership.json là tệp SINH từ dấu `-- @entity:` / `-- @scope:` trong migration (tools/kb) — ZaloGroupPairingCode, ZaloGroupLink, ZaloGroupDelivery (comms, tenant) phải khai bằng dấu ấy trong migration của comms (việc của go-service-builder), rồi make kb. Thứ tự: comms hiểu trường 8–9 trước, nơi phát (petitions, documents) đặt sau; finance không có bộ phận → để trống. Gỡ chỗ nối GROUP PAIRING SEAM ở service-comms/internal/app/zalo_webhook.go:152. CẦN CHỦ DỰ ÁN XÁC NHẬN: (1) bản tin gom (kind 1, 4, 5, 9, 13, 25) không ra nhóm — khoá idempotency theo người/kỳ nên khử trùng theo nhóm sẽ đăng danh sách của người nhận đầu tiên; hợp đồng ghi nơi phát gửi UNSPECIFIED; (2) nhóm đã gắn ở xã A gõ mã xã B (bot chung): từ chối hay kết thúc liên kết ở A; gắn lại cùng nhóm bằng mã mới: thay phạm vi hay từ chối; (3) người làm trong vết gắn nhóm = mã cán bộ đã tạo mã ghép nhóm."
+    },
+    {
+      "id": "lien-ket-phan-anh-danh-ba-proto-17-10",
+      "viec": "identity.proto: FindCitizenContactByPhone + GetCitizenContactMatchPhone cho liên kết phản ánh ↔ danh bạ (ADR 0102, TASK-01)",
+      "trang_thai": "xong",
+      "bang_chung": "proto/vigov/identity/v1/identity.proto (2 RPC, 4 message, chú thích người gọi duy nhất petitions, vết kiểm toán khi found=true, found=false thay NOT_FOUND); transaction-boundaries.json mục lien_ket_phan_anh_danh_ba_nguoi_dan. buf lint, buf breaking, buf generate, GOWORK=off go build service-identity + service-petitions xanh (17/10/2026).",
+      "no_confirm": [],
+      "tiep_theo": "identity cài 2 RPC (TASK-02), petitions dùng (TASK-04)."
     }
   ]
 }

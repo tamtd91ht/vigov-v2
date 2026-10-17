@@ -2385,6 +2385,152 @@ service IdentityService {
   //   INVALID_ARGUMENT    no "x-tenant-id"; `kind` unspecified.
   //   UNIMPLEMENTED       an identity older than this RPC: deploy identity FIRST.
   rpc ListNoticeAttributes(ListNoticeAttributesRequest) returns (ListNoticeAttributesResponse);
+
+  // FindCitizenContactByPhone answers whether ONE phone number has a LIVE row in this commune's citizen
+  // directory (`citizen_contact`, ADR 0097) and, if so, that row's opaque id — and nothing else.
+  //
+  // WHY IT EXISTS (owner, 17/10/2026, ADR 0102 #1, #2): a petition screen offers "Đồng bộ danh bạ" —
+  // open the directory row of the petition's sender if there is one, otherwise open the directory's
+  // "Thêm người dân" pre-filled. The link is DERIVED each time from (tenant_id, normalised phone); no
+  // table stores the other side's id (ADR 0102 #1). service-petitions knows the sender's number;
+  // only identity knows whether the directory holds it, and rule 2 forbids petitions that database.
+  //
+  // # It returns NO personal data — and must never grow any
+  //
+  // `found` and an opaque ULID. No name, no number, no masked number, no active flag. The caller already
+  // holds the number it asked about (the petition's own field); what it lacks is the directory row's key,
+  // and a key is all it gets. A field added here turns a yes/no into a second directory read path for
+  // petitions — a contract change and an owner's decision first (ADR 0102 stop condition #1 in spirit).
+  //
+  // # The match
+  //
+  // identity normalises `phone` with ITS OWN rule — the national form `citizen_contact.phone` stores
+  // (domain.NormalizeCitizenPhone today; the shared function ADR 0102 #3 moves into `core`). The caller
+  // sends the number as the petition holds it and never pre-normalises: two implementations of one
+  // normalisation are two answers to "is this the same person". Compared against LIVE rows only
+  // (`deleted_at IS NULL`); a live number is unique per commune (`citizen_contact_phone_live_unique`, ADR
+  // 0097 D5), so there is at most one match. A contact switched to "ngừng liên hệ" (`is_active = false`)
+  // IS found: it is still that person's directory row, and the staff member edits it there.
+  //
+  // # Which caller, and when it must NOT call
+  //
+  // ONE INTENDED CALLER: service-petitions, behind the petition detail's "Đồng bộ danh bạ" (ADR 0102 #5:
+  // `feedback.unmask` + `citizen.update`, checked by petitions before it calls). NEVER for an anonymous
+  // petition (`an_danh`, ADR 0102 #4, ADR 0008): the caller must not call, rather than call and discard.
+  // As for ResolveCitizenContactPhone, the shared caller key (ADR 0025) cannot enforce the caller; a
+  // second caller is a sentence written here first. identity NEVER calls petitions (ADR 0102 stop #4).
+  //
+  // # Not audited — stated, because it reads a fact about a person
+  //
+  // Rule 6, invariant 7 audits reading FULL personal data; this RPC returns none, and the number in the
+  // request is one the caller already holds and whose full view petitions audits on its own unmask path
+  // (ADR 0030). Writes nothing, so retrying is free.
+  //
+  // # The commune travels in metadata, and is never exempt
+  //
+  // "x-tenant-id" is the whole scope: another commune's directory is unreachable and answers exactly like
+  // "not found". Not a candidate for core/grpcx.methodsWithoutTenant (ADR 0012, decision 1).
+  //
+  // # Never logged
+  //
+  // The REQUEST carries a full phone number and its generated String() prints it (`debug_redact` is a
+  // no-op in protobuf-go v1.36.12). Never log either message; log the commune and `found`.
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK + found          the live row's id.
+  //   OK + !found         no live row for this number in this commune — INCLUDING a number that does not
+  //                       normalise. Indistinguishable on purpose; the caller offers "Thêm người dân".
+  //   INVALID_ARGUMENT    no "x-tenant-id"; `phone` empty after trimming.
+  //   NOT_FOUND           NEVER produced. Absence is `found = false`.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor.
+  //   UNIMPLEMENTED       an identity older than this RPC: deploy identity FIRST.
+  //   UNAVAILABLE etc.    the call did not happen. NOT "not in the directory": the petition screen says the
+  //                       directory could not be checked (ADR 0102 §Hệ quả) and never offers "Thêm" on a
+  //                       guess — that would create a duplicate of a row that exists.
+  //
+  // Not cached: a row added a second ago must be found. Declared in
+  // kb/30-indexes/transaction-boundaries.json, `lien_ket_phan_anh_danh_ba_nguoi_dan`.
+  rpc FindCitizenContactByPhone(FindCitizenContactByPhoneRequest) returns (FindCitizenContactByPhoneResponse);
+
+  // GetCitizenContactMatchPhone hands the FULL normalised number of ONE live directory row to
+  // service-petitions, so petitions can list that person's petitions — and writes ONE audit entry for
+  // the disclosure.
+  //
+  // WHY IT EXISTS (owner, 17/10/2026, ADR 0102 #1, #2, #8): the directory's "Xem phản ánh" lists the
+  // petitions of one person, paged. The link is derived from (tenant_id, normalised phone); petitions owns
+  // the petitions and identity owns the number. The browser and the URL carry only the contact id (ADR 0102
+  // #8 — never a number on a URL, in a log or in an event); petitions turns that id into the match key by
+  // asking here, uses it for its own query, and drops it.
+  //
+  // THIS IS THE ONE EXCEPTION ADR 0102 #2 GRANTS to ADR 0097 stop condition #2 ("a full number over gRPC to
+  // another service") — beside ADR 0099 #5's own exception for notice sending. A second purpose is a new
+  // decision, not a second caller of this RPC.
+  //
+  // # SERVER-TO-SERVER ONLY — the obligations on the caller
+  //
+  // ONLY service-petitions may call it (ADR 0102 stop condition #2), behind the directory's "Xem phản ánh"
+  // (`citizen.read` + `feedback.read`, ADR 0102 #5, checked by petitions before it calls). The shared caller
+  // key (ADR 0025) cannot enforce that; per-service caller identity (mTLS, owed:
+  // service-identity/internal/grpc/server.go, #3) is what would, and this RPC is among the first to restrict
+  // when it exists. The number this RPC returns:
+  //
+  //   - is held in petitions' MEMORY for the one query it keys, then dropped — never stored, never cached;
+  //   - is NEVER returned over HTTP, in any field, masked or not — the list rows carry lookup code, title,
+  //     status and date only (ADR 0102 #8);
+  //   - is NEVER logged, put in an error, a metric label, a span attribute, an event, an outbox row or a
+  //     dead-letter payload.
+  //
+  // Breaking any of these is ADR 0102 stop condition #2, not a refactor.
+  //
+  // # The match key's form
+  //
+  // NATIONAL form, digits only, leading 0 — "0900000000" — exactly as `citizen_contact.phone` stores it and
+  // as the shared normalisation (ADR 0102 #3) produces it for petitions' normalised sender column. One form
+  // on both sides is what makes the derived link an equality.
+  //
+  // # Every call that discloses is audited, in identity, in one transaction with the read
+  //
+  // Rule 6, invariant 7. ONE entry PER CALL that answers `found = true`, written in the SAME transaction as
+  // the read; the number leaves only after it commits (the ordering of staff_email_reveal.go, ADR 0082). A
+  // call that disclosed nothing writes nothing. Every page of "Xem phản ánh" that calls is an entry — "who
+  // looked up whose petitions" stays answerable (ADR 0102 §Hệ quả). The entry, in the commune of metadata:
+  //
+  //   actor    kind "staff", id = `actor_code` — the CB- code of the staff member viewing (rule 6,
+  //            invariant 8). Not the calling service: ADR 0025's shared key cannot name it.
+  //   ip       EMPTY. identity observes no browser on this hop (the argument on
+  //            ResolveStaffPrincipalRequest.client_ip).
+  //   action   one Vietnamese snake_case verb (ADR 0011 convention, like `xem_email_can_bo`); the implementer
+  //            names it in code — "mở số để xem phản ánh của người dân".
+  //   subject  `contact_id`.
+  //   delta    the FIELD opened (`phone`) and the purpose; NEVER the number (rule 6, forbidden #4).
+  //
+  // # The commune travels in metadata, and is never exempt
+  //
+  // The row is looked up by (tenant_id, id); another commune's contact answers exactly like an unknown one.
+  // Not a candidate for core/grpcx.methodsWithoutTenant (ADR 0012, decision 1).
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK + found          the number, already disclosed and audited. A contact switched to "ngừng liên hệ"
+  //                       (`is_active = false`) IS found — its petitions are still that person's petitions.
+  //   OK + !found         no LIVE row with this id in this commune (unknown, soft-deleted, another commune) —
+  //                       indistinguishable on purpose (rule 4, forbidden #2). Nothing written. The caller
+  //                       answers its usual not-found; it never lists petitions without a key.
+  //   INVALID_ARGUMENT    no "x-tenant-id"; `contact_id` empty; `actor_code` empty or not a live
+  //                       `nguoi_dung.ma` of this commune (the caller passes the principal it resolved for
+  //                       THIS request, so a deleted code is a wiring fault, answered loudly).
+  //   NOT_FOUND           NEVER produced.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor.
+  //   UNIMPLEMENTED       an identity older than this RPC: deploy identity FIRST.
+  //   UNAVAILABLE etc.    the call did not happen. NOT "no petitions": the screen says the list could not be
+  //                       loaded; it never shows an empty list as if the person had filed nothing.
+  //
+  // RETRYING IS SAFE FOR THE DATA, NOT FREE FOR THE TRAIL: a retry writes another entry. Not batched — one
+  // directory row per screen — and not cached: a cached number outlives the soft delete that should hide it.
+  //
+  // Declared in kb/30-indexes/transaction-boundaries.json, `lien_ket_phan_anh_danh_ba_nguoi_dan`.
+  rpc GetCitizenContactMatchPhone(GetCitizenContactMatchPhoneRequest) returns (GetCitizenContactMatchPhoneResponse);
 }
 
 message Staff {
@@ -4290,4 +4436,43 @@ message NoticeAttribute {
   string code = 1;
   // The display name — the commune's own label for a dynamic field.
   string label = 2;
+}
+
+message FindCitizenContactByPhoneRequest {
+  // The number AS THE CALLER HOLDS IT — the petition's sender phone, not pre-normalised; identity applies
+  // its own normalisation (see the RPC). FULL PERSONAL DATA (rule 3): never log this message. Empty after
+  // trimming is INVALID_ARGUMENT; a value that does not normalise answers `found = false`.
+  string phone = 1;
+}
+
+// Wrapped: adding a field later must not change the RPC signature — and adding one is a decision (see
+// the RPC: this answer carries no personal data and must not start to).
+message FindCitizenContactByPhoneResponse {
+  // Whether a LIVE `citizen_contact` row of this commune holds this number.
+  bool found = 1;
+  // `citizen_contact.id` (ULID) of that row; "" when `found` is false. The key GetCitizenContactMatchPhone
+  // and the directory's detail screen take.
+  string contact_id = 2;
+}
+
+message GetCitizenContactMatchPhoneRequest {
+  // `citizen_contact.id` — the directory row the staff member opened, as the URL carries it (ADR 0102 #8).
+  // Empty is INVALID_ARGUMENT.
+  string contact_id = 1;
+
+  // The CB- business code of the staff member viewing — `authz.Principal.Ma` of the request petitions is
+  // serving (rule 6, invariant 8; never `Principal.ID`). The audit entry's actor. Required; must be a live
+  // `nguoi_dung.ma` of this commune.
+  string actor_code = 2;
+}
+
+// Wrapped: adding a field later must not change the RPC signature.
+message GetCitizenContactMatchPhoneResponse {
+  // Whether a LIVE row with `contact_id` exists in this commune. False discloses nothing and is not audited.
+  bool found = 1;
+  // THE FULL NUMBER, UNMASKED, national form "0…" — personal data (rule 3). "" when `found` is false.
+  // Already disclosed and audited when this arrives. Server-side match key ONLY: held in memory for the
+  // one query, never returned over HTTP, never stored, never logged, never in an event. NEVER LOG THIS
+  // MESSAGE — generated String() prints it in full.
+  string phone = 2;
 }

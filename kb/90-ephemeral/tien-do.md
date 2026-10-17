@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 06bfb6fb
+derived_from_commit: 02efd4fc
 expires: 2027-01-15
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -30,7 +30,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 211 |
 | chưa làm | 44 |
 | treo | 13 |
-| xong | 600 |
+| xong | 601 |
 
 ## Theo menu
 
@@ -1037,7 +1037,7 @@ Cập nhật 2026-10-14 · 17 mục
 
 ## `proto`
 
-Cập nhật 2026-10-09 · 23 mục
+Cập nhật 2026-10-17 · 24 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -1064,6 +1064,7 @@ Cập nhật 2026-10-09 · 23 mục
 | `adr-0080-zalo-account-tren-phien` — CitizenSessionPrincipal.zalo_account_id = 4 (tai_khoan_zalo.id) — chủ phiếu và 'ai' của phiên chưa xác thực số (ADR 0080) | xong | 7c0e55c9. buf lint + buf breaking xanh; go build 9 module. | — | Không. |
 | `resolve-citizen-contact-phone` — IdentityService.ResolveCitizenContactPhone(session_id, citizen_id) → verified_phone — đường DUY NHẤT số đầy đủ của công dân rời identity, chỉ cho petitions gắn vào phiếu (ADR 0050 §Sửa đổi 08/10/2026). Đòi phiên đang sống của đúng công dân; mọi ca không có số trả OK rỗng; identity ghi vết mỗi lần trả số. | xong | proto/vigov/identity/v1/identity.proto 08/10/2026. buf lint sạch, buf breaking --against .git#ref=HEAD sạch (chỉ thêm), buf generate, go build + vet 7 module. | — | Không. |
 | `adr0086-hop-dong-09-10` — comms StaffNotificationKind 18–25; identity AUTOMATION_JOB_SCHEDULED_REPORTS, ScheduledReportPeriod. | xong | d0b02227. buf lint/breaking/generate xanh. | — | Chạy migration trên PostgreSQL thật. |
+| `lien-ket-phan-anh-danh-ba-proto-17-10` — identity.proto: FindCitizenContactByPhone + GetCitizenContactMatchPhone cho liên kết phản ánh ↔ danh bạ (ADR 0102, TASK-01) | xong | proto/vigov/identity/v1/identity.proto (2 RPC, 4 message, chú thích người gọi duy nhất petitions, vết kiểm toán khi found=true, found=false thay NOT_FOUND); transaction-boundaries.json mục lien_ket_phan_anh_danh_ba_nguoi_dan. buf lint, buf breaking, buf generate, GOWORK=off go build service-identity + service-petitions xanh (17/10/2026). | — | identity cài 2 RPC (TASK-02), petitions dùng (TASK-04). |
 
 ## `service-comms`
 

@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 06bfb6fb
+derived_from_commit: 02efd4fc
 expires: 2027-01-15
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -73,13 +73,13 @@ dòng `// @screens` của khối nói; mỗi phần đếm một lần, ở màn
 | 14 | Báo cáo | `/bao-cao` | `REPORT_READ_PERMISSION` | ✓ | 2 |
 | 15 | Người dùng | `/nguoi-dung` | `QUYEN_QUAN_LY_NGUOI_DUNG` | ✓ | 0 |
 | 16 | Phân quyền | `/nguoi-dung/phan-quyen` | `QUYEN_PHAN_QUYEN` | ✓ | 0 |
-| 17 | Hướng dẫn sử dụng | — | — | ✗ | |
+| 17 | Hướng dẫn sử dụng | `/huong-dan` | `—` | ✓ | **không khai** |
 | 18 | Cấu hình | `/cau-hinh` | `KHOA_MO_CAU_HINH` | ✓ | 1 |
 | 19 | Hệ thống | `/he-thong` | `SYSTEM_MENU_KEYS` | ✓ | 0 |
 
-**18/19** mục menu có màn thật. **43** phần chưa dựng đang hiện trên các màn ấy.
+**19/19** mục menu có màn thật. **43** phần chưa dựng đang hiện trên các màn ấy.
 
-⚠ **2 màn KHÔNG KHAI khối `PHAN_CHUA_DUNG`**, và ô của chúng đọc là `không khai` chứ không phải `0` —
+⚠ **3 màn KHÔNG KHAI khối `PHAN_CHUA_DUNG`**, và ô của chúng đọc là `không khai` chứ không phải `0` —
 hai thứ khác hẳn nhau. `0` nghĩa là màn có khai một danh sách và danh sách ấy rỗng, tức mọi phần
 đặc tả đã dựng. `không khai` nghĩa là **chưa ai nói màn ấy còn thiếu gì**, nên con số 0 ở đó sẽ là
 một lời trấn an không có gì đứng sau.
@@ -127,7 +127,7 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `core` | 45 | 3 | 1 | 1 |
 | `deploy` | 23 | 18 | 1 | 0 |
 | `platform-admin` | 13 | 4 | 0 | 0 |
-| `proto` | 20 | 3 | 0 | 0 |
+| `proto` | 21 | 3 | 0 | 0 |
 | `service-comms` | 40 | 22 | 5 | 3 |
 | `service-documents` | 14 | 6 | 3 | 0 |
 | `service-finance` | 36 | 6 | 2 | 0 |
