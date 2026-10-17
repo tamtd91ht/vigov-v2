@@ -25,9 +25,15 @@
 //	getoa             the commune's access token (`access_token` header). Nothing else.
 //	template/all      the commune's access token; offset and limit.
 //	template/info     the commune's access token; the template id.
+//	message/template  the commune's access token; `phone` (PERSONAL DATA — the recipient's number in
+//	                  Zalo's 84… form; sending it to Zalo is ADR 0018 / ADR 0099 #6), `template_id`,
+//	                  `template_data` (the values staff typed for the WHOLE campaign — no value comes from
+//	                  a recipient's record, ADR 0099 #6), `tracking_id` (the recipient ROW id — opaque).
+//	                  Nothing else: no name, no address.
 //
-// NO PERSONAL DATA CROSSES THROUGH THIS PACKAGE. Sending a message (ZBS `message/template`, which does
-// carry a phone number) is block B's adapter and is deliberately not here.
+// message/template IS THE ONE CALL HERE THAT CARRIES PERSONAL DATA (block D-5, the campaign sender).
+// The number lives in the request body only; this package never renders, logs or returns it, and an
+// error carries none of it (there is no error — an Outcome).
 //
 // TRANSPORT SECURITY IS NOT CONFIGURABLE DOWNWARDS (rule 13 #1): https only, certificates always
 // verified, TLS 1.2 minimum, no InsecureSkipVerify anywhere. The three base URLs are platform constants
@@ -98,6 +104,10 @@ const (
 	OutcomeRejected
 	// OutcomeMalformedResponse — Zalo answered 2xx with something this package cannot read. Final.
 	OutcomeMalformedResponse
+	// OutcomeRecipientRejected — message/template only: Zalo refused THIS phone number (not a Zalo user,
+	// cannot receive ZNS, or not a valid number), or the number is not one this package can put in Zalo's
+	// 84… form. Final for that recipient; says nothing about the OA or the template.
+	OutcomeRecipientRejected
 )
 
 // Retryable — true for RateLimited and Unavailable, false for everything else, OK included.
@@ -120,6 +130,8 @@ func (o Outcome) String() string {
 		return "rejected"
 	case OutcomeMalformedResponse:
 		return "malformed_response"
+	case OutcomeRecipientRejected:
+		return "recipient_rejected"
 	}
 	return "unspecified"
 }
@@ -427,6 +439,112 @@ func (c *Client) TemplateInfo(ctx context.Context, accessToken secret.Secret, te
 		d.Params = append(d.Params, Param{Name: p.Name, Required: p.required(), Type: p.Type, MaxLength: p.maxLength()})
 	}
 	return d, OutcomeOK
+}
+
+// MaxTrackingIDLen bounds tracking_id. Zalo documents a string; this package only ever sends a row id
+// (a ULID is 26), so anything longer is a caller fault refused here.
+const MaxTrackingIDLen = 48
+
+// msgIDPattern — what a msg_id must look like before it is handed on: printable ASCII, ≤ 128 (0032
+// notice_recipient_provider_id_shape).
+func validMsgID(s string) bool {
+	if s == "" || len(s) > 128 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '!' || s[i] > '~' {
+			return false
+		}
+	}
+	return true
+}
+
+// Zalo's numeric errors on message/template that mean "this recipient", not "this OA" or "this template".
+// UNCONFIRMED AGAINST A LIVE OA (the same caveat as tokenErrorCodes): taken from the ZNS error list —
+// -108 phone number invalid, -118 Zalo account does not exist or is disabled, -119 the account cannot
+// receive ZNS. A code outside this set is Rejected (final) — never retried, never blamed on the number.
+var recipientErrorCodes = map[int64]bool{-108: true, -118: true, -119: true}
+
+// zaloPhone puts a Vietnamese number into Zalo's form: "0xxxxxxxxx" → "84xxxxxxxxx"; "84…" and "+84…"
+// kept (without the plus). ok=false for anything else — the caller's number is not sent.
+func zaloPhone(phone string) (string, bool) {
+	p := strings.TrimSpace(phone)
+	p = strings.TrimPrefix(p, "+")
+	switch {
+	case strings.HasPrefix(p, "84"):
+	case strings.HasPrefix(p, "0"):
+		p = "84" + p[1:]
+	default:
+		return "", false
+	}
+	if len(p) < 10 || len(p) > 13 {
+		return "", false
+	}
+	for i := 0; i < len(p); i++ {
+		if p[i] < '0' || p[i] > '9' {
+			return "", false
+		}
+	}
+	return p, true
+}
+
+// SendTemplateMessage sends one ZBS template message (POST business.openapi.zalo.me/message/template,
+// header `access_token`, JSON {phone, template_id, template_data, tracking_id}) and returns Zalo's
+// msg_id on OutcomeOK. `phone` is the national number ("0…"); it is converted to Zalo's 84… form here.
+// tracking_id is the recipient ROW id — opaque. THE NUMBER IS NEVER RENDERED: it is placed in the request
+// body and nowhere else (see the package comment).
+func (c *Client) SendTemplateMessage(ctx context.Context, accessToken secret.Secret, phone, templateID string,
+	templateData map[string]string, trackingID string) (string, Outcome) {
+
+	if accessToken.Rong() {
+		return "", OutcomeTokenRejected
+	}
+	if templateID == "" || trackingID == "" || len(trackingID) > MaxTrackingIDLen {
+		return "", OutcomeRejected // a caller fault; Zalo is not asked
+	}
+	p84, ok := zaloPhone(phone)
+	if !ok {
+		return "", OutcomeRecipientRejected
+	}
+	if templateData == nil {
+		templateData = map[string]string{}
+	}
+	body, err := json.Marshal(struct {
+		Phone        string            `json:"phone"`
+		TemplateID   string            `json:"template_id"`
+		TemplateData map[string]string `json:"template_data"`
+		TrackingID   string            `json:"tracking_id"`
+	}{Phone: p84, TemplateID: templateID, TemplateData: templateData, TrackingID: trackingID})
+	if err != nil {
+		return "", OutcomeRejected
+	}
+	defer clear(body)
+	var raw struct {
+		Error json.RawMessage `json:"error"`
+		Data  struct {
+			MsgID json.RawMessage `json:"msg_id"`
+		} `json:"data"`
+	}
+	hdr := http.Header{"access_token": []string{string(accessToken.Lo())}}
+	o := c.call(ctx, http.MethodPost, c.business+"/message/template", hdr, bytes.NewReader(body), "application/json",
+		classifyStatus, &raw)
+	if o != OutcomeOK {
+		return "", o
+	}
+	if code, present := errorCode(raw.Error); present && code != 0 {
+		switch {
+		case tokenErrorCodes[code]:
+			return "", OutcomeTokenRejected
+		case recipientErrorCodes[code]:
+			return "", OutcomeRecipientRejected
+		}
+		return "", OutcomeRejected
+	}
+	id, ok := scalarText(raw.Data.MsgID)
+	if !ok || !validMsgID(id) {
+		return "", OutcomeMalformedResponse
+	}
+	return id, OutcomeOK
 }
 
 // rawParam reads a parameter entry in either spelling.

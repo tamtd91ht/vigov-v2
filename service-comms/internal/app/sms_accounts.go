@@ -121,10 +121,14 @@ type SmsTemplateNetwork struct {
 // SmsTemplateGroup is one template TEXT as the screen shows it: the rows eSMS lists per network, grouped
 // by content (0032 VENDOR CHOICES: "the picker groups rows by content").
 type SmsTemplateGroup struct {
-	Content  string
-	Params   []domain.SmsTemplateParam
-	Networks []SmsTemplateNetwork
-	SyncedAt time.Time
+	// TemplateRowID is the sms_template.id of the group's FIRST row (by network, then TempId) — the
+	// reference a campaign names the text by (notice_campaign.template_ref). Any row of the group names the
+	// same text; the first is chosen so the reference is stable across reads.
+	TemplateRowID string
+	Content       string
+	Params        []domain.SmsTemplateParam
+	Networks      []SmsTemplateNetwork
+	SyncedAt      time.Time
 }
 
 // SmsTemplateSyncOutput is POST templates/sync.
@@ -511,6 +515,57 @@ func (uc *SmsAccounts) openLive(ctx context.Context, id string) (docstore.SmsAcc
 	return s, esms.Credentials{APIKey: api, SecretKey: sec}, nil
 }
 
+// ---- the campaign's two reads (ADR 0099 #8, block D-5) -----------------------------------------------------
+
+var (
+	// ErrSmsTemplateMissing — no template row with that id under that account of this commune (404).
+	ErrSmsTemplateMissing = errors.New("sms_template: no such template under the account")
+	// ErrSmsTemplateNotSendable — the row exists but eSMS no longer lists it (vanished): sending its text
+	// would come back "sai mẫu" (409).
+	ErrSmsTemplateNotSendable = errors.New("sms_template: eSMS no longer lists this template")
+)
+
+// TemplateForSend reads a LIVE account of this commune and one of its templates that eSMS still lists —
+// what a campaign is composed from. No key is opened.
+//
+//	account not live here        ErrSmsAccountNotFound
+//	no such template row         ErrSmsTemplateMissing
+//	template vanished at eSMS    ErrSmsTemplateNotSendable
+func (uc *SmsAccounts) TemplateForSend(ctx context.Context, accountID, templateRowID string) (domain.SmsAccount, domain.SmsTemplate, error) {
+	a, found, err := uc.accounts.Live(ctx, accountID)
+	if err != nil {
+		return domain.SmsAccount{}, domain.SmsTemplate{}, err
+	}
+	if !found {
+		return domain.SmsAccount{}, domain.SmsTemplate{}, ErrSmsAccountNotFound
+	}
+	t, found, err := uc.templates.TemplateOfAccount(ctx, accountID, templateRowID)
+	if err != nil {
+		return domain.SmsAccount{}, domain.SmsTemplate{}, err
+	}
+	if !found {
+		return domain.SmsAccount{}, domain.SmsTemplate{}, ErrSmsTemplateMissing
+	}
+	if !t.VanishedAt.IsZero() {
+		return domain.SmsAccount{}, domain.SmsTemplate{}, ErrSmsTemplateNotSendable
+	}
+	return a, t, nil
+}
+
+// OpenForSend opens both keys of a LIVE account of this commune for a send or a price estimate. THE CALLER
+// CLEARS BOTH (clear(creds.APIKey), clear(creds.SecretKey)) as soon as eSMS answers, and never logs,
+// stores or returns them.
+//
+//	account not live here       ErrSmsAccountNotFound (a retired account sends nothing)
+//	no SECRET_ENCRYPTION_KEYS   crypto.ErrNotConfigured
+func (uc *SmsAccounts) OpenForSend(ctx context.Context, accountID string) (domain.SmsAccount, esms.Credentials, error) {
+	s, creds, err := uc.openLive(ctx, accountID)
+	if err != nil {
+		return domain.SmsAccount{}, esms.Credentials{}, err
+	}
+	return s.Account, creds, nil
+}
+
 // ListTemplates reads the templates eSMS still lists for a live account of this commune, one entry per
 // TEXT with the networks it is registered on.
 func (uc *SmsAccounts) ListTemplates(ctx context.Context, accountID string) ([]SmsTemplateGroup, error) {
@@ -541,7 +596,7 @@ func groupSmsTemplates(rows []domain.SmsTemplate) []SmsTemplateGroup {
 			if params == nil {
 				params = []domain.SmsTemplateParam{}
 			}
-			out = append(out, SmsTemplateGroup{Content: t.Content, Params: params})
+			out = append(out, SmsTemplateGroup{TemplateRowID: t.ID, Content: t.Content, Params: params})
 		}
 		g := &out[i]
 		g.Networks = append(g.Networks, SmsTemplateNetwork{NetworkID: t.NetworkID, ProviderTemplateID: t.ProviderTemplateID})

@@ -418,7 +418,10 @@ func main() {
 	// ZALO_OA_* unset (dev only — staging and prod refuse to start without them): the OA feature is off by
 	// name — "Kết nối OA" answers 503 zalo_oa_not_configured, and no callback is served.
 	zaloOACross := crosstenant.NewZaloOA(db)
-	communeZaloOAs := commsapp.NewCommuneZaloOAs(kho, zaloOACross, envelope, zalooa.New(zalooa.DefaultTimeout),
+	// ONE zalooa client for the OA administration AND the campaign sender's ZBS template messages (block
+	// D-5): same hosts, same transport discipline.
+	zaloOAClient := zalooa.New(zalooa.DefaultTimeout)
+	communeZaloOAs := commsapp.NewCommuneZaloOAs(kho, zaloOACross, envelope, zaloOAClient,
 		commsapp.ZaloOAConfig{AppID: cfg.ZaloOAAppID(), AppSecret: cfg.ZaloOAAppSecret(), CallbackHost: cfg.ZaloOACallbackHost()},
 		nenTang, log)
 	if cfg.ZaloOACallbackHost() == "" || cfg.ZaloOAAppID() == "" || cfg.ZaloOAAppSecret().Rong() {
@@ -569,12 +572,37 @@ func main() {
 	// sealed by the COMMUNE envelope (nil without SECRET_ENCRYPTION_KEYS → every act that seals or opens
 	// answers 503 by name). Its own eSMS client (internal/esms: constant host, verified TLS, no proxy, no
 	// redirects, sandbox OFF — a dev sandbox switch is an open decision, not a variable added here).
+	esmsClient := esms.New(esms.DefaultTimeout)
+	smsAccounts := commsapp.NewSmsAccounts(kho, commsstore.NewSmsAccountStore(kho), commsstore.NewSmsTemplateStore(kho),
+		envelope, esmsClient, log)
 	svchttp.RegisterSmsAccounts(mux, svchttp.SmsAccountDeps{
-		Checker: staffauth.Checker{},
-		Accounts: commsapp.NewSmsAccounts(kho, commsstore.NewSmsAccountStore(kho), commsstore.NewSmsTemplateStore(kho),
-			envelope, esms.New(esms.DefaultTimeout), log),
-		Log: log,
+		Checker:  staffauth.Checker{},
+		Accounts: smsAccounts,
+		Log:      log,
 	})
+	// NOTICE CAMPAIGNS (ADR 0099 #4–#8, block D-5) — five notice.send routes on the SAME staff mux. The
+	// sources are the two use cases above (the commune's OAs, its eSMS accounts); identity answers who an
+	// audience reaches (counts for the preview, refs + MASKED numbers for the send) over the client the edge
+	// already holds — never a full number at this stage.
+	noticeStore := commsstore.NewNoticeCampaignStore(kho)
+	svchttp.RegisterNoticeCampaigns(mux, svchttp.NoticeCampaignDeps{
+		Checker:   staffauth.Checker{},
+		Campaigns: commsapp.NewNoticeCampaigns(kho, noticeStore, dinhDanh, communeZaloOAs, smsAccounts, esmsClient),
+		Names:     dinhDanh,
+		Log:       log,
+	})
+	// The campaign sender (ADR 0099 #8) — the Zalo dispatcher's shape: one advisory lock per tick
+	// (crosstenant.NoticeSend), each commune in its own context, `nenTang` telling a merged commune (left
+	// untouched). Full numbers come from identity per batch (RevealNoticeRecipientPhones) and live only for
+	// the provider calls.
+	noticeSender, err := commsapp.NewNoticeSender(commsapp.NoticeSenderDeps{
+		DB: kho, Repo: noticeStore, Locks: crosstenant.NewNoticeSend(db), Registry: nenTang, Phones: dinhDanh,
+		OAs: communeZaloOAs, Accounts: smsAccounts, Zns: zaloOAClient, Sms: esmsClient, Log: log,
+	})
+	if err != nil {
+		log.Error("không dựng được việc nền gửi đợt tin", "service", "comms", "err", err)
+		os.Exit(1)
+	}
 	// Zalo GROUP chats (ADR 0092) — four admin.zalo routes on the SAME staff mux. Identity answers whether
 	// a unit is live and the unit and staff names, over the client the edge already holds.
 	svchttp.RegisterZaloGroups(mux, svchttp.ZaloGroupDeps{
@@ -803,6 +831,13 @@ func main() {
 		defer close(zaloOADone)
 		zaloOARefreshJob.Run(jobs)
 	}()
+	// The campaign sender (ADR 0099 #8) on the same context. A batch cut mid-send leaves its rows leased;
+	// the lease runs out and they are claimed again — at least once (eSMS de-duplicates on RequestId).
+	noticeDone := make(chan struct{})
+	go func() {
+		defer close(noticeDone)
+		noticeSender.Run(jobs)
+	}()
 
 	// Buffered for two: either server may fail, and a send nobody reads would leak its goroutine.
 	loi := make(chan error, 2)
@@ -882,6 +917,11 @@ func main() {
 		case <-zaloOADone:
 		case <-ctx.Done():
 			log.Warn("việc nền làm mới token OA Zalo chưa dừng kịp hạn — giao dịch dở bị cuộn lại, lượt sau làm tiếp", "service", "comms")
+		}
+		select {
+		case <-noticeDone:
+		case <-ctx.Done():
+			log.Warn("việc nền gửi đợt tin chưa dừng kịp hạn — dòng đang giữ sẽ được gửi lại sau hạn giữ", "service", "comms")
 		}
 		if errHTTP != nil {
 			log.Error("đóng không sạch", "err", errHTTP)
