@@ -9,6 +9,7 @@ import {
   quyetDinhTabNguoiDung,
   quyetDinhTabPhanQuyen,
   residentialUnitWriteDecision,
+  smsChannelTabDecision,
   systemMessagesTabDecision,
   zaloChannelTabDecision,
 } from "./quyen-tab";
@@ -185,6 +186,8 @@ describe("bốn khoá cấu hình tách khỏi `admin.lookup` / `admin.org` (ch�
     ["admin.zalo", zaloChannelTabDecision],
     ["admin.message", systemMessagesTabDecision],
     ["admin.village", residentialUnitWriteDecision],
+    // ADR 0099 #3 (17/10/2026): the Kênh SMS tab's own key, same rule.
+    ["admin.sms", smsChannelTabDecision],
   ] as const;
 
   it.each(DECISIONS)("có `%s` thì mở", async (key, decide) => {

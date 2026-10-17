@@ -33,6 +33,7 @@ import {
   mailServerTabDecision,
   mapFieldTabDecision,
   slaTabDecision,
+  smsChannelTabDecision,
   systemMessagesTabDecision,
   zaloChannelTabDecision,
   type QuyetDinhTab,
@@ -47,7 +48,8 @@ export type MaTabCauHinh =
   | "thoi-han-xu-ly"
   | "tu-dong-hoa"
   | "may-chu-thu"
-  | "kenh-zalo";
+  | "kenh-zalo"
+  | "kenh-sms";
 
 /** Tabs of `/he-thong` — the three that left `/cau-hinh` on 12/10/2026 (see `SYSTEM_TABS`). */
 export type SystemTabId = "lich-lam-viec" | "nhat-ky-he-thong" | "nhan-dien-xa";
@@ -75,6 +77,10 @@ export type MoTaTab<M extends string = MaTabCauHinh> = {
  * OWNER DECISION 08/10/2026 (ADR 0079 D1): "Thời hạn xử lý" is gated on `admin.sla` like the prototype,
  * and its three calendar tables moved to a tab of their own, "Lịch làm việc".
  *
+ * "Kênh SMS" (ADR 0099 #2 #3, owner 17/10/2026) is not in the prototype either; it sits right after
+ * "Kênh Zalo" — the commune's third outbound channel — gated on its own key, `admin.sms`. So the bar is
+ * the prototype's nine plus this one.
+ *
  * USER DECISION 09/10/2026 put the prototype's nine tabs first, in its order, and the three it lacks —
  * "Lịch làm việc", "Nhật ký hệ thống", "Nhận diện xã" — after them on this bar.
  *
@@ -96,6 +102,7 @@ export const TAB_CAU_HINH: readonly MoTaTab<MaTabCauHinh>[] = [
   { ma: "tu-dong-hoa", nhan: "Tự động hoá", cong: automationTabDecision },
   { ma: "may-chu-thu", nhan: "Máy chủ thư", cong: mailServerTabDecision },
   { ma: "kenh-zalo", nhan: "Kênh Zalo", cong: zaloChannelTabDecision },
+  { ma: "kenh-sms", nhan: "Kênh SMS", cong: smsChannelTabDecision },
 ];
 
 /**

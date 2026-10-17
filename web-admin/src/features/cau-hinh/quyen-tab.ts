@@ -22,6 +22,7 @@ import {
   AUDIT_READ_PERMISSION,
   MAIL_SERVER_PERMISSION,
   RESIDENTIAL_UNIT_PERMISSION,
+  SMS_CHANNEL_PERMISSION,
   SYSTEM_MESSAGE_PERMISSION,
   ZALO_CHANNEL_PERMISSION,
   QUYEN_CAU_HINH_THOI_HAN,
@@ -118,6 +119,14 @@ export function mailServerTabDecision(ketQua: KetQua<identity_phienHienTaiRa>): 
  */
 export function zaloChannelTabDecision(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
   return theoKhoaQuyen(ketQua, ZALO_CHANNEL_PERMISSION);
+}
+
+/**
+ * Tab "Kênh SMS" — `admin.sms` (ADR 0099 #3): the key of all seven `sms-accounts` routes, the list read
+ * included, so the tab hides as a whole without it. `admin.zalo` does not open it (rule 5, invariant 3b).
+ */
+export function smsChannelTabDecision(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
+  return theoKhoaQuyen(ketQua, SMS_CHANNEL_PERMISSION);
 }
 
 /**

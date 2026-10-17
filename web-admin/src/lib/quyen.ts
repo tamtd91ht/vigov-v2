@@ -481,6 +481,13 @@ export const MAIL_SERVER_PERMISSION = "admin.mail";
 export const ZALO_CHANNEL_PERMISSION = "admin.zalo";
 
 /**
+ * `admin.sms` — "Cấu hình kênh SMS" (ADR 0099 #3, identity migration 0035, granted to every role that
+ * held `admin.zalo`). Every route of the Kênh SMS tab, reads included — the commune's eSMS accounts,
+ * their check and their templates (`service-comms/internal/http/sms_accounts.go`).
+ */
+export const SMS_CHANNEL_PERMISSION = "admin.sms";
+
+/**
  * `feedback.unmask` — "Xem đầy đủ họ tên và số điện thoại người gửi"
  * (`service-identity/migrations/0007_quyen_phan_loai_va_xem_day_du.sql:59`). No screen gates on it
  * (the server decides what it returns); it is named here only because the Phân quyền tab warns when

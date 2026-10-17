@@ -102,6 +102,8 @@ describe("khung tab màn Cấu hình", () => {
     expect(html).not.toContain("panel-cau-hinh-may-chu-thu");
     expect(html).not.toContain("panel-cau-hinh-loi-he-thong");
     expect(html).not.toContain("panel-cau-hinh-kenh-zalo");
+    expect(html).not.toContain(">Kênh SMS</button>");
+    expect(html).not.toContain("panel-cau-hinh-kenh-sms");
     expect(html).not.toContain(">Trường bản đồ</button>");
     expect(html).not.toContain("panel-cau-hinh-truong-ban-do");
     // Only the three ungated tabs.
@@ -112,6 +114,7 @@ describe("khung tab màn Cấu hình", () => {
     ["admin.message", "Lời hệ thống", "loi-he-thong"],
     ["admin.mail", "Máy chủ thư", "may-chu-thu"],
     ["admin.zalo", "Kênh Zalo", "kenh-zalo"],
+    ["admin.sms", "Kênh SMS", "kenh-sms"],
   ])("chỉ `%s` → đúng tab %s cộng ba tab không cổng; hai tab khoá tách kia vẫn ẩn", (key, label, id) => {
     phienGia = phienCo([key]);
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
@@ -173,6 +176,17 @@ describe("khung tab màn Cấu hình", () => {
       "Máy chủ thư",
       "Kênh Zalo",
     ]);
+  });
+
+  it("`admin.sms` → Kênh SMS ngay sau Kênh Zalo (ADR 0099 #2 #3); CA BỊ TỪ CHỐI: `admin.zalo` không mở nó", () => {
+    phienGia = phienCo([...ALL_KEYS, "admin.sms"]);
+    const order = tabOrder(renderToStaticMarkup(<KhungTabCauHinh />));
+    expect(order.slice(-2)).toEqual(["Kênh Zalo", "Kênh SMS"]);
+    expect(order).toHaveLength(10);
+    phienGia = phienCo(ALL_KEYS);
+    const html = renderToStaticMarkup(<KhungTabCauHinh />);
+    expect(html).not.toContain(">Kênh SMS</button>");
+    expect(html).not.toContain("panel-cau-hinh-kenh-sms");
   });
 
   it("thanh chín tab MỘT DÒNG, cuộn ngang, ẩn thanh cuộn, cao 32px (người dùng, 09/10/2026)", () => {

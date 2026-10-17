@@ -230,6 +230,8 @@ describe("mục Cấu hình — mở khi có BẤT KỲ khoá nào canh một ta
     "admin.message",
     "admin.mail",
     "admin.zalo",
+    // ADR 0099 #3 (17/10/2026): the Kênh SMS tab's own key.
+    "admin.sms",
   ])(
     "chỉ có `%s`: thấy mục Cấu hình",
     (khoa) => {
@@ -253,7 +255,7 @@ describe("mục Cấu hình — mở khi có BẤT KỲ khoá nào canh một ta
 
   it("chuỗi gần giống không mở được mục", () => {
     const ten = tenMuc(
-      locMenu(NHOM_MENU, ["admin.slas", "ADMIN.SLA", "admin.sla.read", "admin", "admin.mails", "admin.zalos", "ADMIN.ZALO"]),
+      locMenu(NHOM_MENU, ["admin.slas", "ADMIN.SLA", "admin.sla.read", "admin", "admin.mails", "admin.zalos", "ADMIN.ZALO", "admin.smss", "ADMIN.SMS"]),
     );
     expect(ten).not.toContain("Cấu hình");
   });

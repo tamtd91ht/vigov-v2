@@ -8,6 +8,7 @@ import {
   MAIL_SERVER_PERMISSION,
   NOTICE_SEND_PERMISSION,
   RESIDENTIAL_UNIT_PERMISSION,
+  SMS_CHANNEL_PERMISSION,
   SYSTEM_MESSAGE_PERMISSION,
   ZALO_CHANNEL_PERMISSION,
   QUYEN_CAU_HINH_THOI_HAN,
@@ -83,6 +84,7 @@ export const KHOA_MO_CAU_HINH: readonly string[] = [
   QUYEN_CAU_HINH_THOI_HAN, // Thời hạn xử lý — bảng thời hạn và mọi nút ghi
   MAIL_SERVER_PERMISSION, // Máy chủ thư — cả tab (15/10/2026)
   ZALO_CHANNEL_PERMISSION, // Kênh Zalo — cả tab (15/10/2026)
+  SMS_CHANNEL_PERMISSION, // Kênh SMS — cả tab (ADR 0099 #3, 17/10/2026)
 ];
 
 /**

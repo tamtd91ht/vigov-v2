@@ -49,13 +49,16 @@ const PROTOTYPE_NINE = [
   "Kênh Zalo",
 ];
 
+/** The bar: the prototype's nine, then "Kênh SMS" (ADR 0099 #2 #3, owner 17/10/2026) right after "Kênh Zalo". */
+const CONFIG_TABS = [...PROTOTYPE_NINE, "Kênh SMS"];
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
 describe("tab nào của màn Cấu hình được hiện", () => {
-  it("mọi khoá → đúng chín tab của prototype, đúng thứ tự — không còn ba tab dư (chủ dự án 12/10/2026, S27)", async () => {
+  it("mọi khoá → chín tab của prototype rồi Kênh SMS, đúng thứ tự — không còn ba tab dư (chủ dự án 12/10/2026, S27)", async () => {
     const phien = await phienVoi(
       phanHoiPhien([
         "admin.user",
@@ -68,11 +71,12 @@ describe("tab nào của màn Cấu hình được hiện", () => {
         "admin.message",
         "admin.mail",
         "admin.zalo",
+        "admin.sms",
       ]),
     );
     const hien = cacTabHien(TAB_CAU_HINH, phien);
-    expect(nhan(hien)).toEqual(PROTOTYPE_NINE);
-    expect(nhan(TAB_CAU_HINH)).toEqual(PROTOTYPE_NINE);
+    expect(nhan(hien)).toEqual(CONFIG_TABS);
+    expect(nhan(TAB_CAU_HINH)).toEqual(CONFIG_TABS);
     expect(coThanhTab(phien, hien.length)).toBe(true);
   });
 
@@ -112,6 +116,15 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     expect(nhan(cacTabHien(TAB_CAU_HINH, denied))).not.toContain("Kênh Zalo");
     const holder = await phienVoi(phanHoiPhien(["admin.zalo"]));
     expect(nhan(cacTabHien(TAB_CAU_HINH, holder))).toContain("Kênh Zalo");
+  });
+
+  it("Kênh SMS đi theo `admin.sms` (ADR 0099 #3) — ca bị từ chối trước, kể cả `admin.zalo`", async () => {
+    const denied = await phienVoi(
+      phanHoiPhien(["admin.user", "admin.lookup", "admin.mail", "admin.zalo", "admin.message", "admin.smss", "ADMIN.SMS"]),
+    );
+    expect(nhan(cacTabHien(TAB_CAU_HINH, denied))).not.toContain("Kênh SMS");
+    const holder = await phienVoi(phanHoiPhien(["admin.sms"]));
+    expect(nhan(cacTabHien(TAB_CAU_HINH, holder))).toEqual(["Sơ đồ tổ chức", "Thôn / Tổ dân phố", "Danh mục", "Kênh SMS"]);
   });
 
   it("Tự động hoá đi theo `admin.sla` — khoá của cả ba tuyến automation-jobs; ca bị từ chối", async () => {
@@ -193,6 +206,7 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     expect(hien).not.toContain("Trường bản đồ");
     expect(hien).not.toContain("Máy chủ thư");
     expect(hien).not.toContain("Kênh Zalo");
+    expect(hien).not.toContain("Kênh SMS");
     expect(hien).not.toContain("Lời hệ thống");
     expect(hien).not.toContain("Tự động hoá");
     expect(hien).not.toContain("Thời hạn xử lý");

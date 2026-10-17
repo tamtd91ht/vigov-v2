@@ -11,6 +11,7 @@ import { AutomationTab } from "./automation-tab";
 import { CommuneBrandingTab } from "./commune-branding-tab";
 import { MailServerTab } from "./mail-server-tab";
 import { MapFieldTab } from "./map-field-tab";
+import { SmsChannelTab } from "./sms-channel-tab";
 import { SystemMessagesTab } from "./system-messages-tab";
 import { TabDanhMuc } from "./tab-danh-muc";
 import { TabSoDoToChuc } from "./tab-so-do-to-chuc";
@@ -44,6 +45,7 @@ const NOI_DUNG: Record<MaTabCauHinh, (active: boolean) => ReactNode> = {
   "tu-dong-hoa": () => <AutomationTab />,
   "may-chu-thu": () => <MailServerTab />,
   "kenh-zalo": () => <ZaloChannelTab />,
+  "kenh-sms": () => <SmsChannelTab />,
 };
 
 /** Panels of `/he-thong` — the three tabs that left `/cau-hinh` on 12/10/2026, components unchanged. */
