@@ -152,12 +152,13 @@ describe("imported sources (ADR 0099 §Sửa đổi S1–S4)", () => {
   };
   const PREVIEW = { content: "Mời Bà A", recipient_count: 2, skipped_count: 0, invalid_count: 0, duplicate_count: 0, unit_price: null, estimated_cost: null, missing_params: [] };
 
-  it("SMS from a file: rows, mode, shared text and mapping go up; NO template_ref; a row without values sends none", async () => {
+  it("SMS from a file: rows, mode, shared text and mapping go up; template_ref empty (required by the contract); a row without values sends none", async () => {
     const fake = stubFetch(json(PREVIEW, 200));
     expect(await previewNoticeCampaign(FILE_SMS)).toEqual({ ok: true, duLieu: PREVIEW });
     expect(sentBody(fake)).toEqual({
       channel: "sms",
       sms_account_id: "01JSMS",
+      template_ref: "",
       audience: { kind: "tep-nhap", ids: [], tags: [] },
       params: {},
       recipients: [{ phone: "0900000000", values: { variable_1: "Bà A" } }, { phone: "0900000001" }],
@@ -179,7 +180,7 @@ describe("imported sources (ADR 0099 §Sửa đổi S1–S4)", () => {
   });
 
   it("recipients: GET /api/v1/notice-campaigns/{id}/recipients, the id encoded, no empty cursor, the next cursor encoded", async () => {
-    const page = { items: [{ id: "r1", phone_masked: "09****0000", status: "that-bai", error_message: "Sai mẫu (146)", sent_at: null, created_at: "2026-10-17T01:00:00Z" }], next_cursor: "" };
+    const page = { items: [{ id: "r1", phone_masked: "09****0000", status: "that-bai", failure_class: "template", error_message: "Sai mẫu (146)", sent_at: null, created_at: "2026-10-17T01:00:00Z" }], next_cursor: "" };
     const fake = stubFetch(json(page, 200));
     expect(await listNoticeRecipients("a/b")).toEqual({ ok: true, duLieu: page });
     expect(fake.mock.calls[0]?.[0]).toBe("/api/v1/notice-campaigns/a%2Fb/recipients");

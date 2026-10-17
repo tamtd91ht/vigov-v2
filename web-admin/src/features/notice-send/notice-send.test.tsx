@@ -751,7 +751,7 @@ const importedPreview = (extra: Record<string, unknown> = {}) =>
   json({ content: "Mời Bà A họp", recipient_count: 2, skipped_count: 0, invalid_count: 1, duplicate_count: 1, unit_price: null, estimated_cost: null, missing_params: [], ...extra });
 
 describe("imported source — typed list", () => {
-  it("SMS: live count, account select, shared content with a counter; the body carries danh-sach-so, rows, the content, NO template_ref, NO mapping", async () => {
+  it("SMS: live count, account select, shared content with a counter; the body carries danh-sach-so, rows, the content, template_ref empty (required by the contract), NO mapping", async () => {
     previewReply = () => importedPreview();
     const el = await mount(session(["notice.send"]));
     await click(el, "Nhập số điện thoại");
@@ -774,6 +774,7 @@ describe("imported source — typed list", () => {
     expect(body).toEqual({
       channel: "sms",
       sms_account_id: "01JSMS1",
+      template_ref: "",
       audience: { kind: "danh-sach-so", ids: [], tags: [] },
       params: {},
       recipients: [{ phone: "0900000000" }, { phone: "0900000001" }, { phone: "0900000002" }],
@@ -847,6 +848,7 @@ describe("imported source — file read in the browser", () => {
     expect(bodyOf(posts("/api/v1/notice-campaign-previews").at(-1))).toEqual({
       channel: "sms",
       sms_account_id: "01JSMS1",
+      template_ref: "",
       audience: { kind: "tep-nhap", ids: [], tags: [] },
       params: {},
       recipients: [
