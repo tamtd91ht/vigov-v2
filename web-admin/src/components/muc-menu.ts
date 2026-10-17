@@ -4,6 +4,7 @@ import { coQuyen } from "@/lib/quyen";
 import {
   ASSET_READ_PERMISSION,
   AUDIT_READ_PERMISSION,
+  CITIZEN_FIELD_PERMISSION,
   CITIZEN_READ_PERMISSION,
   MAIL_SERVER_PERMISSION,
   NOTICE_SEND_PERMISSION,
@@ -85,6 +86,7 @@ export const KHOA_MO_CAU_HINH: readonly string[] = [
   MAIL_SERVER_PERMISSION, // Máy chủ thư — cả tab (15/10/2026)
   ZALO_CHANNEL_PERMISSION, // Kênh Zalo — cả tab (15/10/2026)
   SMS_CHANNEL_PERMISSION, // Kênh SMS — cả tab (ADR 0099 #3, 17/10/2026)
+  CITIZEN_FIELD_PERMISSION, // Thuộc tính danh bạ — cả tab (ADR 0101 #5); thiếu thì người chỉ giữ khoá này không có lối vào tab
 ];
 
 /**

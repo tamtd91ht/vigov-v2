@@ -1725,7 +1725,7 @@
       "trang_thai": "xong",
       "bang_chung": "b0ed1304: app/huong-dan/page.tsx, features/user-guide/{guide-content,guide-visibility,user-guide}.ts(x); 20 phần (thêm Danh bạ người dân, Gửi tin ZNS/SMS, Tài khoản cá nhân; Cấu hình 11 tab); sửa 11 câu lệch mã; phần/nút ẩn theo locMenu + khoá tạo mới (coQuyen); tên xã đọc lúc chạy. muc-menu: duong /huong-dan, PENDING_SCREENS rỗng. tsc + eslint xanh; npm test 351 tệp / 6523 ca xanh (17/10/2026).",
       "no_confirm": [],
-      "tiep_theo": "CHƯA xem ảnh render (cả bề rộng <640px) — người dùng kiểm trên máy build. Lệch prototype vigov-require (iframe HTML tĩnh có ảnh) là theo lựa chọn của người dùng 17/10/2026: bỏ ảnh, dùng nút mở chức năng. Ngoài phạm vi: admin.citizen_field thiếu trong KHOA_MO_CAU_HINH (muc-menu.ts:79-88); câu banner ở commune-branding.ts:70 nói hiện dưới thanh trên cùng nhưng khung đã bỏ dải banner."
+      "tiep_theo": "CHƯA xem ảnh render (cả bề rộng <640px) — người dùng kiểm trên máy build. Lệch prototype vigov-require (iframe HTML tĩnh có ảnh) là theo lựa chọn của người dùng 17/10/2026: bỏ ảnh, dùng nút mở chức năng. Ngoài phạm vi (còn): câu banner ở commune-branding.ts:70 nói hiện dưới thanh trên cùng nhưng khung đã bỏ dải banner."
     },
     {
       "id": "mo-san-hop-tao-moi-create-17-10",
@@ -1734,6 +1734,14 @@
       "bang_chung": "04aacfe6 lib/create-link.ts; lib/use-consume-create-param.ts (mở một lần, chỉ khi màn tự vẽ nút cho tài khoản, chờ khi phiên chưa đọc, rồi bỏ create khỏi địa chỉ giữ tham số khác + hash). Test: create-link.test.ts, use-consume-create-param(.screens).test.tsx, nhiem-vu/open-create.test.tsx. tsc + eslint xanh; npm test 351 tệp / 6523 ca xanh (17/10/2026).",
       "no_confirm": [],
       "tiep_theo": "CHƯA kiểm trên trình duyệt. Thông báo và Nhập biên bản không có cổng client nên link mở như nút. /van-ban có drill-down + create=1 (Hướng dẫn không sinh link này): sang tab Đơn thư mới mở hộp. Thiếu quyền ở vài màn thì create=1 ở lại địa chỉ, không mở gì."
+    },
+    {
+      "id": "cau-hinh-khoa-citizen-field-17-10",
+      "viec": "Tài khoản chỉ giữ admin.citizen_field không thấy mục menu Cấu hình dù tab Thuộc tính danh bạ mở cho họ",
+      "trang_thai": "xong",
+      "bang_chung": "muc-menu.ts KHOA_MO_CAU_HINH thêm CITIZEN_FIELD_PERMISSION (khoá có thật, lib/quyen.ts:496, cổng tab quyen-tab.ts:139). muc-menu.test.ts: ca được phép admin.citizen_field + ca chuỗi gần giống (admin.citizen_fields, ADMIN.CITIZEN_FIELD) không mở. vitest components + user-guide + cau-hinh 93 tệp / 1665 ca xanh; tsc + eslint xanh (17/10/2026).",
+      "no_confirm": [],
+      "tiep_theo": "Không còn gì."
     }
   ]
 }
